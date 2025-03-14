@@ -43,11 +43,8 @@ def retorna_processo(num_processo):
         'senhaConsultante': MNI_SENHA_CONSULTANTE,
         'numeroProcesso': num_processo,
         'movimentos': True,
-        'incluirDocumentos': True,
         'incluirCabecalho': True,
-        'incluirAvisos': True,
-        'incluirEtiquetas': True,
-        'incluirInformacoesSigilosas': True
+        'incluirDocumentos': True
     }
 
     try:
