@@ -1,23 +1,16 @@
-from app import app, db
-from flask import render_template, request, send_file, flash, redirect, url_for
-from flask_login import login_required
+from app import app
+from flask import render_template, request, send_file, flash
 import core
 from funcoes_mni import retorna_processo, retorna_documento_processo
 from controle.exceptions import ExcecaoConsultaMNI
 import tempfile
 import os
-from routes.auth import auth
-
-# Register blueprints
-app.register_blueprint(auth, url_prefix='/auth')
 
 @app.route('/')
-@login_required
 def index():
     return render_template('index.html')
 
 @app.route('/consultar', methods=['POST'])
-@login_required
 def consultar():
     num_processo = request.form.get('num_processo')
 
@@ -50,7 +43,6 @@ def consultar():
         return render_template('index.html')
 
 @app.route('/download_documento/<num_processo>/<num_documento>')
-@login_required
 def download_documento(num_processo, num_documento):
     try:
         resposta = retorna_documento_processo(num_processo, num_documento)
