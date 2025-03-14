@@ -25,31 +25,37 @@
         <h4>Documentos do Processo</h4>
     </div>
     <div class="card-body">
-        <div class="table-responsive">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Tipo</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for doc in documentos %}
-                    <tr>
-                        <td>{{ doc.id }}</td>
-                        <td>{{ doc.tipo }}</td>
-                        <td>
-                            <a href="{{ url_for('download_documento', num_processo=processo.numero, num_documento=doc.id) }}" 
-                               class="btn btn-sm btn-primary">
-                                <i class="bi bi-download"></i> Download
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        {% if documentos %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Tipo</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doc in documentos %}
+                        <tr>
+                            <td>{{ doc.id }}</td>
+                            <td>{{ doc.tipo }}</td>
+                            <td>
+                                <a href="{{ url_for('download_documento', num_processo=processo.numero, num_documento=doc.id) }}" 
+                                   class="btn btn-sm btn-primary">
+                                    <i class="bi bi-download"></i> Download
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                Nenhum documento disponível para este processo.
+            </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

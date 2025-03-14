@@ -5,6 +5,11 @@ from funcoes_mni import retorna_processo, retorna_documento_processo
 from controle.exceptions import ExcecaoConsultaMNI
 import tempfile
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 @app.route('/')
 def index():
@@ -20,25 +25,41 @@ def consultar():
 
     try:
         resposta = retorna_processo(num_processo)
+        logger.debug(f"MNI Response: {resposta}")  # Debug log
+
         if resposta and resposta.sucesso:
+            processo_info = {
+                'numero': getattr(resposta.processo, 'numero', num_processo),
+                'classeProcessual': getattr(resposta.processo, 'classeProcessual', 'Não disponível'),
+                'dataAjuizamento': getattr(resposta.processo, 'dataAjuizamento', 'Não disponível'),
+                'orgaoJulgador': {
+                    'descricao': getattr(getattr(resposta.processo, 'orgaoJulgador', {}), 'descricao', 'Não disponível')
+                },
+                'situacao': getattr(resposta.processo, 'situacao', 'Não disponível')
+            }
+
             documentos = []
-            for doc in resposta.processo.documento:
-                documentos.append({
-                    'id': doc.idDocumento,
-                    'tipo': doc.tipoDocumento,
-                    'nome': f"Documento {doc.idDocumento}"
-                })
+            if hasattr(resposta.processo, 'documento'):
+                for doc in resposta.processo.documento:
+                    documentos.append({
+                        'id': getattr(doc, 'idDocumento', ''),
+                        'tipo': getattr(doc, 'tipoDocumento', 'Documento'),
+                        'nome': f"Documento {getattr(doc, 'idDocumento', '')}"
+                    })
+
             return render_template('result.html', 
-                               processo=resposta.processo,
+                               processo=processo_info,
                                documentos=documentos)
         else:
-            flash('Processo não encontrado ou erro na consulta.', 'error')
+            msg = getattr(resposta, 'mensagem', 'Processo não encontrado ou erro na consulta.')
+            flash(msg, 'error')
             return render_template('index.html')
 
     except ExcecaoConsultaMNI as e:
         flash(f'Erro na consulta: {str(e)}', 'error')
         return render_template('index.html')
     except Exception as e:
+        logger.error(f"Erro inesperado: {str(e)}", exc_info=True)  # Full error log
         flash(f'Erro inesperado: {str(e)}', 'error')
         return render_template('index.html')
 
@@ -66,6 +87,7 @@ def download_documento(num_processo, num_documento):
         )
 
     except Exception as e:
+        logger.error(f"Erro ao baixar documento: {str(e)}", exc_info=True)  # Full error log
         flash(f'Erro ao baixar documento: {str(e)}', 'error')
         return render_template('index.html')
 
