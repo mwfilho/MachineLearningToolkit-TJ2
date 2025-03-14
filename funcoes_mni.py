@@ -44,7 +44,10 @@ def retorna_processo(num_processo):
         'numeroProcesso': num_processo,
         'movimentos': True,
         'incluirDocumentos': True,
-        'incluirCabecalho': True  # Added to get more document details
+        'incluirCabecalho': True,
+        'incluirAvisos': True,
+        'incluirEtiquetas': True,
+        'incluirInformacoesSigilosas': True
     }
 
     try:
@@ -57,7 +60,12 @@ def retorna_processo(num_processo):
             response = EasyDict(data_dict)
 
         if response.sucesso:
-            logger.debug(f"Processo encontrado. Número de documentos: {len(getattr(response.processo, 'documento', []))}")
+            if hasattr(response.processo, 'documento'):
+                logger.debug(f"Processo encontrado. Número de documentos: {len(response.processo.documento)}")
+                for doc in response.processo.documento:
+                    logger.debug(f"Documento encontrado: ID={getattr(doc, 'idDocumento', 'N/A')}, "
+                               f"Tipo={getattr(doc, 'tipoDocumento', 'N/A')}, "
+                               f"Nome={getattr(doc, 'nome', 'N/A')}")
             return response
         else:
             logger.error(f"Erro na consulta do processo {num_processo}: {response.mensagem}")

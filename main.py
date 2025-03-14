@@ -43,25 +43,31 @@ def consultar():
                 logger.debug(f"Processando {len(resposta.processo.documento)} documentos")
 
                 for doc in resposta.processo.documento:
-                    doc_id = getattr(doc, 'idDocumento', '')
-                    logger.debug(f"Processando documento ID: {doc_id}")
-
-                    # Get more detailed information about the document
                     doc_info = {
-                        'id': doc_id,
-                        'tipo': getattr(doc, 'tipoDocumento', 'Documento'),
-                        'descricao': getattr(doc, 'descricao', ''),
+                        'id': getattr(doc, 'idDocumento', ''),
+                        'tipo': getattr(doc, 'tipoDocumento', ''),
                         'nome': getattr(doc, 'nome', ''),
-                        'mimetype': getattr(doc, 'mimetype', ''),
+                        'descricao': getattr(doc, 'descricao', ''),
+                        'assunto': getattr(doc, 'assunto', ''),
+                        'movimento': getattr(doc, 'movimento', ''),
+                        'data_protocolo': getattr(doc, 'dataProtocolo', ''),
                         'nivel_sigilo': getattr(doc, 'nivelSigilo', 0)
                     }
 
-                    # Only add documents that are not marked as highly confidential
-                    if doc_info['nivel_sigilo'] < 5:  # Assuming level 5 is highly confidential
+                    # Consultar descrição do tipo de documento
+                    try:
+                        tipo_desc = consultar_tipo_documento(doc_info['tipo'])
+                        if tipo_desc:
+                            doc_info['tipo_descricao'] = tipo_desc
+                    except Exception as e:
+                        logger.warning(f"Erro ao consultar tipo do documento: {str(e)}")
+                        doc_info['tipo_descricao'] = doc_info['tipo']
+
+                    if doc_info['nivel_sigilo'] < 5:
                         documentos.append(doc_info)
                         logger.debug(f"Documento adicionado: {doc_info}")
                     else:
-                        logger.debug(f"Documento sigiloso ignorado: {doc_id}")
+                        logger.debug(f"Documento sigiloso ignorado: {doc_info['id']}")
 
             logger.debug(f"Total de documentos processados: {len(documentos)}")
             return render_template('result.html', 

@@ -32,9 +32,10 @@
                     <thead>
                         <tr>
                             <th>ID</th>
-                            <th>Nome</th>
+                            <th>Data</th>
                             <th>Tipo</th>
                             <th>Descrição</th>
+                            <th>Movimento</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -42,9 +43,18 @@
                         {% for doc in documentos %}
                         <tr>
                             <td>{{ doc.id }}</td>
-                            <td>{{ doc.nome }}</td>
-                            <td>{{ doc.tipo }}</td>
-                            <td>{{ doc.descricao }}</td>
+                            <td>{{ doc.data_protocolo }}</td>
+                            <td>{{ doc.tipo_descricao }}</td>
+                            <td>
+                                {% if doc.descricao %}
+                                    {{ doc.descricao }}
+                                {% elif doc.assunto %}
+                                    {{ doc.assunto }}
+                                {% else %}
+                                    {{ doc.nome }}
+                                {% endif %}
+                            </td>
+                            <td>{{ doc.movimento }}</td>
                             <td>
                                 <a href="{{ url_for('download_documento', num_processo=processo.numero, num_documento=doc.id) }}" 
                                    class="btn btn-sm btn-primary" 
