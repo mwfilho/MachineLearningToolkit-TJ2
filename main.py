@@ -25,7 +25,7 @@ def consultar():
 
     try:
         resposta = retorna_processo(num_processo)
-        logger.debug(f"MNI Response: {resposta}")  # Debug log
+        logger.debug(f"MNI Response received. Success: {resposta.sucesso}")
 
         if resposta and resposta.sucesso:
             processo_info = {
@@ -40,13 +40,30 @@ def consultar():
 
             documentos = []
             if hasattr(resposta.processo, 'documento'):
-                for doc in resposta.processo.documento:
-                    documentos.append({
-                        'id': getattr(doc, 'idDocumento', ''),
-                        'tipo': getattr(doc, 'tipoDocumento', 'Documento'),
-                        'nome': f"Documento {getattr(doc, 'idDocumento', '')}"
-                    })
+                logger.debug(f"Processando {len(resposta.processo.documento)} documentos")
 
+                for doc in resposta.processo.documento:
+                    doc_id = getattr(doc, 'idDocumento', '')
+                    logger.debug(f"Processando documento ID: {doc_id}")
+
+                    # Get more detailed information about the document
+                    doc_info = {
+                        'id': doc_id,
+                        'tipo': getattr(doc, 'tipoDocumento', 'Documento'),
+                        'descricao': getattr(doc, 'descricao', ''),
+                        'nome': getattr(doc, 'nome', ''),
+                        'mimetype': getattr(doc, 'mimetype', ''),
+                        'nivel_sigilo': getattr(doc, 'nivelSigilo', 0)
+                    }
+
+                    # Only add documents that are not marked as highly confidential
+                    if doc_info['nivel_sigilo'] < 5:  # Assuming level 5 is highly confidential
+                        documentos.append(doc_info)
+                        logger.debug(f"Documento adicionado: {doc_info}")
+                    else:
+                        logger.debug(f"Documento sigiloso ignorado: {doc_id}")
+
+            logger.debug(f"Total de documentos processados: {len(documentos)}")
             return render_template('result.html', 
                                processo=processo_info,
                                documentos=documentos)
@@ -59,13 +76,14 @@ def consultar():
         flash(f'Erro na consulta: {str(e)}', 'error')
         return render_template('index.html')
     except Exception as e:
-        logger.error(f"Erro inesperado: {str(e)}", exc_info=True)  # Full error log
+        logger.error(f"Erro inesperado: {str(e)}", exc_info=True)
         flash(f'Erro inesperado: {str(e)}', 'error')
         return render_template('index.html')
 
 @app.route('/download_documento/<num_processo>/<num_documento>')
 def download_documento(num_processo, num_documento):
     try:
+        logger.debug(f"Attempting to download document {num_documento} from process {num_processo}")
         resposta = retorna_documento_processo(num_processo, num_documento)
 
         if 'msg_erro' in resposta:

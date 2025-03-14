@@ -21,17 +21,20 @@
 </div>
 
 <div class="card">
-    <div class="card-header">
-        <h4>Documentos do Processo</h4>
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Documentos do Processo</h4>
+        <span class="badge bg-primary">{{ documentos|length }} documentos</span>
     </div>
     <div class="card-body">
         {% if documentos %}
             <div class="table-responsive">
-                <table class="table">
+                <table class="table table-hover">
                     <thead>
                         <tr>
                             <th>ID</th>
+                            <th>Nome</th>
                             <th>Tipo</th>
+                            <th>Descrição</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -39,10 +42,14 @@
                         {% for doc in documentos %}
                         <tr>
                             <td>{{ doc.id }}</td>
+                            <td>{{ doc.nome }}</td>
                             <td>{{ doc.tipo }}</td>
+                            <td>{{ doc.descricao }}</td>
                             <td>
                                 <a href="{{ url_for('download_documento', num_processo=processo.numero, num_documento=doc.id) }}" 
-                                   class="btn btn-sm btn-primary">
+                                   class="btn btn-sm btn-primary" 
+                                   title="Baixar documento"
+                                   data-bs-toggle="tooltip">
                                     <i class="bi bi-download"></i> Download
                                 </a>
                             </td>

@@ -44,10 +44,12 @@ def retorna_processo(num_processo):
         'numeroProcesso': num_processo,
         'movimentos': True,
         'incluirDocumentos': True,
+        'incluirCabecalho': True  # Added to get more document details
     }
 
     try:
         client = Client(url)
+        logger.debug(f"Consultando processo: {num_processo}")
 
         with client.settings(strict=False, xml_huge_tree=True):
             response = client.service.consultarProcesso(**request_data)
@@ -55,6 +57,7 @@ def retorna_processo(num_processo):
             response = EasyDict(data_dict)
 
         if response.sucesso:
+            logger.debug(f"Processo encontrado. Número de documentos: {len(getattr(response.processo, 'documento', []))}")
             return response
         else:
             logger.error(f"Erro na consulta do processo {num_processo}: {response.mensagem}")
