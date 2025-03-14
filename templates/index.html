@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4>Consulta de Processo</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('consultar') }}">
+                    <div class="mb-3">
+                        <label for="num_processo" class="form-label">Número do Processo</label>
+                        <input type="text" class="form-control" id="num_processo" name="num_processo" 
+                               placeholder="0000000-00.0000.0.00.0000" required>
+                        <div class="form-text">Digite o número do processo no formato CNJ</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Consultar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

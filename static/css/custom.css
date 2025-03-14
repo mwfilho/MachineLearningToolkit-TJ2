@@ -1,0 +1,20 @@
+.footer {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    background-color: var(--bs-dark);
+    border-top: 1px solid var(--bs-border-color);
+}
+
+main {
+    margin-bottom: 100px;
+}
+
+.card {
+    background-color: var(--bs-dark);
+    border: 1px solid var(--bs-border-color);
+}
+
+.table {
+    color: var(--bs-body-color);
+}

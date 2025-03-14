@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h4>Detalhes do Processo</h4>
+    </div>
+    <div class="card-body">
+        <h5>Número do Processo: {{ processo.numero }}</h5>
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <p><strong>Classe:</strong> {{ processo.classeProcessual }}</p>
+                <p><strong>Data de Distribuição:</strong> {{ processo.dataAjuizamento }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Vara:</strong> {{ processo.orgaoJulgador.descricao }}</p>
+                <p><strong>Situação:</strong> {{ processo.situacao }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h4>Documentos do Processo</h4>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Tipo</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in documentos %}
+                    <tr>
+                        <td>{{ doc.id }}</td>
+                        <td>{{ doc.tipo }}</td>
+                        <td>
+                            <a href="{{ url_for('download_documento', num_processo=processo.numero, num_documento=doc.id) }}" 
+                               class="btn btn-sm btn-primary">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
