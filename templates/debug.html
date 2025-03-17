@@ -6,7 +6,7 @@
         <h4>Debug MNI</h4>
     </div>
     <div class="card-body">
-        <form method="POST" action="{{ url_for('debug_consulta') }}" class="mb-4">
+        <form method="POST" action="{{ url_for('web.debug_consulta') }}" class="mb-4">
             <div class="mb-3">
                 <label for="num_processo" class="form-label">Número do Processo</label>
                 <input type="text" class="form-control" id="num_processo" name="num_processo" 
@@ -17,7 +17,7 @@
             <button type="submit" class="btn btn-primary">Consultar Estrutura Completa</button>
         </form>
 
-        <form method="POST" action="{{ url_for('debug_documento') }}" class="mb-4">
+        <form method="POST" action="{{ url_for('web.debug_documento') }}" class="mb-4">
             <div class="mb-3">
                 <label for="num_processo" class="form-label">Número do Processo</label>
                 <input type="text" class="form-control" id="num_processo" name="num_processo" 
@@ -64,7 +64,7 @@
                         <td>
                             {{ doc_id }}
                             <br>
-                            <a href="{{ url_for('download_documento', num_processo=num_processo, num_documento=doc_id) }}" 
+                            <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=doc_id) }}" 
                                class="btn btn-sm btn-outline-primary mt-1">
                                 <i class="bi bi-download"></i> Baixar
                             </a>
@@ -81,7 +81,7 @@
                                         {% if doc_vinc.tipoDocumento %} - Tipo: {{ doc_vinc.tipoDocumento }}{% endif %}
                                         {% if doc_vinc.descricao %} - {{ doc_vinc.descricao }}{% endif %}
                                         <br>
-                                        <a href="{{ url_for('download_documento', num_processo=num_processo, num_documento=doc_vinc.idDocumento) }}" 
+                                        <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=doc_vinc.idDocumento) }}" 
                                            class="btn btn-sm btn-outline-secondary mt-1">
                                             <i class="bi bi-download"></i> Baixar
                                         </a>
@@ -100,7 +100,7 @@
                                         ID: {{ doc_rel.id }}
                                         {% if doc_rel.tipo %} - Tipo: {{ doc_rel.tipo }}{% endif %}
                                         <br>
-                                        <a href="{{ url_for('download_documento', num_processo=num_processo, num_documento=doc_rel.id) }}" 
+                                        <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=doc_rel.id) }}" 
                                            class="btn btn-sm btn-outline-secondary mt-1">
                                             <i class="bi bi-download"></i> Baixar
                                         </a>
