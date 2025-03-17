@@ -125,7 +125,7 @@ def debug_consulta():
 
     try:
         resposta = retorna_processo(num_processo)
-        logger.debug(f"Resposta completa do MNI: {resposta}")
+        logger.debug(f"Resposta completa do MNI recebida para o processo {num_processo}")
 
         # Processar hierarquia de documentos
         docs_principais = {}
@@ -137,19 +137,24 @@ def debug_consulta():
                 id_vinculado = getattr(doc, 'idDocumentoVinculado', None)
                 doc_id = getattr(doc, 'idDocumento', '')
 
+                logger.debug(f"Processando documento: ID={doc_id}, Vinculado a={id_vinculado}")
+
                 if id_vinculado:
                     # É um documento vinculado
                     if id_vinculado not in docs_vinculados:
                         docs_vinculados[id_vinculado] = []
                     docs_vinculados[id_vinculado].append(doc_id)
+                    logger.debug(f"Documento {doc_id} vinculado ao documento {id_vinculado}")
                 else:
                     # É um documento principal
                     docs_principais[doc_id] = []
+                    logger.debug(f"Documento principal encontrado: {doc_id}")
 
         # Adicionar documentos vinculados aos principais
         for doc_id in docs_principais:
             if doc_id in docs_vinculados:
                 docs_principais[doc_id] = docs_vinculados[doc_id]
+                logger.debug(f"Documentos vinculados ao {doc_id}: {docs_vinculados[doc_id]}")
 
         return render_template('debug.html', 
                            resposta=resposta,
@@ -166,11 +171,15 @@ def debug_documento():
     id_documento = request.form.get('id_documento')
 
     try:
+        logger.debug(f"Consultando documento específico: Processo={num_processo}, ID={id_documento}")
         resposta = retorna_documento_processo(num_processo, id_documento)
-        logger.debug(f"Resposta do documento específico: {resposta}")
 
-        return render_template('debug.html', 
-                           resposta=resposta)
+        if 'msg_erro' in resposta:
+            flash(resposta['msg_erro'], 'error')
+            return render_template('debug.html')
+
+        logger.debug(f"Documento encontrado: {resposta}")
+        return render_template('debug.html', resposta=resposta)
 
     except Exception as e:
         logger.error(f"Erro na consulta do documento: {str(e)}", exc_info=True)

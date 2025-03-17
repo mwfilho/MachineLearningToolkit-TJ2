@@ -10,7 +10,9 @@
             <div class="mb-3">
                 <label for="num_processo" class="form-label">Número do Processo</label>
                 <input type="text" class="form-control" id="num_processo" name="num_processo" 
-                       placeholder="0000000-00.0000.0.00.0000" required>
+                       placeholder="0000000-00.0000.0.00.0000" required
+                       data-bs-toggle="tooltip" 
+                       title="Digite o número do processo para ver sua estrutura completa e hierarquia de documentos">
             </div>
             <button type="submit" class="btn btn-primary">Consultar Estrutura Completa</button>
         </form>
@@ -24,7 +26,9 @@
             <div class="mb-3">
                 <label for="id_documento" class="form-label">ID do Documento</label>
                 <input type="text" class="form-control" id="id_documento" name="id_documento" 
-                       placeholder="ID do documento para consulta" required>
+                       placeholder="ID do documento para consulta" required
+                       data-bs-toggle="tooltip" 
+                       title="Digite o ID do documento específico que deseja consultar">
             </div>
             <button type="submit" class="btn btn-primary">Consultar Documento Específico</button>
         </form>
@@ -39,7 +43,7 @@
     <div class="card-body">
         <h5>Estrutura de Documentos:</h5>
         <pre class="bg-dark text-light p-3 rounded"><code>{{ resposta | tojson(indent=2) }}</code></pre>
-        
+
         {% if documentos_hierarquia %}
         <h5 class="mt-4">Hierarquia de Documentos:</h5>
         <div class="table-responsive">
