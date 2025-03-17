@@ -33,6 +33,7 @@ def extract_mni_data(resposta):
 
             if hasattr(processo, 'documento'):
                 for doc in processo.documento:
+                    # Primeiro cria o documento principal
                     doc_info = {
                         'idDocumento': getattr(doc, 'idDocumento', ''),
                         'idDocumentoVinculado': getattr(doc, 'idDocumentoVinculado', ''),
@@ -41,23 +42,25 @@ def extract_mni_data(resposta):
                         'dataHora': getattr(doc, 'dataHora', ''),
                         'mimetype': getattr(doc, 'mimetype', ''),
                         'nivelSigilo': getattr(doc, 'nivelSigilo', 0),
-                        'documentos_relacionados': []  # Lista para documentos relacionados
+                        'documentos_vinculados': []
                     }
 
-                    # Tentar extrair documentos relacionados
-                    try:
-                        logger.debug(f"Buscando documentos relacionados para {doc_info['idDocumento']}")
-                        doc_detalhado = retorna_documento_processo(processo.numero, doc_info['idDocumento'])
-                        if isinstance(doc_detalhado, dict) and not 'msg_erro' in doc_detalhado:
-                            doc_info['documentos_relacionados'].append({
-                                'id': doc_detalhado.get('id_documento', ''),
-                                'tipo': doc_detalhado.get('id_tipo_documento', ''),
-                                'mimetype': doc_detalhado.get('mimetype', '')
-                            })
-                    except Exception as e:
-                        logger.warning(f"Erro ao buscar documentos relacionados: {str(e)}")
+                    # Se tiver documentoVinculado, busca os documentos vinculados
+                    if hasattr(doc, 'documentoVinculado'):
+                        for doc_vinc in doc.documentoVinculado:
+                            vinc_info = {
+                                'idDocumento': getattr(doc_vinc, 'idDocumento', ''),
+                                'tipoDocumento': getattr(doc_vinc, 'tipoDocumento', ''),
+                                'descricao': getattr(doc_vinc, 'descricao', ''),
+                                'dataHora': getattr(doc_vinc, 'dataHora', ''),
+                                'mimetype': getattr(doc_vinc, 'mimetype', ''),
+                                'nivelSigilo': getattr(doc_vinc, 'nivelSigilo', 0)
+                            }
+                            doc_info['documentos_vinculados'].append(vinc_info)
+                            logger.debug(f"Documento vinculado encontrado: {vinc_info['idDocumento']}")
 
                     dados['processo']['documentos'].append(doc_info)
+                    logger.debug(f"Documento principal processado: {doc_info['idDocumento']} com {len(doc_info['documentos_vinculados'])} documentos vinculados")
 
         return dados
     except Exception as e:
@@ -91,14 +94,11 @@ def debug_consulta():
         if dados['sucesso'] and dados['processo'].get('documentos'):
             for doc in dados['processo']['documentos']:
                 doc_id = doc['idDocumento']
-                id_vinculado = doc['idDocumentoVinculado']
+                docs_principais[doc_id] = doc
 
-                if id_vinculado:
-                    if id_vinculado not in docs_vinculados:
-                        docs_vinculados[id_vinculado] = []
-                    docs_vinculados[id_vinculado].append(doc)
-                else:
-                    docs_principais[doc_id] = doc
+                # Se tem documentos vinculados, adiciona à estrutura
+                if doc['documentos_vinculados']:
+                    docs_vinculados[doc_id] = doc['documentos_vinculados']
 
         # Adicionar documentos vinculados aos principais
         for doc_id, doc_info in docs_principais.items():
