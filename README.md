@@ -27,6 +27,9 @@ O sistema suporta duas formas de fornecer credenciais do MNI:
    - `X-MNI-CPF`: CPF/CNPJ do consultante
    - `X-MNI-SENHA`: Senha do consultante
 
+**Importante**: O CPF/CNPJ deve ser fornecido apenas com números, sem pontos, traços ou barras.
+Exemplo: Use `03909823343` ao invés de `039.098.233-43`
+
 ### URLs do MNI
 
 As URLs de acesso ao MNI são configuradas em `config.py`:
@@ -92,8 +95,9 @@ O sistema implementa uma estrutura hierárquica completa:
 ## Como Usar
 
 1. **Página Principal**
-   - Acesse a raiz do sistema
    - Digite o número do processo no formato CNJ
+   - Opcionalmente, forneça suas credenciais do PJe (CPF/CNPJ e senha)
+   - Para o CPF/CNPJ, use apenas números (ex: 03909823343)
    - Clique em "Consultar"
 
 2. **Página de Debug**
@@ -205,7 +209,7 @@ A API permite que cada usuário use suas próprias credenciais do PJe através d
 
 ```bash
 # Headers obrigatórios
-X-MNI-CPF: seu_cpf_aqui
+X-MNI-CPF: 03909823343  # Apenas números, sem formatação
 X-MNI-SENHA: sua_senha_aqui
 ```
 
@@ -215,8 +219,8 @@ X-MNI-SENHA: sua_senha_aqui
    ```bash
    # Exemplo com curl
    curl -X GET "http://seu-servidor.repl.co/api/v1/processo/0000000-00.0000.0.00.0000" \
-     -H "X-MNI-CPF: seu_cpf_aqui" \
-     -H "X-MNI-SENHA: sua_senha_aqui"
+     -H "X-MNI-CPF: 03909823343" \
+     -H "X-MNI-SENHA: sua_senha"
    ```
    Retorna dados do processo e lista completa de documentos.
 
@@ -254,8 +258,8 @@ X-MNI-SENHA: sua_senha_aqui
    ```bash
    # Exemplo com curl
    curl -X GET "http://seu-servidor.repl.co/api/v1/processo/0000000-00.0000.0.00.0000/documento/123456" \
-     -H "X-MNI-CPF: seu_cpf_aqui" \
-     -H "X-MNI-SENHA: sua_senha_aqui" \
+     -H "X-MNI-CPF: 03909823343" \
+     -H "X-MNI-SENHA: sua_senha" \
      --output documento.pdf
    ```
    Faz download do documento específico. Retorna o arquivo binário com o Content-Type apropriado.
