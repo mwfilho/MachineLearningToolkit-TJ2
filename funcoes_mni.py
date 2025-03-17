@@ -46,7 +46,9 @@ def retorna_processo(num_processo, cpf=None, senha=None):
         'numeroProcesso': num_processo,
         'movimentos': True,
         'incluirCabecalho': True,
-        'incluirDocumentos': True
+        'incluirDocumentos': True,
+        'todosDocumentos': True,  # Adicionado para garantir que todos os documentos sejam retornados
+        'documentosVinculados': True  # Adicionado para garantir que documentos vinculados sejam retornados
     }
 
     try:

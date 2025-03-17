@@ -28,7 +28,6 @@ def extract_mni_data(resposta):
                     # Primeiro cria o documento principal
                     doc_info = {
                         'idDocumento': getattr(doc, 'idDocumento', ''),
-                        'idDocumentoVinculado': getattr(doc, 'idDocumentoVinculado', ''),
                         'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
                         'descricao': getattr(doc, 'descricao', ''),
                         'dataHora': getattr(doc, 'dataHora', ''),
@@ -37,7 +36,8 @@ def extract_mni_data(resposta):
                         'documentos_vinculados': []
                     }
 
-                    # Se tiver documentoVinculado, busca os documentos vinculados
+                    # Procura documentos vinculados em todas as possíveis estruturas
+                    # 1. Documentos diretamente vinculados
                     if hasattr(doc, 'documentoVinculado'):
                         for doc_vinc in doc.documentoVinculado:
                             vinc_info = {
@@ -49,7 +49,35 @@ def extract_mni_data(resposta):
                                 'nivelSigilo': getattr(doc_vinc, 'nivelSigilo', 0)
                             }
                             doc_info['documentos_vinculados'].append(vinc_info)
-                            logger.debug(f"Documento vinculado encontrado: {vinc_info['idDocumento']}")
+                            logger.debug(f"Documento vinculado encontrado (direto): {vinc_info['idDocumento']}")
+
+                    # 2. Documentos em subprocessos
+                    if hasattr(doc, 'subprocesso') and hasattr(doc.subprocesso, 'documento'):
+                        for sub_doc in doc.subprocesso.documento:
+                            sub_info = {
+                                'idDocumento': getattr(sub_doc, 'idDocumento', ''),
+                                'tipoDocumento': getattr(sub_doc, 'tipoDocumento', ''),
+                                'descricao': getattr(sub_doc, 'descricao', ''),
+                                'dataHora': getattr(sub_doc, 'dataHora', ''),
+                                'mimetype': getattr(sub_doc, 'mimetype', ''),
+                                'nivelSigilo': getattr(sub_doc, 'nivelSigilo', 0)
+                            }
+                            doc_info['documentos_vinculados'].append(sub_info)
+                            logger.debug(f"Documento vinculado encontrado (subprocesso): {sub_info['idDocumento']}")
+
+                    # 3. Anexos como documentos vinculados
+                    if hasattr(doc, 'anexos'):
+                        for anexo in doc.anexos:
+                            anexo_info = {
+                                'idDocumento': getattr(anexo, 'idDocumento', ''),
+                                'tipoDocumento': getattr(anexo, 'tipoDocumento', ''),
+                                'descricao': getattr(anexo, 'descricao', ''),
+                                'dataHora': getattr(anexo, 'dataHora', ''),
+                                'mimetype': getattr(anexo, 'mimetype', ''),
+                                'nivelSigilo': getattr(anexo, 'nivelSigilo', 0)
+                            }
+                            doc_info['documentos_vinculados'].append(anexo_info)
+                            logger.debug(f"Documento vinculado encontrado (anexo): {anexo_info['idDocumento']}")
 
                     dados['processo']['documentos'].append(doc_info)
                     logger.debug(f"Documento principal processado: {doc_info['idDocumento']} com {len(doc_info['documentos_vinculados'])} documentos vinculados")
