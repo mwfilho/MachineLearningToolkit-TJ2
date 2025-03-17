@@ -39,10 +39,18 @@ def retorna_processo(num_processo, cpf=None, senha=None):
         EasyDict: Dados do processo consultado
     """
     url = MNI_URL
+    cpf_consultante = cpf or MNI_ID_CONSULTANTE
+    senha_consultante = senha or MNI_SENHA_CONSULTANTE
+
+    if not cpf_consultante or not senha_consultante:
+        raise ExcecaoConsultaMNI("Credenciais MNI não fornecidas. Configure MNI_ID_CONSULTANTE e MNI_SENHA_CONSULTANTE")
+
+    logger.debug(f"Iniciando consulta ao processo {num_processo}")
+    logger.debug(f"Usando consultante: {cpf_consultante}")
 
     request_data = {
-        'idConsultante': cpf or MNI_ID_CONSULTANTE,
-        'senhaConsultante': senha or MNI_SENHA_CONSULTANTE,
+        'idConsultante': cpf_consultante,
+        'senhaConsultante': senha_consultante,
         'numeroProcesso': num_processo,
         'movimentos': True,
         'incluirCabecalho': True,
@@ -51,10 +59,13 @@ def retorna_processo(num_processo, cpf=None, senha=None):
 
     try:
         client = Client(url)
-        logger.debug(f"Consultando processo: {num_processo}")
+        logger.debug("Cliente SOAP criado com sucesso")
 
         with client.settings(strict=False, xml_huge_tree=True):
+            logger.debug("Enviando requisição SOAP")
             response = client.service.consultarProcesso(**request_data)
+            logger.debug("Resposta SOAP recebida")
+
             data_dict = serialize_object(response)
             response = EasyDict(data_dict)
 
@@ -70,15 +81,21 @@ def retorna_processo(num_processo, cpf=None, senha=None):
                             logger.debug(f"Documento vinculado encontrado: ID={getattr(doc_vinc, 'idDocumento', 'N/A')}")
             return response
         else:
-            logger.error(f"Erro na consulta do processo {num_processo}: {response.mensagem}")
-            raise ExcecaoConsultaMNI(response.mensagem)
+            error_msg = f"Erro na consulta do processo {num_processo}: {response.mensagem}"
+            logger.error(error_msg)
+            raise ExcecaoConsultaMNI(error_msg)
 
     except Fault as e:
-        logger.error(f"Erro SOAP na consulta do processo {num_processo}: {str(e)}")
-        raise ExcecaoConsultaMNI(f"Erro na comunicação SOAP: {str(e)}")
+        if "loginFailed" in str(e):
+            error_msg = "Erro de autenticação no MNI. Verifique suas credenciais (CPF/CNPJ e senha)"
+        else:
+            error_msg = f"Erro na comunicação SOAP: {str(e)}"
+        logger.error(f"{error_msg} (Processo: {num_processo})")
+        raise ExcecaoConsultaMNI(error_msg)
     except Exception as e:
-        logger.error(f"Erro inesperado na consulta do processo {num_processo}: {str(e)}")
-        raise ExcecaoConsultaMNI(f"Erro inesperado: {str(e)}")
+        error_msg = f"Erro inesperado na consulta do processo {num_processo}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        raise ExcecaoConsultaMNI(error_msg)
 
 def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None):
     """
