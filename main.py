@@ -7,29 +7,47 @@ from controle.exceptions import ExcecaoConsultaMNI
 import tempfile
 import os
 import logging
-from zeep.helpers import serialize_object
-import json
-from xml.etree import ElementTree
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-def xml_to_dict(element):
-    """Convert XML element to dictionary"""
-    if not isinstance(element, ElementTree.Element):
-        return element
+def extract_mni_data(resposta):
+    """Extrai dados relevantes da resposta MNI de forma segura"""
+    try:
+        dados = {
+            'sucesso': getattr(resposta, 'sucesso', False),
+            'mensagem': getattr(resposta, 'mensagem', ''),
+            'processo': {}
+        }
 
-    result = {}
-    for child in element:
-        if child:
-            if len(child) == 1:
-                result[child.tag] = xml_to_dict(child[0])
-            else:
-                result[child.tag] = xml_to_dict(child)
-        else:
-            result[child.tag] = child.text
-    return result
+        if hasattr(resposta, 'processo'):
+            processo = resposta.processo
+            dados['processo'] = {
+                'numero': getattr(processo, 'numero', ''),
+                'classeProcessual': getattr(processo, 'classeProcessual', ''),
+                'dataAjuizamento': getattr(processo, 'dataAjuizamento', ''),
+                'orgaoJulgador': getattr(getattr(processo, 'orgaoJulgador', {}), 'descricao', ''),
+                'documentos': []
+            }
+
+            if hasattr(processo, 'documento'):
+                for doc in processo.documento:
+                    doc_info = {
+                        'idDocumento': getattr(doc, 'idDocumento', ''),
+                        'idDocumentoVinculado': getattr(doc, 'idDocumentoVinculado', ''),
+                        'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
+                        'descricao': getattr(doc, 'descricao', ''),
+                        'dataHora': getattr(doc, 'dataHora', ''),
+                        'mimetype': getattr(doc, 'mimetype', ''),
+                        'nivelSigilo': getattr(doc, 'nivelSigilo', 0)
+                    }
+                    dados['processo']['documentos'].append(doc_info)
+
+        return dados
+    except Exception as e:
+        logger.error(f"Erro ao extrair dados MNI: {str(e)}")
+        return {'sucesso': False, 'mensagem': f'Erro ao processar dados: {str(e)}'}
 
 @app.route('/')
 def index():
@@ -44,63 +62,38 @@ def debug_consulta():
     num_processo = request.form.get('num_processo')
 
     try:
+        logger.debug(f"Consultando processo: {num_processo}")
         resposta = retorna_processo(num_processo)
-        logger.debug(f"Resposta completa do MNI recebida para o processo {num_processo}")
+
+        # Extrair dados relevantes
+        dados = extract_mni_data(resposta)
+        logger.debug(f"Dados extraídos: {dados}")
 
         # Processar hierarquia de documentos
         docs_principais = {}
         docs_vinculados = {}
 
-        if resposta.sucesso and hasattr(resposta.processo, 'documento'):
-            for doc in resposta.processo.documento:
-                # Verificar se é um documento vinculado
-                id_vinculado = getattr(doc, 'idDocumentoVinculado', None)
-                doc_id = getattr(doc, 'idDocumento', '')
-
-                doc_info = {
-                    'id': doc_id,
-                    'tipo': getattr(doc, 'tipoDocumento', ''),
-                    'descricao': getattr(doc, 'descricao', ''),
-                    'data': getattr(doc, 'dataHora', '')
-                }
-
-                logger.debug(f"Processando documento: {doc_info}")
+        if dados['sucesso'] and dados['processo'].get('documentos'):
+            for doc in dados['processo']['documentos']:
+                doc_id = doc['idDocumento']
+                id_vinculado = doc['idDocumentoVinculado']
 
                 if id_vinculado:
-                    # É um documento vinculado
                     if id_vinculado not in docs_vinculados:
                         docs_vinculados[id_vinculado] = []
-                    docs_vinculados[id_vinculado].append(doc_info)
+                    docs_vinculados[id_vinculado].append(doc)
                 else:
-                    # É um documento principal
-                    docs_principais[doc_id] = doc_info
+                    docs_principais[doc_id] = doc
 
         # Adicionar documentos vinculados aos principais
-        for doc_id in docs_principais:
+        for doc_id, doc_info in docs_principais.items():
             if doc_id in docs_vinculados:
-                docs_principais[doc_id]['documentos_vinculados'] = docs_vinculados[doc_id]
-
-        # Serializar resposta removendo elementos XML
-        try:
-            serialized = serialize_object(resposta)
-            # Remove conteúdos binários
-            if isinstance(serialized, dict) and 'processo' in serialized:
-                if 'documento' in serialized['processo']:
-                    for doc in serialized['processo']['documento']:
-                        if 'conteudo' in doc:
-                            doc['conteudo'] = '[CONTEÚDO BINÁRIO]'
-        except Exception as e:
-            logger.error(f"Erro na serialização: {e}")
-            serialized = {
-                'erro_serializacao': str(e),
-                'processo': {
-                    'numero': num_processo,
-                    'mensagem': 'Erro ao serializar resposta completa'
-                }
-            }
+                doc_info['documentos_vinculados'] = docs_vinculados[doc_id]
+            else:
+                doc_info['documentos_vinculados'] = []
 
         return render_template('debug.html', 
-                           resposta=serialized,
+                           resposta=dados,
                            documentos_hierarquia=docs_principais)
 
     except Exception as e:
@@ -121,16 +114,17 @@ def debug_documento():
             flash(resposta['msg_erro'], 'error')
             return render_template('debug.html')
 
-        # Criar uma cópia da resposta para serialização
-        resposta_serializable = {}
-        for key, value in resposta.items():
-            if key == 'conteudo':
-                resposta_serializable[key] = '[CONTEÚDO BINÁRIO]'
-            else:
-                resposta_serializable[key] = value
+        # Criar uma versão segura para exibição
+        doc_info = {
+            'num_processo': resposta.get('num_processo', ''),
+            'id_documento': resposta.get('id_documento', ''),
+            'id_tipo_documento': resposta.get('id_tipo_documento', ''),
+            'mimetype': resposta.get('mimetype', ''),
+            'conteudo': '[CONTEÚDO BINÁRIO]' if resposta.get('conteudo') else 'Sem conteúdo'
+        }
 
-        logger.debug(f"Documento encontrado: {resposta_serializable}")
-        return render_template('debug.html', resposta=resposta_serializable)
+        logger.debug(f"Documento encontrado: {doc_info}")
+        return render_template('debug.html', resposta=doc_info)
 
     except Exception as e:
         logger.error(f"Erro na consulta do documento: {str(e)}", exc_info=True)
