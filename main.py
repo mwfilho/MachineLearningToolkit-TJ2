@@ -71,8 +71,8 @@ def consultar():
 
             logger.debug(f"Total de documentos processados: {len(documentos)}")
             return render_template('result.html', 
-                               processo=processo_info,
-                               documentos=documentos)
+                                   processo=processo_info,
+                                   documentos=documentos)
         else:
             msg = getattr(resposta, 'mensagem', 'Processo não encontrado ou erro na consulta.')
             flash(msg, 'error')
@@ -114,6 +114,68 @@ def download_documento(num_processo, num_documento):
         logger.error(f"Erro ao baixar documento: {str(e)}", exc_info=True)  # Full error log
         flash(f'Erro ao baixar documento: {str(e)}', 'error')
         return render_template('index.html')
+
+@app.route('/debug')
+def debug():
+    return render_template('debug.html')
+
+@app.route('/debug/consulta', methods=['POST'])
+def debug_consulta():
+    num_processo = request.form.get('num_processo')
+
+    try:
+        resposta = retorna_processo(num_processo)
+        logger.debug(f"Resposta completa do MNI: {resposta}")
+
+        # Processar hierarquia de documentos
+        docs_principais = {}
+        docs_vinculados = {}
+
+        if resposta.sucesso and hasattr(resposta.processo, 'documento'):
+            for doc in resposta.processo.documento:
+                # Verificar se é um documento vinculado
+                id_vinculado = getattr(doc, 'idDocumentoVinculado', None)
+                doc_id = getattr(doc, 'idDocumento', '')
+
+                if id_vinculado:
+                    # É um documento vinculado
+                    if id_vinculado not in docs_vinculados:
+                        docs_vinculados[id_vinculado] = []
+                    docs_vinculados[id_vinculado].append(doc_id)
+                else:
+                    # É um documento principal
+                    docs_principais[doc_id] = []
+
+        # Adicionar documentos vinculados aos principais
+        for doc_id in docs_principais:
+            if doc_id in docs_vinculados:
+                docs_principais[doc_id] = docs_vinculados[doc_id]
+
+        return render_template('debug.html', 
+                           resposta=resposta,
+                           documentos_hierarquia=docs_principais)
+
+    except Exception as e:
+        logger.error(f"Erro na consulta de debug: {str(e)}", exc_info=True)
+        flash(f'Erro na consulta: {str(e)}', 'error')
+        return render_template('debug.html')
+
+@app.route('/debug/documento', methods=['POST'])
+def debug_documento():
+    num_processo = request.form.get('num_processo')
+    id_documento = request.form.get('id_documento')
+
+    try:
+        resposta = retorna_documento_processo(num_processo, id_documento)
+        logger.debug(f"Resposta do documento específico: {resposta}")
+
+        return render_template('debug.html', 
+                           resposta=resposta)
+
+    except Exception as e:
+        logger.error(f"Erro na consulta do documento: {str(e)}", exc_info=True)
+        flash(f'Erro na consulta do documento: {str(e)}', 'error')
+        return render_template('debug.html')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

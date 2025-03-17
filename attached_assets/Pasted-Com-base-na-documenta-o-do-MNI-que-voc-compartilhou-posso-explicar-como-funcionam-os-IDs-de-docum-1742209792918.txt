@@ -1,0 +1,37 @@
+Com base na documentação do MNI que você compartilhou, posso explicar como funcionam os IDs de documentos e suas vinculações no sistema PJe.
+
+A documentação do MNI menciona especificamente dois atributos importantes na estrutura de documentos:
+
+1. **idDocumento**: Identificador único do documento no sistema. Este é o ID principal que identifica cada documento individualmente no PJe.
+
+2. **idDocumentoVinculado**: Identificador que estabelece uma relação hierárquica entre documentos. Quando um documento possui este atributo preenchido, significa que ele é um documento anexo ou subordinado a outro documento principal.
+
+Na estrutura de documentos do MNI, a vinculação funciona da seguinte forma:
+
+- Um documento sem `idDocumentoVinculado` é considerado um documento principal
+- Um documento que possui `idDocumentoVinculado` é considerado um anexo do documento cujo ID é referenciado
+
+No arquivo "Consulta Completa de Documentos no PJe via MNI.txt" que você compartilhou, existe uma implementação que trabalha justamente com esta hierarquia:
+
+```python
+# Verificar se é um documento vinculado
+id_vinculado = getattr(doc, 'idDocumentoVinculado', None)
+            
+if id_vinculado:
+    # É um documento vinculado
+    if id_vinculado not in docs_vinculados:
+        docs_vinculados[id_vinculado] = []
+    docs_vinculados[id_vinculado].append(doc.idDocumento)
+else:
+    # É um documento principal
+    docs_principais[doc.idDocumento] = info_doc
+```
+
+Essa relação de vinculação é importante para manter a organização dos documentos processuais, como por exemplo:
+
+- Um documento principal poderia ser uma petição inicial
+- Documentos vinculados a ela poderiam ser documentos comprobatórios, procurações, etc.
+
+A documentação não especifica um limite para o número de níveis de vinculação, mas na prática, geralmente são utilizados apenas dois níveis: documentos principais e seus anexos.
+
+Ao consultar processos através do MNI, você pode recuperar toda essa estrutura hierárquica e reconstruí-la em seu sistema, mantendo as mesmas relações existentes no PJe.

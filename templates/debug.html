@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h4>Debug MNI</h4>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('debug_consulta') }}" class="mb-4">
+            <div class="mb-3">
+                <label for="num_processo" class="form-label">Número do Processo</label>
+                <input type="text" class="form-control" id="num_processo" name="num_processo" 
+                       placeholder="0000000-00.0000.0.00.0000" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Consultar Estrutura Completa</button>
+        </form>
+
+        <form method="POST" action="{{ url_for('debug_documento') }}" class="mb-4">
+            <div class="mb-3">
+                <label for="num_processo" class="form-label">Número do Processo</label>
+                <input type="text" class="form-control" id="num_processo" name="num_processo" 
+                       placeholder="0000000-00.0000.0.00.0000" required>
+            </div>
+            <div class="mb-3">
+                <label for="id_documento" class="form-label">ID do Documento</label>
+                <input type="text" class="form-control" id="id_documento" name="id_documento" 
+                       placeholder="ID do documento para consulta" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Consultar Documento Específico</button>
+        </form>
+    </div>
+</div>
+
+{% if resposta %}
+<div class="card">
+    <div class="card-header">
+        <h4>Resposta do MNI</h4>
+    </div>
+    <div class="card-body">
+        <h5>Estrutura de Documentos:</h5>
+        <pre class="bg-dark text-light p-3 rounded"><code>{{ resposta | tojson(indent=2) }}</code></pre>
+        
+        {% if documentos_hierarquia %}
+        <h5 class="mt-4">Hierarquia de Documentos:</h5>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID Principal</th>
+                        <th>Documentos Vinculados</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc_principal, docs_vinculados in documentos_hierarquia.items() %}
+                    <tr>
+                        <td>{{ doc_principal }}</td>
+                        <td>
+                            {% if docs_vinculados %}
+                                {{ docs_vinculados | join(', ') }}
+                            {% else %}
+                                <em>Nenhum documento vinculado</em>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
