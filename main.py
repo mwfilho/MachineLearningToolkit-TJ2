@@ -40,8 +40,23 @@ def extract_mni_data(resposta):
                         'descricao': getattr(doc, 'descricao', ''),
                         'dataHora': getattr(doc, 'dataHora', ''),
                         'mimetype': getattr(doc, 'mimetype', ''),
-                        'nivelSigilo': getattr(doc, 'nivelSigilo', 0)
+                        'nivelSigilo': getattr(doc, 'nivelSigilo', 0),
+                        'documentos_relacionados': []  # Lista para documentos relacionados
                     }
+
+                    # Tentar extrair documentos relacionados
+                    try:
+                        logger.debug(f"Buscando documentos relacionados para {doc_info['idDocumento']}")
+                        doc_detalhado = retorna_documento_processo(processo.numero, doc_info['idDocumento'])
+                        if isinstance(doc_detalhado, dict) and not 'msg_erro' in doc_detalhado:
+                            doc_info['documentos_relacionados'].append({
+                                'id': doc_detalhado.get('id_documento', ''),
+                                'tipo': doc_detalhado.get('id_tipo_documento', ''),
+                                'mimetype': doc_detalhado.get('mimetype', '')
+                            })
+                    except Exception as e:
+                        logger.warning(f"Erro ao buscar documentos relacionados: {str(e)}")
+
                     dados['processo']['documentos'].append(doc_info)
 
         return dados
@@ -130,68 +145,6 @@ def debug_documento():
         logger.error(f"Erro na consulta do documento: {str(e)}", exc_info=True)
         flash(f'Erro na consulta do documento: {str(e)}', 'error')
         return render_template('debug.html')
-
-@app.route('/consultar', methods=['POST'])
-def consultar():
-    num_processo = request.form.get('num_processo')
-
-    if not num_processo:
-        flash('Por favor, insira um número de processo válido.', 'error')
-        return render_template('index.html')
-
-    try:
-        resposta = retorna_processo(num_processo)
-        logger.debug(f"MNI Response received. Success: {resposta.sucesso}")
-
-        if resposta and resposta.sucesso:
-            processo_info = {
-                'numero': getattr(resposta.processo, 'numero', num_processo),
-                'classeProcessual': getattr(resposta.processo, 'classeProcessual', 'Não disponível'),
-                'dataAjuizamento': getattr(resposta.processo, 'dataAjuizamento', 'Não disponível'),
-                'orgaoJulgador': {
-                    'descricao': getattr(getattr(resposta.processo, 'orgaoJulgador', {}), 'descricao', 'Não disponível')
-                },
-                'situacao': getattr(resposta.processo, 'situacao', 'Não disponível')
-            }
-
-            documentos = []
-            if hasattr(resposta.processo, 'documento'):
-                logger.debug(f"Processando {len(resposta.processo.documento)} documentos")
-
-                for doc in resposta.processo.documento:
-                    doc_info = {
-                        'id': getattr(doc, 'idDocumento', ''),
-                        'tipo': getattr(doc, 'tipoDocumento', ''),
-                        'nome': getattr(doc, 'nome', ''),
-                        'descricao': getattr(doc, 'descricao', ''),
-                        'assunto': getattr(doc, 'assunto', ''),
-                        'movimento': getattr(doc, 'movimento', ''),
-                        'data_protocolo': getattr(doc, 'dataProtocolo', ''),
-                        'nivel_sigilo': getattr(doc, 'nivelSigilo', 0)
-                    }
-
-                    if doc_info['nivel_sigilo'] < 5:
-                        documentos.append(doc_info)
-                        logger.debug(f"Documento adicionado: {doc_info}")
-                    else:
-                        logger.debug(f"Documento sigiloso ignorado: {doc_info['id']}")
-
-            logger.debug(f"Total de documentos processados: {len(documentos)}")
-            return render_template('result.html', 
-                                   processo=processo_info,
-                                   documentos=documentos)
-        else:
-            msg = getattr(resposta, 'mensagem', 'Processo não encontrado ou erro na consulta.')
-            flash(msg, 'error')
-            return render_template('index.html')
-
-    except ExcecaoConsultaMNI as e:
-        flash(f'Erro na consulta: {str(e)}', 'error')
-        return render_template('index.html')
-    except Exception as e:
-        logger.error(f"Erro inesperado: {str(e)}", exc_info=True)
-        flash(f'Erro inesperado: {str(e)}', 'error')
-        return render_template('index.html')
 
 @app.route('/download_documento/<num_processo>/<num_documento>')
 def download_documento(num_processo, num_documento):

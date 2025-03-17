@@ -55,12 +55,20 @@
                         <th>Tipo</th>
                         <th>Descrição</th>
                         <th>Documentos Vinculados</th>
+                        <th>Documentos Relacionados</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for doc_id, doc_info in documentos_hierarquia.items() %}
                     <tr>
-                        <td>{{ doc_id }}</td>
+                        <td>
+                            {{ doc_id }}
+                            <br>
+                            <a href="{{ url_for('download_documento', num_processo=resposta.processo.numero, num_documento=doc_id) }}" 
+                               class="btn btn-sm btn-outline-primary mt-1">
+                                <i class="bi bi-download"></i> Baixar
+                            </a>
+                        </td>
                         <td>{{ doc_info.dataHora }}</td>
                         <td>{{ doc_info.tipoDocumento }}</td>
                         <td>{{ doc_info.descricao }}</td>
@@ -72,11 +80,35 @@
                                         ID: {{ doc_vinc.idDocumento }}
                                         {% if doc_vinc.tipoDocumento %} - Tipo: {{ doc_vinc.tipoDocumento }}{% endif %}
                                         {% if doc_vinc.descricao %} - {{ doc_vinc.descricao }}{% endif %}
+                                        <br>
+                                        <a href="{{ url_for('download_documento', num_processo=resposta.processo.numero, num_documento=doc_vinc.idDocumento) }}" 
+                                           class="btn btn-sm btn-outline-secondary mt-1">
+                                            <i class="bi bi-download"></i> Baixar
+                                        </a>
                                     </li>
                                 {% endfor %}
                                 </ul>
                             {% else %}
                                 <em>Nenhum documento vinculado</em>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if doc_info.documentos_relacionados %}
+                                <ul class="list-unstyled">
+                                {% for doc_rel in doc_info.documentos_relacionados %}
+                                    <li>
+                                        ID: {{ doc_rel.id }}
+                                        {% if doc_rel.tipo %} - Tipo: {{ doc_rel.tipo }}{% endif %}
+                                        <br>
+                                        <a href="{{ url_for('download_documento', num_processo=resposta.processo.numero, num_documento=doc_rel.id) }}" 
+                                           class="btn btn-sm btn-outline-secondary mt-1">
+                                            <i class="bi bi-download"></i> Baixar
+                                        </a>
+                                    </li>
+                                {% endfor %}
+                                </ul>
+                            {% else %}
+                                <em>Nenhum documento relacionado</em>
                             {% endif %}
                         </td>
                     </tr>
