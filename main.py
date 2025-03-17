@@ -109,7 +109,8 @@ def debug_consulta():
 
         return render_template('debug.html', 
                            resposta=dados,
-                           documentos_hierarquia=docs_principais)
+                           documentos_hierarquia=docs_principais,
+                           num_processo=num_processo)  
 
     except Exception as e:
         logger.error(f"Erro na consulta de debug: {str(e)}", exc_info=True)
