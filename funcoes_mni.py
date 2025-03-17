@@ -46,9 +46,7 @@ def retorna_processo(num_processo, cpf=None, senha=None):
         'numeroProcesso': num_processo,
         'movimentos': True,
         'incluirCabecalho': True,
-        'incluirDocumentos': True,
-        'todosDocumentos': True,  # Adicionado para garantir que todos os documentos sejam retornados
-        'documentosVinculados': True  # Adicionado para garantir que documentos vinculados sejam retornados
+        'incluirDocumentos': True
     }
 
     try:
@@ -65,8 +63,11 @@ def retorna_processo(num_processo, cpf=None, senha=None):
                 logger.debug(f"Processo encontrado. Número de documentos: {len(response.processo.documento)}")
                 for doc in response.processo.documento:
                     logger.debug(f"Documento encontrado: ID={getattr(doc, 'idDocumento', 'N/A')}, "
-                               f"Tipo={getattr(doc, 'tipoDocumento', 'N/A')}, "
-                               f"Nome={getattr(doc, 'nome', 'N/A')}")
+                             f"Tipo={getattr(doc, 'tipoDocumento', 'N/A')}, "
+                             f"Nome={getattr(doc, 'nome', 'N/A')}")
+                    if hasattr(doc, 'documentoVinculado'):
+                        for doc_vinc in doc.documentoVinculado:
+                            logger.debug(f"Documento vinculado encontrado: ID={getattr(doc_vinc, 'idDocumento', 'N/A')}")
             return response
         else:
             logger.error(f"Erro na consulta do processo {num_processo}: {response.mensagem}")
