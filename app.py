@@ -16,25 +16,36 @@ logger = logging.getLogger(__name__)
 class Base(DeclarativeBase):
     pass
 
-db = SQLAlchemy(model_class=Base)
+# create the app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", os.environ.get('SECRET_KEY', 'dev'))
 
-# Configure the SQLAlchemy database connection
+# Configure SQLAlchemy
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
 }
 
-# Initialize extensions
+# Initialize SQLAlchemy
+db = SQLAlchemy(model_class=Base)
 db.init_app(app)
 
 # Register blueprints
-app.register_blueprint(web)  # Web routes without prefix
-app.register_blueprint(api)  # API routes with prefix /api/v1
+logger.debug("Registrando blueprint web...")
+app.register_blueprint(web)  # Web routes sem prefixo
+
+logger.debug("Registrando blueprint api...")
+app.register_blueprint(api)  # API routes com prefixo /api/v1
+
+logger.debug("Blueprints registrados com sucesso")
 
 with app.app_context():
-    # Make sure to import the models here or their tables won't be created
+    # Import models para criar as tabelas
     import models  # noqa: F401
     db.create_all()
+
+# Log todas as rotas registradas
+logger.debug("Rotas registradas:")
+for rule in app.url_map.iter_rules():
+    logger.debug(f"{rule.endpoint}: {rule.rule}")

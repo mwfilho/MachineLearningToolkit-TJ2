@@ -17,6 +17,13 @@ def get_mni_credentials():
     senha = request.headers.get('X-MNI-SENHA') or os.environ.get('MNI_SENHA_CONSULTANTE')
     return cpf, senha
 
+@api.before_request
+def log_request_info():
+    """Log detalhes da requisição para debug"""
+    logger.debug('Headers: %s', dict(request.headers))
+    logger.debug('Body: %s', request.get_data())
+    logger.debug('URL: %s', request.url)
+
 @api.route('/processo/<num_processo>', methods=['GET'])
 def get_processo(num_processo):
     """
