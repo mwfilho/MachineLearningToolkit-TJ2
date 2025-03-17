@@ -26,12 +26,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def retorna_processo(num_processo):
+def retorna_processo(num_processo, cpf=None, senha=None):
     """
     Consulta um processo judicial via MNI.
 
     Args:
         num_processo (str): Número do processo no formato CNJ
+        cpf (str, optional): CPF/CNPJ do consultante. Se não fornecido, usa o padrão do ambiente
+        senha (str, optional): Senha do consultante. Se não fornecida, usa o padrão do ambiente
 
     Returns:
         EasyDict: Dados do processo consultado
@@ -39,8 +41,8 @@ def retorna_processo(num_processo):
     url = MNI_URL
 
     request_data = {
-        'idConsultante': MNI_ID_CONSULTANTE,
-        'senhaConsultante': MNI_SENHA_CONSULTANTE,
+        'idConsultante': cpf or MNI_ID_CONSULTANTE,
+        'senhaConsultante': senha or MNI_SENHA_CONSULTANTE,
         'numeroProcesso': num_processo,
         'movimentos': True,
         'incluirCabecalho': True,
@@ -75,41 +77,43 @@ def retorna_processo(num_processo):
         logger.error(f"Erro inesperado na consulta do processo {num_processo}: {str(e)}")
         raise ExcecaoConsultaMNI(f"Erro inesperado: {str(e)}")
 
-def retorna_documento_processo(num_processo, num_documento):
+def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None):
     """
     Retorna um documento específico de um processo.
-    
+
     Args:
         num_processo (str): Número do processo
         num_documento (str): ID do documento
-        
+        cpf (str, optional): CPF/CNPJ do consultante. Se não fornecido, usa o padrão do ambiente
+        senha (str, optional): Senha do consultante. Se não fornecida, usa o padrão do ambiente
+
     Returns:
         dict: Dados do documento incluindo seu conteúdo
     """
     url = MNI_URL
-    
+
     request_data = {
-        'idConsultante': MNI_ID_CONSULTANTE,
-        'senhaConsultante': MNI_SENHA_CONSULTANTE,
+        'idConsultante': cpf or MNI_ID_CONSULTANTE,
+        'senhaConsultante': senha or MNI_SENHA_CONSULTANTE,
         'numeroProcesso': num_processo,
         'documento': num_documento
     }
 
     try:
         client = Client(url)
-        
+
         with client.settings(strict=False, xml_huge_tree=True):
             response = client.service.consultarProcesso(**request_data)
             data_dict = serialize_object(response)
             response = EasyDict(data_dict)
-            
+
         if response.sucesso:
             for documento in response.processo.documento:
                 if int(documento.idDocumento) == int(num_documento):
                     if documento.conteudo is None:
                         return registro_erro(num_processo, num_documento, 
-                                          f"Documento {num_documento} retornou vazio")
-                                          
+                                        f"Documento {num_documento} retornou vazio")
+
                     return {
                         'num_processo': num_processo,
                         'id_documento': documento.idDocumento,
@@ -117,13 +121,13 @@ def retorna_documento_processo(num_processo, num_documento):
                         'mimetype': documento.mimetype,
                         'conteudo': documento.conteudo
                     }
-                    
+
             return registro_erro(num_processo, num_documento, 
-                               f"Documento {num_documento} não encontrado")
+                             f"Documento {num_documento} não encontrado")
         else:
             return registro_erro(num_processo, num_documento, 
-                               f"Erro ao consultar o MNI: {response.mensagem}")
-                               
+                             f"Erro ao consultar o MNI: {response.mensagem}")
+
     except Exception as e:
         logger.error(f"Erro ao consultar documento {num_documento}: {str(e)}")
         return registro_erro(num_processo, num_documento, str(e))
@@ -131,12 +135,12 @@ def retorna_documento_processo(num_processo, num_documento):
 def registro_erro(num_processo, num_documento, msg):
     """
     Registra um erro ocorrido durante o processamento.
-    
+
     Args:
         num_processo (str): Número do processo
         num_documento (str): ID do documento
         msg (str): Mensagem de erro
-        
+
     Returns:
         dict: Dados do erro formatados
     """
@@ -150,24 +154,24 @@ def registro_erro(num_processo, num_documento, msg):
 def consultar_tipo_documento(tipo_documento):
     """
     Consulta a descrição de um tipo de documento.
-    
+
     Args:
         tipo_documento (str): Código do tipo de documento
-        
+
     Returns:
         str: Descrição do tipo de documento
     """
     try:
         client = Client(MNI_CONSULTA_URL)
         response = client.service.consultarTodosTiposDocumentoProcessual()
-        
+
         if isinstance(response, list):
             for retorno in response:
                 if tipo_documento == retorno.codigo:
                     return retorno.descricao
-                    
+
         return "Tipo não encontrado"
-        
+
     except Exception as e:
         logger.error(f"Erro ao consultar tipo de documento: {str(e)}")
         return "Erro na consulta"
@@ -175,11 +179,11 @@ def consultar_tipo_documento(tipo_documento):
 def consultar_classe_processual(classe_processual, codigoLocalidade):
     """
     Consulta a descrição de uma classe processual.
-    
+
     Args:
         classe_processual (str): Código da classe
         codigoLocalidade (str): Código da localidade
-        
+
     Returns:
         str: Descrição da classe processual
     """
@@ -190,17 +194,17 @@ def consultar_classe_processual(classe_processual, codigoLocalidade):
                 'id': str(codigoLocalidade)
             }
         }
-        
+
         client = Client(MNI_CONSULTA_URL)
         response = client.service.consultarClassesJudiciais(**request_data)
-        
+
         if isinstance(response, list):
             for retorno in response:
                 if int(classe_processual) == int(retorno.codigo):
                     return retorno.descricao
-                    
+
         return "Classe não encontrada"
-        
+
     except Exception as e:
         logger.error(f"Erro ao consultar classe processual: {str(e)}")
         return "Erro na consulta"
