@@ -9,8 +9,8 @@ import tempfile
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Criar o blueprint com url_prefix
-api = Blueprint('api', __name__)
+# Criar o blueprint da API
+api = Blueprint('api', __name__, url_prefix='/api/v1')
 
 def get_mni_credentials():
     """Obtém credenciais do MNI dos headers ou environment"""
@@ -25,7 +25,7 @@ def log_request_info():
     logger.debug('Body: %s', request.get_data())
     logger.debug('URL: %s', request.url)
 
-@api.route('/api/v1/processo/<num_processo>', methods=['GET'])
+@api.route('/processo/<num_processo>', methods=['GET'])
 def get_processo(num_processo):
     """
     Retorna os dados do processo incluindo lista de documentos
@@ -53,7 +53,7 @@ def get_processo(num_processo):
             'mensagem': 'Erro ao consultar processo'
         }), 500
 
-@api.route('/api/v1/processo/<num_processo>/documento/<num_documento>', methods=['GET'])
+@api.route('/processo/<num_processo>/documento/<num_documento>', methods=['GET'])
 def download_documento(num_processo, num_documento):
     """
     Faz download de um documento específico do processo
