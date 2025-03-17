@@ -10,17 +10,22 @@ Sistema de consulta processual judicial avançado que utiliza o Modelo Nacional 
 - ✅ Visualização hierárquica de documentos do processo
 - ✅ Download de documentos processuais
 - ✅ Interface de debug para análise detalhada
+- ✅ API REST para integração com outros sistemas
+- ✅ Suporte a credenciais MNI personalizadas
 
 ## Configuração do Ambiente
 
 ### Credenciais MNI
 
-O sistema utiliza credenciais do MNI armazenadas como variáveis de ambiente por questões de segurança:
+O sistema suporta duas formas de fornecer credenciais do MNI:
 
-- `MNI_ID_CONSULTANTE`: CPF/CNPJ do consultante 
-- `MNI_SENHA_CONSULTANTE`: Senha do consultante
+1. **Variáveis de Ambiente** (para uso geral)
+   - `MNI_ID_CONSULTANTE`: CPF/CNPJ do consultante 
+   - `MNI_SENHA_CONSULTANTE`: Senha do consultante
 
-Estas credenciais são utilizadas para autenticar todas as requisições ao serviço MNI.
+2. **Headers HTTP** (para API REST)
+   - `X-MNI-CPF`: CPF/CNPJ do consultante
+   - `X-MNI-SENHA`: Senha do consultante
 
 ### URLs do MNI
 
@@ -194,11 +199,24 @@ Possíveis melhorias futuras:
 
 O sistema disponibiliza uma API REST para integração com outros sistemas:
 
+### Autenticação
+
+A API permite que cada usuário use suas próprias credenciais do PJe através de headers HTTP:
+
+```bash
+# Headers obrigatórios
+X-MNI-CPF: seu_cpf_aqui
+X-MNI-SENHA: sua_senha_aqui
+```
+
 ### Endpoints
 
 1. **Consulta de Processo**
-   ```
-   GET /api/v1/processo/{numero_processo}
+   ```bash
+   # Exemplo com curl
+   curl -X GET "http://seu-servidor.repl.co/api/v1/processo/0000000-00.0000.0.00.0000" \
+     -H "X-MNI-CPF: seu_cpf_aqui" \
+     -H "X-MNI-SENHA: sua_senha_aqui"
    ```
    Retorna dados do processo e lista completa de documentos.
 
@@ -233,26 +251,25 @@ O sistema disponibiliza uma API REST para integração com outros sistemas:
    ```
 
 2. **Download de Documento**
-   ```
-   GET /api/v1/processo/{numero_processo}/documento/{id_documento}
+   ```bash
+   # Exemplo com curl
+   curl -X GET "http://seu-servidor.repl.co/api/v1/processo/0000000-00.0000.0.00.0000/documento/123456" \
+     -H "X-MNI-CPF: seu_cpf_aqui" \
+     -H "X-MNI-SENHA: sua_senha_aqui" \
+     --output documento.pdf
    ```
    Faz download do documento específico. Retorna o arquivo binário com o Content-Type apropriado.
 
-### Exemplos de Uso (Postman)
+### Códigos de Status HTTP
 
-1. **Consultar Processo**
-   ```
-   GET http://seu-servidor.repl.co/api/v1/processo/0000000-00.0000.0.00.0000
-   ```
-
-2. **Baixar Documento**
-   ```
-   GET http://seu-servidor.repl.co/api/v1/processo/0000000-00.0000.0.00.0000/documento/123456
-   ```
+- 200: Sucesso
+- 401: Credenciais não fornecidas ou inválidas
+- 404: Documento não encontrado
+- 500: Erro interno do servidor
 
 ### Notas sobre a API
 
-- Todos os endpoints retornam erro 500 em caso de falha interna
-- O download de documentos retorna erro 404 se o documento não for encontrado
+- As credenciais são obrigatórias em todas as chamadas
 - Os documentos são retornados em seu formato original (PDF, HTML, etc)
 - A API preserva os tipos MIME originais dos documentos
+- Recomenda-se usar HTTPS em produção para proteger as credenciais

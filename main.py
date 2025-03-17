@@ -28,10 +28,16 @@ def debug():
 @app.route('/debug/consulta', methods=['POST'])
 def debug_consulta():
     num_processo = request.form.get('num_processo')
+    cpf = request.form.get('cpf')
+    senha = request.form.get('senha')
 
     try:
         logger.debug(f"Consultando processo: {num_processo}")
-        resposta = retorna_processo(num_processo)
+        resposta = retorna_processo(
+            num_processo,
+            cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
+            senha=senha or os.environ.get('MNI_SENHA_CONSULTANTE')
+        )
 
         # Extrair dados relevantes
         dados = extract_mni_data(resposta)

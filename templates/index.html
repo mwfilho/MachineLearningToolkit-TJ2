@@ -15,6 +15,18 @@
                                placeholder="0000000-00.0000.0.00.0000" required>
                         <div class="form-text">Digite o número do processo no formato CNJ</div>
                     </div>
+                    <div class="mb-3">
+                        <label for="cpf" class="form-label">CPF/CNPJ do Consultante</label>
+                        <input type="text" class="form-control" id="cpf" name="cpf" 
+                               placeholder="Seu CPF/CNPJ cadastrado no PJe">
+                        <div class="form-text">Opcional. Se não fornecido, usará as credenciais padrão do sistema.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="senha" class="form-label">Senha do PJe</label>
+                        <input type="password" class="form-control" id="senha" name="senha" 
+                               placeholder="Sua senha do PJe">
+                        <div class="form-text">Opcional. Se não fornecido, usará as credenciais padrão do sistema.</div>
+                    </div>
                     <button type="submit" class="btn btn-primary">Consultar</button>
                 </form>
             </div>

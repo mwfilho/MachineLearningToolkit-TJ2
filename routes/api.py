@@ -1,14 +1,21 @@
-from flask import Blueprint, jsonify, send_file
+from flask import Blueprint, jsonify, send_file, request
 from funcoes_mni import retorna_processo, retorna_documento_processo
 import tempfile
 import os
 import logging
 from utils import extract_mni_data
+import core
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 api = Blueprint('api', __name__, url_prefix='/api/v1')
+
+def get_mni_credentials():
+    """Obtém credenciais do MNI dos headers ou environment"""
+    cpf = request.headers.get('X-MNI-CPF') or os.environ.get('MNI_ID_CONSULTANTE')
+    senha = request.headers.get('X-MNI-SENHA') or os.environ.get('MNI_SENHA_CONSULTANTE')
+    return cpf, senha
 
 @api.route('/processo/<num_processo>', methods=['GET'])
 def get_processo(num_processo):
@@ -17,7 +24,15 @@ def get_processo(num_processo):
     """
     try:
         logger.debug(f"API: Consultando processo {num_processo}")
-        resposta = retorna_processo(num_processo)
+        cpf, senha = get_mni_credentials()
+
+        if not cpf or not senha:
+            return jsonify({
+                'erro': 'Credenciais MNI não fornecidas',
+                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+            }), 401
+
+        resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
 
         # Extrair dados relevantes
         dados = extract_mni_data(resposta)
@@ -37,7 +52,15 @@ def download_documento(num_processo, num_documento):
     """
     try:
         logger.debug(f"API: Download do documento {num_documento} do processo {num_processo}")
-        resposta = retorna_documento_processo(num_processo, num_documento)
+        cpf, senha = get_mni_credentials()
+
+        if not cpf or not senha:
+            return jsonify({
+                'erro': 'Credenciais MNI não fornecidas',
+                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+            }), 401
+
+        resposta = retorna_documento_processo(num_processo, num_documento, cpf=cpf, senha=senha)
 
         if 'msg_erro' in resposta:
             return jsonify({
