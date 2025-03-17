@@ -51,16 +51,30 @@
                 <thead>
                     <tr>
                         <th>ID Principal</th>
+                        <th>Tipo</th>
+                        <th>Descrição</th>
+                        <th>Data</th>
                         <th>Documentos Vinculados</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for doc_principal, docs_vinculados in documentos_hierarquia.items() %}
+                    {% for doc_id, doc_info in documentos_hierarquia.items() %}
                     <tr>
-                        <td>{{ doc_principal }}</td>
+                        <td>{{ doc_id }}</td>
+                        <td>{{ doc_info.tipo }}</td>
+                        <td>{{ doc_info.descricao }}</td>
+                        <td>{{ doc_info.data }}</td>
                         <td>
-                            {% if docs_vinculados %}
-                                {{ docs_vinculados | join(', ') }}
+                            {% if doc_info.documentos_vinculados %}
+                                <ul class="list-unstyled">
+                                {% for doc_vinc in doc_info.documentos_vinculados %}
+                                    <li>
+                                        ID: {{ doc_vinc.id }}
+                                        {% if doc_vinc.tipo %} - Tipo: {{ doc_vinc.tipo }}{% endif %}
+                                        {% if doc_vinc.descricao %} - {{ doc_vinc.descricao }}{% endif %}
+                                    </li>
+                                {% endfor %}
+                                </ul>
                             {% else %}
                                 <em>Nenhum documento vinculado</em>
                             {% endif %}
