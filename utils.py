@@ -23,8 +23,8 @@ def extract_mni_data(resposta):
                 'documentos': []
             }
 
-            def process_document(doc, is_vinculado=False, parent_id=None):
-                """Processa um documento e seus documentos vinculados"""
+            def process_document(doc):
+                """Helper para extrair informações do documento"""
                 doc_info = {
                     'idDocumento': getattr(doc, 'idDocumento', ''),
                     'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
@@ -34,63 +34,60 @@ def extract_mni_data(resposta):
                     'nivelSigilo': getattr(doc, 'nivelSigilo', 0),
                     'movimento': getattr(doc, 'movimento', None),
                     'hash': getattr(doc, 'hash', ''),
-                    'parent': parent_id,
+                    'conteudo': None,  # O conteúdo é obtido separadamente
                     'documentos_vinculados': []
                 }
 
-                # Log detalhes do documento
-                logger.debug(f"Processando documento: ID={doc_info['idDocumento']}, Tipo={doc_info['tipoDocumento']}")
-                if parent_id:
-                    logger.debug(f"  Vinculado ao documento: {parent_id}")
+                # Log dos atributos encontrados
+                logger.debug(f"Processando documento {doc_info['idDocumento']}")
 
-                # 1. Verifica se tem documentos vinculados diretos
+                # Verifica documentos vinculados
                 if hasattr(doc, 'documentoVinculado'):
-                    docs_vinc = doc.documentoVinculado
-                    if not isinstance(docs_vinc, list):
-                        docs_vinc = [docs_vinc]
+                    vinculados = doc.documentoVinculado
+                    if not isinstance(vinculados, list):
+                        vinculados = [vinculados]
 
-                    for vinc in docs_vinc:
-                        vinc_info = process_document(vinc, True, doc_info['idDocumento'])
+                    for vinc in vinculados:
+                        vinc_info = process_document(vinc)
                         doc_info['documentos_vinculados'].append(vinc_info)
-                        logger.debug(f"  Documento vinculado encontrado: {vinc_info['idDocumento']}")
+                        logger.debug(f"  Adicionado documento vinculado: {vinc_info['idDocumento']}")
 
-                # 2. Verifica se tem documento como atributo
+                # Verifica subDocumentos
                 if hasattr(doc, 'documento'):
-                    sub_docs = doc.documento
-                    if not isinstance(sub_docs, list):
-                        sub_docs = [sub_docs]
+                    subdocs = doc.documento
+                    if not isinstance(subdocs, list):
+                        subdocs = [subdocs]
 
-                    for sub in sub_docs:
-                        if hasattr(sub, 'idDocumento'):  # Verifica se é um documento válido
-                            sub_info = process_document(sub, True, doc_info['idDocumento'])
+                    for subdoc in subdocs:
+                        if hasattr(subdoc, 'idDocumento'):
+                            sub_info = process_document(subdoc)
                             doc_info['documentos_vinculados'].append(sub_info)
-                            logger.debug(f"  Subdocumento encontrado: {sub_info['idDocumento']}")
+                            logger.debug(f"  Adicionado subdocumento: {sub_info['idDocumento']}")
 
-                # 3. Procura em outras estruturas possíveis
-                for attr in ['documentos', 'anexos']:
+                # Verifica relacionamentos
+                for attr in ['documentos', 'documentosVinculados', 'anexos']:
                     if hasattr(doc, attr):
-                        outros = getattr(doc, attr)
-                        if outros:
-                            outros_docs = outros if isinstance(outros, list) else [outros]
-                            for outro in outros_docs:
-                                if hasattr(outro, 'idDocumento'):
-                                    outro_info = process_document(outro, True, doc_info['idDocumento'])
-                                    doc_info['documentos_vinculados'].append(outro_info)
-                                    logger.debug(f"  Outro documento encontrado via {attr}: {outro_info['idDocumento']}")
+                        rel_docs = getattr(doc, attr)
+                        if rel_docs:
+                            if not isinstance(rel_docs, list):
+                                rel_docs = [rel_docs]
+
+                            for rel_doc in rel_docs:
+                                if hasattr(rel_doc, 'idDocumento'):
+                                    rel_info = process_document(rel_doc)
+                                    doc_info['documentos_vinculados'].append(rel_info)
+                                    logger.debug(f"  Adicionado documento relacionado ({attr}): {rel_info['idDocumento']}")
 
                 return doc_info
 
             # Processa documentos principais
             if hasattr(processo, 'documento'):
-                docs_principais = processo.documento
-                if not isinstance(docs_principais, list):
-                    docs_principais = [docs_principais]
+                docs = processo.documento if isinstance(processo.documento, list) else [processo.documento]
 
-                for doc in docs_principais:
+                for doc in docs:
                     doc_info = process_document(doc)
                     dados['processo']['documentos'].append(doc_info)
-                    logger.debug(f"Documento principal processado: {doc_info['idDocumento']} "
-                             f"com {len(doc_info['documentos_vinculados'])} vinculados")
+                    logger.debug(f"Documento principal processado: {doc_info['idDocumento']} com {len(doc_info['documentos_vinculados'])} vinculados")
 
         return dados
     except Exception as e:
