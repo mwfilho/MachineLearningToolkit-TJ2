@@ -36,7 +36,7 @@ logger.debug("Registrando blueprint web...")
 app.register_blueprint(web)  # Web routes sem prefixo
 
 logger.debug("Registrando blueprint api...")
-app.register_blueprint(api)  # API routes com prefixo /api/v1
+app.register_blueprint(api, url_prefix='')  # API routes sem prefixo adicional pois já está nas rotas
 
 logger.debug("Blueprints registrados com sucesso")
 

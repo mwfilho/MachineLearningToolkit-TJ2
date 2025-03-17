@@ -1,15 +1,16 @@
 from flask import Blueprint, jsonify, send_file, request
-from funcoes_mni import retorna_processo, retorna_documento_processo
-import tempfile
 import os
 import logging
+from funcoes_mni import retorna_processo, retorna_documento_processo
 from utils import extract_mni_data
 import core
+import tempfile
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
-api = Blueprint('api', __name__, url_prefix='/api/v1')
+# Criar o blueprint com url_prefix
+api = Blueprint('api', __name__)
 
 def get_mni_credentials():
     """Obtém credenciais do MNI dos headers ou environment"""
@@ -24,7 +25,7 @@ def log_request_info():
     logger.debug('Body: %s', request.get_data())
     logger.debug('URL: %s', request.url)
 
-@api.route('/processo/<num_processo>', methods=['GET'])
+@api.route('/api/v1/processo/<num_processo>', methods=['GET'])
 def get_processo(num_processo):
     """
     Retorna os dados do processo incluindo lista de documentos
@@ -52,7 +53,7 @@ def get_processo(num_processo):
             'mensagem': 'Erro ao consultar processo'
         }), 500
 
-@api.route('/processo/<num_processo>/documento/<num_documento>', methods=['GET'])
+@api.route('/api/v1/processo/<num_processo>/documento/<num_documento>', methods=['GET'])
 def download_documento(num_processo, num_documento):
     """
     Faz download de um documento específico do processo
