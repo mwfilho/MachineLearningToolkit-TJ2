@@ -69,21 +69,41 @@ def retorna_processo(num_processo, cpf=None, senha=None):
             data_dict = serialize_object(response)
             response = EasyDict(data_dict)
 
-        if response.sucesso:
-            if hasattr(response.processo, 'documento'):
-                logger.debug(f"Processo encontrado. Número de documentos: {len(response.processo.documento)}")
-                for doc in response.processo.documento:
-                    logger.debug(f"Documento encontrado: ID={getattr(doc, 'idDocumento', 'N/A')}, "
-                             f"Tipo={getattr(doc, 'tipoDocumento', 'N/A')}, "
-                             f"Nome={getattr(doc, 'nome', 'N/A')}")
-                    if hasattr(doc, 'documentoVinculado'):
-                        for doc_vinc in doc.documentoVinculado:
-                            logger.debug(f"Documento vinculado encontrado: ID={getattr(doc_vinc, 'idDocumento', 'N/A')}")
-            return response
-        else:
-            error_msg = f"Erro na consulta do processo {num_processo}: {response.mensagem}"
-            logger.error(error_msg)
-            raise ExcecaoConsultaMNI(error_msg)
+            if response.sucesso:
+                if hasattr(response.processo, 'documento'):
+                    logger.debug("### Estrutura completa dos documentos ###")
+                    for doc in response.processo.documento:
+                        logger.debug(f"\nDocumento Principal:")
+                        logger.debug(f"  ID: {getattr(doc, 'idDocumento', 'N/A')}")
+                        logger.debug(f"  Tipo: {getattr(doc, 'tipoDocumento', 'N/A')}")
+                        logger.debug(f"  Nome: {getattr(doc, 'nome', 'N/A')}")
+
+                        # Log todos os atributos do documento
+                        for attr_name in dir(doc):
+                            if not attr_name.startswith('_'):
+                                attr_value = getattr(doc, attr_name)
+                                logger.debug(f"  {attr_name}: {attr_value}")
+
+                        # Verifica documentos vinculados
+                        if hasattr(doc, 'documentoVinculado'):
+                            logger.debug("  Documentos Vinculados:")
+                            docs_vinc = doc.documentoVinculado
+                            if not isinstance(docs_vinc, list):
+                                docs_vinc = [docs_vinc]
+
+                            for doc_vinc in docs_vinc:
+                                logger.debug(f"    ID Vinculado: {getattr(doc_vinc, 'idDocumento', 'N/A')}")
+                                logger.debug(f"    Tipo: {getattr(doc_vinc, 'tipoDocumento', 'N/A')}")
+                                # Log todos os atributos do documento vinculado
+                                for attr_name in dir(doc_vinc):
+                                    if not attr_name.startswith('_'):
+                                        attr_value = getattr(doc_vinc, attr_name)
+                                        logger.debug(f"    {attr_name}: {attr_value}")
+                return response
+            else:
+                error_msg = f"Erro na consulta do processo {num_processo}: {response.mensagem}"
+                logger.error(error_msg)
+                raise ExcecaoConsultaMNI(error_msg)
 
     except Fault as e:
         if "loginFailed" in str(e):
