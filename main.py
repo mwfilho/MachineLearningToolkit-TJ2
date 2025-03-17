@@ -8,7 +8,6 @@ import tempfile
 import os
 import logging
 from zeep.helpers import serialize_object
-import base64
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
