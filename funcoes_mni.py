@@ -171,28 +171,91 @@ def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None
         dict: Dados do documento incluindo seu conteúdo
     """
     url = MNI_URL
+    cpf_consultante = cpf or MNI_ID_CONSULTANTE
+    senha_consultante = senha or MNI_SENHA_CONSULTANTE
+
+    if not cpf_consultante or not senha_consultante:
+        raise ExcecaoConsultaMNI("Credenciais MNI não fornecidas")
+
+    logger.debug(f"\n{'=' * 80}")
+    logger.debug(f"Consultando documento {num_documento} do processo {num_processo}")
+    logger.debug(f"Usando consultante: {cpf_consultante}")
+    logger.debug(f"{'=' * 80}\n")
 
     request_data = {
-        'idConsultante': cpf or MNI_ID_CONSULTANTE,
-        'senhaConsultante': senha or MNI_SENHA_CONSULTANTE,
+        'idConsultante': cpf_consultante,
+        'senhaConsultante': senha_consultante,
         'numeroProcesso': num_processo,
-        'documento': num_documento
+        'documento': num_documento,
+        'incluirDocumentos': True  # Garante que todos os documentos serão incluídos
     }
 
     try:
         client = Client(url)
+        logger.debug("Cliente SOAP criado com sucesso")
 
         with client.settings(strict=False, xml_huge_tree=True):
+            logger.debug("Enviando requisição SOAP")
             response = client.service.consultarProcesso(**request_data)
+            logger.debug("Resposta SOAP recebida")
+
             data_dict = serialize_object(response)
             response = EasyDict(data_dict)
 
-        if response.sucesso:
-            for documento in response.processo.documento:
-                if int(documento.idDocumento) == int(num_documento):
+            if response.sucesso:
+                logger.debug("Resposta bem sucedida, procurando documento...")
+
+                if not hasattr(response.processo, 'documento'):
+                    logger.error("Processo não contém documentos")
+                    return registro_erro(num_processo, num_documento, "Processo não contém documentos")
+
+                docs = response.processo.documento
+                if not isinstance(docs, list):
+                    docs = [docs]
+
+                logger.debug(f"Encontrados {len(docs)} documentos no processo")
+
+                # Função auxiliar para procurar documento recursivamente
+                def procurar_documento(doc_list, target_id):
+                    for doc in doc_list:
+                        # Log detalhado do documento atual
+                        logger.debug(f"Verificando documento: ID={getattr(doc, 'idDocumento', 'N/A')}")
+
+                        # Verifica se é o documento procurado
+                        if str(getattr(doc, 'idDocumento', '')) == str(target_id):
+                            logger.debug(f"Documento {target_id} encontrado!")
+                            return doc
+
+                        # Verifica documentos vinculados
+                        if hasattr(doc, 'documentoVinculado'):
+                            vinc_docs = doc.documentoVinculado
+                            if not isinstance(vinc_docs, list):
+                                vinc_docs = [vinc_docs]
+
+                            logger.debug(f"Verificando {len(vinc_docs)} documentos vinculados")
+                            result = procurar_documento(vinc_docs, target_id)
+                            if result:
+                                return result
+
+                        # Verifica outros tipos de documentos
+                        for attr in ['documento', 'documentos', 'anexos']:
+                            if hasattr(doc, attr):
+                                outros = getattr(doc, attr)
+                                if outros:
+                                    outros_list = outros if isinstance(outros, list) else [outros]
+                                    logger.debug(f"Verificando {len(outros_list)} documentos em {attr}")
+                                    result = procurar_documento(outros_list, target_id)
+                                    if result:
+                                        return result
+                    return None
+
+                # Procura o documento em toda a estrutura
+                documento = procurar_documento(docs, num_documento)
+
+                if documento:
                     if documento.conteudo is None:
                         return registro_erro(num_processo, num_documento, 
-                                        f"Documento {num_documento} retornou vazio")
+                                        f"Documento {num_documento} encontrado mas retornou vazio")
 
                     return {
                         'num_processo': num_processo,
@@ -201,16 +264,26 @@ def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None
                         'mimetype': documento.mimetype,
                         'conteudo': documento.conteudo
                     }
+                else:
+                    logger.error(f"Documento {num_documento} não encontrado na estrutura do processo")
+                    return registro_erro(num_processo, num_documento, 
+                                    f"Documento {num_documento} não encontrado")
+            else:
+                logger.error(f"Erro na resposta: {response.mensagem}")
+                return registro_erro(num_processo, num_documento, 
+                                f"Erro ao consultar o MNI: {response.mensagem}")
 
-            return registro_erro(num_processo, num_documento, 
-                             f"Documento {num_documento} não encontrado")
+    except Fault as e:
+        if "loginFailed" in str(e):
+            error_msg = "Erro de autenticação no MNI. Verifique suas credenciais"
         else:
-            return registro_erro(num_processo, num_documento, 
-                             f"Erro ao consultar o MNI: {response.mensagem}")
-
+            error_msg = f"Erro na comunicação SOAP: {str(e)}"
+        logger.error(f"{error_msg} (Processo: {num_processo}, Documento: {num_documento})")
+        return registro_erro(num_processo, num_documento, error_msg)
     except Exception as e:
-        logger.error(f"Erro ao consultar documento {num_documento}: {str(e)}")
-        return registro_erro(num_processo, num_documento, str(e))
+        error_msg = f"Erro inesperado: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return registro_erro(num_processo, num_documento, error_msg)
 
 def registro_erro(num_processo, num_documento, msg):
     """
