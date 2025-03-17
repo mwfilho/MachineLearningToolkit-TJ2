@@ -23,35 +23,67 @@ def extract_mni_data(resposta):
                 'documentos': []
             }
 
+            def extract_doc_info(doc, parent_id=None, level=0):
+                """Helper para extrair informações do documento e seus vinculados recursivamente"""
+                prefix = '  ' * level
+                doc_info = {
+                    'idDocumento': getattr(doc, 'idDocumento', ''),
+                    'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
+                    'descricao': getattr(doc, 'descricao', ''),
+                    'dataHora': getattr(doc, 'dataHora', ''),
+                    'mimetype': getattr(doc, 'mimetype', ''),
+                    'nivelSigilo': getattr(doc, 'nivelSigilo', 0),
+                    'documentos_vinculados': []
+                }
+
+                logger.debug(f"{prefix}Processando documento: {doc_info['idDocumento']} (parent: {parent_id})")
+
+                # Processa os documentos vinculados de todas as formas possíveis
+                attributes_to_check = [
+                    'documentoVinculado',  # Vínculo direto
+                    'documento',           # Documento individual
+                    'documentos',          # Lista de documentos
+                    'anexos',              # Anexos do documento
+                    'documentosVinculados' # Outra forma de vínculo
+                ]
+
+                for attr in attributes_to_check:
+                    if hasattr(doc, attr):
+                        docs_to_process = getattr(doc, attr)
+                        if docs_to_process is not None:
+                            # Converte para lista se não for
+                            if not isinstance(docs_to_process, list):
+                                docs_to_process = [docs_to_process]
+
+                            # Processa cada documento
+                            for sub_doc in docs_to_process:
+                                if hasattr(sub_doc, 'idDocumento'):  # Verifica se é um documento válido
+                                    sub_info = extract_doc_info(
+                                        sub_doc, 
+                                        parent_id=doc_info['idDocumento'],
+                                        level=level + 1
+                                    )
+                                    doc_info['documentos_vinculados'].append(sub_info)
+                                    logger.debug(
+                                        f"{prefix}  Documento vinculado encontrado: "
+                                        f"{sub_info['idDocumento']} (via {attr})"
+                                    )
+
+                return doc_info
+
+            # Processa documentos principais do processo
             if hasattr(processo, 'documento'):
-                for doc in processo.documento:
-                    # Primeiro cria o documento principal
-                    doc_info = {
-                        'idDocumento': getattr(doc, 'idDocumento', ''),
-                        'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
-                        'descricao': getattr(doc, 'descricao', ''),
-                        'dataHora': getattr(doc, 'dataHora', ''),
-                        'mimetype': getattr(doc, 'mimetype', ''),
-                        'nivelSigilo': getattr(doc, 'nivelSigilo', 0),
-                        'documentos_vinculados': []
-                    }
+                docs_to_process = processo.documento
+                if not isinstance(docs_to_process, list):
+                    docs_to_process = [docs_to_process]
 
-                    # Procura documentos vinculados
-                    if hasattr(doc, 'documentoVinculado'):
-                        for doc_vinc in doc.documentoVinculado:
-                            vinc_info = {
-                                'idDocumento': getattr(doc_vinc, 'idDocumento', ''),
-                                'tipoDocumento': getattr(doc_vinc, 'tipoDocumento', ''),
-                                'descricao': getattr(doc_vinc, 'descricao', ''),
-                                'dataHora': getattr(doc_vinc, 'dataHora', ''),
-                                'mimetype': getattr(doc_vinc, 'mimetype', ''),
-                                'nivelSigilo': getattr(doc_vinc, 'nivelSigilo', 0)
-                            }
-                            doc_info['documentos_vinculados'].append(vinc_info)
-                            logger.debug(f"Documento vinculado encontrado: {vinc_info['idDocumento']}")
-
+                for doc in docs_to_process:
+                    doc_info = extract_doc_info(doc)
                     dados['processo']['documentos'].append(doc_info)
-                    logger.debug(f"Documento principal processado: {doc_info['idDocumento']} com {len(doc_info['documentos_vinculados'])} documentos vinculados")
+                    logger.debug(
+                        f"Documento principal processado: {doc_info['idDocumento']} "
+                        f"com {len(doc_info['documentos_vinculados'])} vinculados"
+                    )
 
         return dados
     except Exception as e:
