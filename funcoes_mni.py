@@ -390,53 +390,38 @@ def gerar_pdf_completo(num_processo, cpf=None, senha=None):
         if not dados['sucesso']:
             raise ExcecaoConsultaMNI(f"Erro ao processar dados: {dados['mensagem']}")
 
-        # Função auxiliar para processar documentos
-        def processar_documento(doc_info):
-            """Processa um documento e seus vinculados, retornando lista de PDFs"""
-            pdfs = []
-
-            # Obtém o documento atual
-            doc = retorna_documento_processo(num_processo, doc_info['idDocumento'], cpf, senha)
-            if doc and 'conteudo' in doc and doc['conteudo']:
-                try:
-                    # Decodifica o conteúdo base64
-                    conteudo = base64.b64decode(doc['conteudo'])
-
-                    # Se for HTML, converte para PDF (implementar se necessário)
-                    if doc['mimetype'] == 'text/html':
-                        # TODO: Implementar conversão HTML para PDF se necessário
-                        pass
-
-                    # Adiciona o PDF à lista
-                    if doc['mimetype'] == 'application/pdf':
-                        pdfs.append(conteudo)
-
-                except Exception as e:
-                    logger.error(f"Erro ao processar documento {doc_info['idDocumento']}: {str(e)}")
-
-            # Processa documentos vinculados
-            if 'documentos_vinculados' in doc_info:
-                for doc_vinc in doc_info['documentos_vinculados']:
-                    pdfs.extend(processar_documento(doc_vinc))
-
-            return pdfs
-
         # Processa todos os documentos principais
         merger = PdfMerger()
         documentos = dados['processo'].get('documentos', [])
 
         logger.debug(f"Processando {len(documentos)} documentos principais")
         for doc_info in documentos:
-            pdfs = processar_documento(doc_info)
-            for pdf in pdfs:
+            # Obtém o documento atual
+            doc = retorna_documento_processo(num_processo, doc_info['idDocumento'], cpf, senha)
+            if doc and 'conteudo' in doc and doc['conteudo'] and doc['mimetype'] == 'application/pdf':
                 try:
-                    # Adiciona cada PDF ao merger
-                    pdf_file = io.BytesIO(pdf)
+                    # Decodifica o conteúdo base64 e adiciona ao merger
+                    pdf_bytes = base64.b64decode(doc['conteudo'])
+                    pdf_file = io.BytesIO(pdf_bytes)
                     reader = PdfReader(pdf_file)
                     merger.append(reader)
                     logger.debug(f"PDF do documento {doc_info['idDocumento']} adicionado ao merger")
                 except Exception as e:
-                    logger.error(f"Erro ao mesclar PDF do documento {doc_info['idDocumento']}: {str(e)}")
+                    logger.error(f"Erro ao processar PDF do documento {doc_info['idDocumento']}: {str(e)}")
+
+            # Processa documentos vinculados
+            if 'documentos_vinculados' in doc_info:
+                for doc_vinc in doc_info['documentos_vinculados']:
+                    doc = retorna_documento_processo(num_processo, doc_vinc['idDocumento'], cpf, senha)
+                    if doc and 'conteudo' in doc and doc['conteudo'] and doc['mimetype'] == 'application/pdf':
+                        try:
+                            pdf_bytes = base64.b64decode(doc['conteudo'])
+                            pdf_file = io.BytesIO(pdf_bytes)
+                            reader = PdfReader(pdf_file)
+                            merger.append(reader)
+                            logger.debug(f"PDF do documento vinculado {doc_vinc['idDocumento']} adicionado ao merger")
+                        except Exception as e:
+                            logger.error(f"Erro ao processar PDF do documento vinculado {doc_vinc['idDocumento']}: {str(e)}")
 
         # Gera o PDF final
         output = io.BytesIO()
