@@ -147,7 +147,7 @@ def retorna_processo(num_processo, cpf=None, senha=None):
 
     except Fault as e:
         if "loginFailed" in str(e):
-            error_msg = "Erro de autenticação no MNI. Verifique suas credenciais (CPF/CNPJ e senha)"
+            error_msg = "Erro de autenticação no MNI. Verifique suas credenciais"
         else:
             error_msg = f"Erro na comunicação SOAP: {str(e)}"
         logger.error(f"{error_msg} (Processo: {num_processo})")
