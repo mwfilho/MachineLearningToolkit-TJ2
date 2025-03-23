@@ -1,5 +1,8 @@
 import logging
 from functools import wraps
+import io
+from PyPDF2 import PdfMerger
+from base64 import b64decode
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -39,6 +42,7 @@ def extract_mni_data(resposta):
                         'nivelSigilo': getattr(doc, 'nivelSigilo', 0),
                         'movimento': getattr(doc, 'movimento', None),
                         'hash': getattr(doc, 'hash', ''),
+                        'conteudo': getattr(doc, 'conteudo', None),
                         'documentos_vinculados': []
                     }
 
@@ -91,3 +95,49 @@ def extract_mni_data(resposta):
     except Exception as e:
         logger.error(f"Erro ao extrair dados MNI: {str(e)}")
         return {'sucesso': False, 'mensagem': f'Erro ao processar dados: {str(e)}'}
+
+def merge_process_documents(documentos):
+    """
+    Mescla todos os documentos do processo em um único PDF.
+
+    Args:
+        documentos (list): Lista de documentos do processo com seus documentos vinculados
+
+    Returns:
+        bytes: Conteúdo do PDF mesclado
+    """
+    merger = PdfMerger()
+
+    def add_document_to_merger(doc):
+        """Adiciona um documento ao merger"""
+        try:
+            if doc.get('conteudo') and doc.get('mimetype') == 'application/pdf':
+                # Converte conteúdo base64 para bytes
+                pdf_content = b64decode(doc['conteudo'])
+                pdf_stream = io.BytesIO(pdf_content)
+
+                # Adiciona ao merger
+                merger.append(pdf_stream)
+                logger.debug(f"Documento {doc['idDocumento']} adicionado ao PDF")
+
+                # Processa documentos vinculados
+                for doc_vinc in doc.get('documentos_vinculados', []):
+                    add_document_to_merger(doc_vinc)
+        except Exception as e:
+            logger.error(f"Erro ao processar documento {doc.get('idDocumento')}: {str(e)}")
+
+    try:
+        # Processa todos os documentos principais e seus vinculados
+        for doc in documentos:
+            add_document_to_merger(doc)
+
+        # Gera o PDF final
+        output = io.BytesIO()
+        merger.write(output)
+        merger.close()
+
+        return output.getvalue()
+
+    except Exception as e:
+        logger.error(f"Erro ao mesclar documentos: {str(e)}")
+        raise
