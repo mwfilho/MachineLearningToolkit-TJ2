@@ -1,5 +1,3 @@
-from controle.exceptions import ExcecaoConsultaMNI
-import base64
 import json
 import os
 import sys
@@ -20,8 +18,6 @@ from configparser import ConfigParser
 from datetime import datetime
 from zeep.exceptions import Fault
 from datetime import date
-from PyPDF2 import PdfMerger, PdfReader
-import io
 
 # Configure logging
 logging.basicConfig(
@@ -365,73 +361,3 @@ def consultar_classe_processual(classe_processual, codigoLocalidade):
     except Exception as e:
         logger.error(f"Erro ao consultar classe processual: {str(e)}")
         return "Erro na consulta"
-
-def gerar_pdf_completo(num_processo, cpf=None, senha=None):
-    """
-    Gera um PDF único contendo todos os documentos do processo organizados hierarquicamente.
-
-    Args:
-        num_processo (str): Número do processo
-        cpf (str, optional): CPF/CNPJ do consultante
-        senha (str, optional): Senha do consultante
-
-    Returns:
-        bytes: Conteúdo do PDF mesclado
-    """
-    try:
-        # Obtém dados do processo
-        resposta = retorna_processo(num_processo, cpf, senha)
-        if not resposta.sucesso:
-            raise ExcecaoConsultaMNI(f"Erro ao consultar processo: {resposta.mensagem}")
-
-        # Extrai os dados em formato adequado
-        from utils import extract_mni_data
-        dados = extract_mni_data(resposta)
-        if not dados['sucesso']:
-            raise ExcecaoConsultaMNI(f"Erro ao processar dados: {dados['mensagem']}")
-
-        # Processa todos os documentos principais
-        merger = PdfMerger()
-        documentos = dados['processo'].get('documentos', [])
-
-        logger.debug(f"Processando {len(documentos)} documentos principais")
-        for doc_info in documentos:
-            # Obtém o documento atual
-            doc = retorna_documento_processo(num_processo, doc_info['idDocumento'], cpf, senha)
-            if doc and 'conteudo' in doc and doc['conteudo'] and doc['mimetype'] == 'application/pdf':
-                try:
-                    # Decodifica o conteúdo base64 e adiciona ao merger
-                    pdf_bytes = base64.b64decode(doc['conteudo'])
-                    pdf_file = io.BytesIO(pdf_bytes)
-                    reader = PdfReader(pdf_file)
-                    merger.append(reader)
-                    logger.debug(f"PDF do documento {doc_info['idDocumento']} adicionado ao merger")
-                except Exception as e:
-                    logger.error(f"Erro ao processar PDF do documento {doc_info['idDocumento']}: {str(e)}")
-
-            # Processa documentos vinculados
-            if 'documentos_vinculados' in doc_info:
-                for doc_vinc in doc_info['documentos_vinculados']:
-                    doc = retorna_documento_processo(num_processo, doc_vinc['idDocumento'], cpf, senha)
-                    if doc and 'conteudo' in doc and doc['conteudo'] and doc['mimetype'] == 'application/pdf':
-                        try:
-                            pdf_bytes = base64.b64decode(doc['conteudo'])
-                            pdf_file = io.BytesIO(pdf_bytes)
-                            reader = PdfReader(pdf_file)
-                            merger.append(reader)
-                            logger.debug(f"PDF do documento vinculado {doc_vinc['idDocumento']} adicionado ao merger")
-                        except Exception as e:
-                            logger.error(f"Erro ao processar PDF do documento vinculado {doc_vinc['idDocumento']}: {str(e)}")
-
-        # Gera o PDF final
-        output = io.BytesIO()
-        merger.write(output)
-        merger.close()
-
-        output_bytes = output.getvalue()
-        logger.debug(f"PDF completo gerado com {len(output_bytes)} bytes")
-        return output_bytes
-
-    except Exception as e:
-        logger.error(f"Erro ao gerar PDF completo: {str(e)}")
-        raise ExcecaoConsultaMNI(f"Erro ao gerar PDF completo: {str(e)}")

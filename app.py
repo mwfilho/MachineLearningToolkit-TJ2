@@ -1,12 +1,10 @@
 import os
 import logging
-from flask import Flask, send_file, make_response
+from flask import Flask
 from routes.api import api
 from routes.web import web
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
-from funcoes_mni import gerar_pdf_completo
-from io import BytesIO
 
 # Configure logging
 logging.basicConfig(
@@ -41,35 +39,6 @@ logger.debug("Registrando blueprint api...")
 app.register_blueprint(api)  # API routes com prefixo /api/v1
 
 logger.debug("Blueprints registrados com sucesso")
-
-# Endpoint para download do PDF completo
-@app.route('/processo/<num_processo>/pdf')
-def download_pdf_processo(num_processo):
-    try:
-        # Gera o PDF completo
-        pdf_bytes = gerar_pdf_completo(num_processo)
-
-        # Cria um objeto BytesIO com o conteúdo do PDF
-        pdf_io = BytesIO(pdf_bytes)
-
-        # Configura o nome do arquivo para download
-        filename = f"processo_{num_processo}.pdf"
-
-        # Retorna o arquivo PDF para download
-        response = make_response(send_file(
-            pdf_io,
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=filename
-        ))
-
-        # Adiciona headers para garantir download correto
-        response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
-
-    except Exception as e:
-        logger.error(f"Erro ao gerar PDF do processo {num_processo}: {str(e)}")
-        return {"error": str(e)}, 500
 
 with app.app_context():
     # Import models para criar as tabelas
