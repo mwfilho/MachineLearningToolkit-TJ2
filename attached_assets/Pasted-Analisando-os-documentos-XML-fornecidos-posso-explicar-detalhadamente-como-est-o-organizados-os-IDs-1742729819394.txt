@@ -1,0 +1,64 @@
+Analisando os documentos XML fornecidos, posso explicar detalhadamente como estão organizados os IDs de documentos e seus documentos vinculados no sistema PJe.
+
+# Estrutura de IDs de Documentos no PJe
+
+Os documentos no PJe estão organizados hierarquicamente, seguindo uma estrutura de documentos principais e documentos vinculados (anexos). Esta estrutura é representada através de elementos XML específicos:
+
+## Elementos Principais
+
+1. **`idDocumento`**: Identificador único do documento
+   - Exemplo: `idDocumento="12695681"` 
+
+2. **`idDocumentoVinculado`**: Indica que um documento é anexo de outro
+   - Quando presente, aponta para o `idDocumento` do documento principal
+   - Exemplo: `idDocumentoVinculado="12696120"`
+
+3. **`tipoDocumento`**: Classifica o tipo de documento
+   - Exemplo: `tipoDocumento="1001425"` (identificando petições, despachos, etc.)
+
+## Hierarquia de Documentos
+
+Os documentos no sistema PJe seguem uma estrutura hierárquica onde:
+
+1. **Documentos Principais**: Não possuem o atributo `idDocumentoVinculado`
+   - São independentes e geralmente representam peças processuais principais
+
+2. **Documentos Vinculados (Anexos)**: Possuem o atributo `idDocumentoVinculado` 
+   - São subordinados a documentos principais
+   - O valor do `idDocumentoVinculado` aponta para o `idDocumento` do documento principal
+
+## Exemplo Concreto
+
+No XML fornecido, vemos exemplos como:
+
+```xml
+<ns2:documento idDocumento="12695681" tipoDocumento="1001425" dataHora="20241125184414" mimetype="text/html" nivelSigilo="0" movimentos="1001423/1" hash="4cbfzfb5b887cS1dSe28p..." descricao="Mandado">
+  <!-- conteúdo do documento principal -->
+</ns2:documento>
+
+<ns2:documentoVinculado idDocumento="12696120" idDocumentoVinculado="12695681" tipoDocumento="1001425" dataHora="20241125184414" mimetype="application/pdf" nivelSigilo="0" hash="77GJcfdy6DwuBdN...">
+  <!-- conteúdo do documento vinculado/anexo -->
+</ns2:documentoVinculado>
+```
+
+Neste exemplo:
+- O documento com ID "12695681" é um documento principal (um mandado)
+- O documento com ID "12696120" está vinculado ao documento "12695681"
+
+## Parâmetros Adicionais
+
+Cada documento (principal ou vinculado) possui metadados adicionais:
+- `dataHora`: Timestamp da inclusão do documento
+- `mimetype`: Tipo do arquivo (pdf, html, etc.)
+- `nivelSigilo`: Nível de restrição de acesso (0 a 5)
+- `hash`: Identificador de integridade do documento
+
+## Detalhes Operacionais
+
+Para acessar documentos no sistema PJe através da API, o procedimento típico é:
+
+1. Consultar o processo para obter a lista de documentos principais
+2. Para cada documento principal, identificar se há documentos vinculados
+3. Acessar cada documento (principal ou vinculado) usando seu respectivo `idDocumento`
+
+Esta estrutura organizada permite o gerenciamento adequado dos diversos tipos de documentos em um processo judicial eletrônico, mantendo claras as relações entre documentos principais e seus anexos.
