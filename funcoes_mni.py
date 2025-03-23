@@ -77,35 +77,102 @@ def debug_estrutura_documento(doc, nivel=0, prefixo=''):
         else:
             debug_estrutura_documento(doc.documentos, nivel + 1, "[Lista] ")
 
+def obter_ids_documentos_processo(response):
+    """
+    Extrai todos os IDs dos documentos de um processo, incluindo vinculados.
+    Simplificada e otimizada para capturar a estrutura correta do MNI.
+
+    Args:
+        response: Resposta da consulta MNI já processada
+
+    Returns:
+        list: Lista de dicionários com informações dos documentos
+    """
+    logger.debug("\n=== Iniciando extração de IDs dos documentos ===\n")
+
+    documentos_encontrados = []
+
+    def extrair_documento(doc, nivel=0, doc_pai=None):
+        """Processa um documento e seus vinculados recursivamente"""
+        try:
+            indent = '  ' * nivel
+            doc_info = {
+                'idDocumento': getattr(doc, 'idDocumento', ''),
+                'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
+                'nivel': nivel,
+                'documento_pai': doc_pai,
+                'parametros': {}
+            }
+
+            # Extrai parâmetros adicionais
+            if hasattr(doc, 'outroParametro'):
+                params = doc.outroParametro if isinstance(doc.outroParametro, list) else [doc.outroParametro]
+                for param in params:
+                    nome = getattr(param, 'nome', '')
+                    valor = getattr(param, 'valor', '')
+                    doc_info['parametros'][nome] = valor
+                    logger.debug(f"{indent}Parâmetro: {nome} = {valor}")
+
+            # Log do documento atual
+            logger.debug(f"{indent}Documento: ID={doc_info['idDocumento']}, Tipo={doc_info['tipoDocumento']}")
+            if doc_pai:
+                logger.debug(f"{indent}Vinculado ao documento: {doc_pai}")
+
+            documentos_encontrados.append(doc_info)
+
+            # Processa documentos vinculados
+            if hasattr(doc, 'documentoVinculado'):
+                vinculados = doc.documentoVinculado
+                if not isinstance(vinculados, list):
+                    vinculados = [vinculados]
+
+                logger.debug(f"{indent}Processando {len(vinculados)} documentos vinculados")
+                for vinc in vinculados:
+                    extrair_documento(vinc, nivel + 1, doc_info['idDocumento'])
+
+        except Exception as e:
+            logger.error(f"Erro ao processar documento: {str(e)}")
+
+    # Processa documentos principais
+    if hasattr(response.processo, 'documento'):
+        documentos = response.processo.documento
+        if not isinstance(documentos, list):
+            documentos = [documentos]
+
+        logger.debug(f"Encontrados {len(documentos)} documentos principais")
+        for doc in documentos:
+            extrair_documento(doc)
+
+    return documentos_encontrados
+
 def retorna_processo(num_processo, cpf=None, senha=None):
     """
     Consulta um processo judicial via MNI.
 
     Args:
         num_processo (str): Número do processo no formato CNJ
-        cpf (str, optional): CPF/CNPJ do consultante. Se não fornecido, usa o padrão do ambiente
-        senha (str, optional): Senha do consultante. Se não fornecida, usa o padrão do ambiente
+        cpf (str, optional): CPF/CNPJ do consultante
+        senha (str, optional): Senha do consultante
 
     Returns:
-        EasyDict: Dados do processo consultado
+        dict: Dados do processo e lista de IDs dos documentos
     """
     url = MNI_URL
     cpf_consultante = cpf or MNI_ID_CONSULTANTE
     senha_consultante = senha or MNI_SENHA_CONSULTANTE
 
     if not cpf_consultante or not senha_consultante:
-        raise ExcecaoConsultaMNI("Credenciais MNI não fornecidas. Configure MNI_ID_CONSULTANTE e MNI_SENHA_CONSULTANTE")
+        raise ExcecaoConsultaMNI("Credenciais MNI não fornecidas")
 
     logger.debug(f"\n{'=' * 80}\nIniciando consulta ao processo {num_processo}\n{'=' * 80}")
-    logger.debug(f"Usando consultante: {cpf_consultante}")
 
     request_data = {
         'idConsultante': cpf_consultante,
         'senhaConsultante': senha_consultante,
         'numeroProcesso': num_processo,
+        'incluirDocumentos': True,  # Garante que todos os documentos serão incluídos
         'movimentos': True,
-        'incluirCabecalho': True,
-        'incluirDocumentos': True
+        'incluirCabecalho': True
     }
 
     try:
@@ -117,33 +184,19 @@ def retorna_processo(num_processo, cpf=None, senha=None):
             response = client.service.consultarProcesso(**request_data)
             logger.debug("Resposta SOAP recebida")
 
-            data_dict = serialize_object(response)
-            response = EasyDict(data_dict)
-
-            if response.sucesso:
-                if hasattr(response.processo, 'documento'):
-                    logger.debug("\n=== INICIANDO ANÁLISE DETALHADA DA ESTRUTURA ===\n")
-
-                    # Informações gerais do processo
-                    logger.debug(f"Número do Processo: {getattr(response.processo, 'numero', 'N/A')}")
-                    logger.debug(f"Classe Processual: {getattr(response.processo, 'classeProcessual', 'N/A')}")
-
-                    # Analisa cada documento do processo
-                    docs = response.processo.documento
-                    if not isinstance(docs, list):
-                        docs = [docs]
-
-                    for idx, doc in enumerate(docs, 1):
-                        logger.debug(f"\n{'#' * 80}")
-                        logger.debug(f"DOCUMENTO PRINCIPAL #{idx}")
-                        logger.debug(f"{'#' * 80}")
-                        debug_estrutura_documento(doc)
-
-                return response
-            else:
+            if not response.sucesso:
                 error_msg = f"Erro na consulta do processo {num_processo}: {response.mensagem}"
                 logger.error(error_msg)
                 raise ExcecaoConsultaMNI(error_msg)
+
+            # Extrai IDs dos documentos
+            documentos = obter_ids_documentos_processo(response)
+            logger.debug(f"Total de documentos encontrados: {len(documentos)}")
+
+            return {
+                'processo': response,
+                'documentos': documentos
+            }
 
     except Fault as e:
         if "loginFailed" in str(e):
@@ -152,6 +205,7 @@ def retorna_processo(num_processo, cpf=None, senha=None):
             error_msg = f"Erro na comunicação SOAP: {str(e)}"
         logger.error(f"{error_msg} (Processo: {num_processo})")
         raise ExcecaoConsultaMNI(error_msg)
+
     except Exception as e:
         error_msg = f"Erro inesperado na consulta do processo {num_processo}: {str(e)}"
         logger.error(error_msg, exc_info=True)
