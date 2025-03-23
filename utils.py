@@ -34,7 +34,7 @@ def extract_mni_data(resposta):
                     'nivelSigilo': getattr(doc, 'nivelSigilo', 0),
                     'movimento': getattr(doc, 'movimento', None),
                     'hash': getattr(doc, 'hash', ''),
-                    'conteudo': None,  # O conteúdo é obtido separadamente
+                    'parent': None,
                     'documentos_vinculados': []
                 }
 
@@ -48,35 +48,29 @@ def extract_mni_data(resposta):
                         vinculados = [vinculados]
 
                     for vinc in vinculados:
-                        vinc_info = process_document(vinc)
+                        vinc_info = {
+                            'idDocumento': getattr(vinc, 'idDocumento', ''),
+                            'idDocumentoVinculado': getattr(vinc, 'idDocumentoVinculado', ''),
+                            'tipoDocumento': getattr(vinc, 'tipoDocumento', ''),
+                            'descricao': getattr(vinc, 'descricao', ''),
+                            'dataHora': getattr(vinc, 'dataHora', ''),
+                            'mimetype': getattr(vinc, 'mimetype', ''),
+                            'nivelSigilo': getattr(vinc, 'nivelSigilo', 0),
+                            'hash': getattr(vinc, 'hash', ''),
+                            'movimento': None,
+                            'parent': doc_info['idDocumento'],
+                            'documentos_vinculados': []
+                        }
                         doc_info['documentos_vinculados'].append(vinc_info)
-                        logger.debug(f"  Adicionado documento vinculado: {vinc_info['idDocumento']}")
+                        logger.debug(f"  Adicionado documento vinculado: {vinc_info['idDocumento']} -> {doc_info['idDocumento']}")
 
-                # Verifica subDocumentos
-                if hasattr(doc, 'documento'):
-                    subdocs = doc.documento
-                    if not isinstance(subdocs, list):
-                        subdocs = [subdocs]
-
-                    for subdoc in subdocs:
-                        if hasattr(subdoc, 'idDocumento'):
-                            sub_info = process_document(subdoc)
-                            doc_info['documentos_vinculados'].append(sub_info)
-                            logger.debug(f"  Adicionado subdocumento: {sub_info['idDocumento']}")
-
-                # Verifica relacionamentos
-                for attr in ['documentos', 'documentosVinculados', 'anexos']:
-                    if hasattr(doc, attr):
-                        rel_docs = getattr(doc, attr)
-                        if rel_docs:
-                            if not isinstance(rel_docs, list):
-                                rel_docs = [rel_docs]
-
-                            for rel_doc in rel_docs:
-                                if hasattr(rel_doc, 'idDocumento'):
-                                    rel_info = process_document(rel_doc)
-                                    doc_info['documentos_vinculados'].append(rel_info)
-                                    logger.debug(f"  Adicionado documento relacionado ({attr}): {rel_info['idDocumento']}")
+                        # Processa parâmetros adicionais do documento vinculado
+                        if hasattr(vinc, 'outroParametro'):
+                            outros = vinc.outroParametro if isinstance(vinc.outroParametro, list) else [vinc.outroParametro]
+                            for param in outros:
+                                nome = getattr(param, 'nome', '')
+                                valor = getattr(param, 'valor', '')
+                                logger.debug(f"    Parâmetro: {nome} = {valor}")
 
                 return doc_info
 
