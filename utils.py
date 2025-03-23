@@ -3,6 +3,7 @@ from functools import wraps
 import io
 from PyPDF2 import PdfMerger
 from base64 import b64decode
+from datetime import datetime
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -96,16 +97,105 @@ def extract_mni_data(resposta):
         logger.error(f"Erro ao extrair dados MNI: {str(e)}")
         return {'sucesso': False, 'mensagem': f'Erro ao processar dados: {str(e)}'}
 
-def merge_process_documents(documentos):
+def filter_documents(documentos, filtros=None):
     """
-    Mescla todos os documentos do processo em um único PDF.
+    Filtra documentos com base em critérios específicos.
 
     Args:
-        documentos (list): Lista de documentos do processo com seus documentos vinculados
+        documentos (list): Lista de documentos do processo
+        filtros (dict): Dicionário com critérios de filtro
+            - tipos_documento (list): Lista de tipos de documento a incluir
+            - data_inicial (str): Data inicial formato YYYYMMDD
+            - data_final (str): Data final formato YYYYMMDD
+            - descricao (str): Texto a buscar na descrição
+            - apenas_principais (bool): Se True, inclui apenas documentos principais
+            - apenas_pdf (bool): Se True, inclui apenas documentos PDF
+
+    Returns:
+        list: Lista de documentos filtrados
+    """
+    if not filtros:
+        return documentos
+
+    def match_document(doc):
+        """Verifica se o documento atende aos critérios"""
+        # Filtra por tipo de documento
+        if 'tipos_documento' in filtros and filtros['tipos_documento']:
+            if doc['tipoDocumento'] not in filtros['tipos_documento']:
+                return False
+
+        # Filtra por data
+        if 'data_inicial' in filtros or 'data_final' in filtros:
+            doc_data = datetime.strptime(doc['dataHora'][:8], '%Y%m%d')
+
+            if 'data_inicial' in filtros and filtros['data_inicial']:
+                data_inicial = datetime.strptime(filtros['data_inicial'], '%Y%m%d')
+                if doc_data < data_inicial:
+                    return False
+
+            if 'data_final' in filtros and filtros['data_final']:
+                data_final = datetime.strptime(filtros['data_final'], '%Y%m%d')
+                if doc_data > data_final:
+                    return False
+
+        # Filtra por descrição
+        if 'descricao' in filtros and filtros['descricao']:
+            if filtros['descricao'].lower() not in doc['descricao'].lower():
+                return False
+
+        # Filtra apenas PDFs
+        if filtros.get('apenas_pdf', False):
+            if doc.get('mimetype') != 'application/pdf':
+                return False
+
+        return True
+
+    def filter_recursive(docs):
+        """Aplica o filtro recursivamente nos documentos e seus vinculados"""
+        filtered = []
+        for doc in docs:
+            if match_document(doc):
+                # Cria uma cópia do documento para não modificar o original
+                doc_filtered = doc.copy()
+
+                # Se não é para incluir apenas documentos principais, processa vinculados
+                if not filtros.get('apenas_principais', False):
+                    vinculados = filter_recursive(doc.get('documentos_vinculados', []))
+                    doc_filtered['documentos_vinculados'] = vinculados
+                else:
+                    doc_filtered['documentos_vinculados'] = []
+
+                filtered.append(doc_filtered)
+
+        return filtered
+
+    # Aplica os filtros em todos os documentos
+    documentos_filtrados = filter_recursive(documentos)
+
+    # Log do resultado da filtragem
+    total_docs = len(documentos)
+    total_filtrados = len(documentos_filtrados)
+    logger.debug(f"Filtro aplicado: {total_filtrados} documentos selecionados de {total_docs}")
+
+    return documentos_filtrados
+
+def merge_process_documents(documentos, filtros=None):
+    """
+    Mescla documentos do processo em um único PDF, aplicando filtros se especificados.
+
+    Args:
+        documentos (list): Lista de documentos do processo
+        filtros (dict): Critérios de filtro para os documentos
 
     Returns:
         bytes: Conteúdo do PDF mesclado
     """
+    # Aplica filtros se especificados
+    if filtros:
+        documentos = filter_documents(documentos, filtros)
+        if not documentos:
+            raise ValueError("Nenhum documento encontrado com os filtros especificados")
+
     merger = PdfMerger()
 
     def add_document_to_merger(doc):
@@ -127,7 +217,7 @@ def merge_process_documents(documentos):
             logger.error(f"Erro ao processar documento {doc.get('idDocumento')}: {str(e)}")
 
     try:
-        # Processa todos os documentos principais e seus vinculados
+        # Processa todos os documentos filtrados
         for doc in documentos:
             add_document_to_merger(doc)
 

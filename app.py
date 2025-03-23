@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask, send_file
+from flask import Flask, send_file, request
 from routes.api import api
 from routes.web import web
 from flask_sqlalchemy import SQLAlchemy
@@ -47,19 +47,48 @@ logger.debug("Blueprints registrados com sucesso")
 @app.route('/processo/<numero>/pdf', methods=['GET'])
 def download_processo_pdf(numero):
     """
-    Mescla todos os documentos do processo em um único PDF e retorna para download.
+    Mescla documentos do processo em um único PDF, aplicando filtros opcionais.
 
     Args:
         numero (str): Número do processo no formato CNJ
+
+    Query Parameters:
+        tipos_documento: Lista de tipos de documento (separados por vírgula)
+        data_inicial: Data inicial (YYYYMMDD)
+        data_final: Data final (YYYYMMDD)
+        descricao: Texto a buscar na descrição
+        apenas_principais: Se deve incluir apenas documentos principais
+        apenas_pdf: Se deve incluir apenas documentos PDF
     """
     try:
+        # Extrai filtros da query string
+        filtros = {}
+
+        if request.args.get('tipos_documento'):
+            filtros['tipos_documento'] = request.args.get('tipos_documento').split(',')
+
+        if request.args.get('data_inicial'):
+            filtros['data_inicial'] = request.args.get('data_inicial')
+
+        if request.args.get('data_final'):
+            filtros['data_final'] = request.args.get('data_final')
+
+        if request.args.get('descricao'):
+            filtros['descricao'] = request.args.get('descricao')
+
+        if request.args.get('apenas_principais'):
+            filtros['apenas_principais'] = request.args.get('apenas_principais').lower() == 'true'
+
+        if request.args.get('apenas_pdf'):
+            filtros['apenas_pdf'] = request.args.get('apenas_pdf').lower() == 'true'
+
         # Busca todos os documentos do processo
         resposta = retorna_processo(numero)
         if not resposta.sucesso:
             return {'error': resposta.mensagem}, 400
 
-        # Mescla os documentos em um único PDF
-        pdf_data = merge_process_documents(resposta.processo.documentos)
+        # Mescla os documentos em um único PDF aplicando os filtros
+        pdf_data = merge_process_documents(resposta.processo.documentos, filtros)
 
         # Cria o arquivo para download
         pdf_buffer = BytesIO(pdf_data)
@@ -73,7 +102,12 @@ def download_processo_pdf(numero):
             download_name=f'processo_{numero}.pdf'
         )
 
+    except ValueError as e:
+        # Erro de validação (nenhum documento encontrado)
+        logger.warning(f"Validação: {str(e)}")
+        return {'error': str(e)}, 400
     except Exception as e:
+        # Erro interno
         logger.error(f"Erro ao gerar PDF do processo {numero}: {str(e)}")
         return {'error': 'Erro ao gerar PDF'}, 500
 
