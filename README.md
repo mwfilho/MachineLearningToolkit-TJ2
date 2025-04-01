@@ -48,10 +48,10 @@ Sistema avançado de consulta processual judicial, especializado no processament
    - Autenticação flexível via credenciais personalizadas
    - Processamento de XML complexos do modelo MNI
    
-2. **Sistema de Autenticação**
-   - Gerenciamento de usuários com Flask-Login
-   - Armazenamento seguro de senhas com hash
-   - Controle de acesso a áreas restritas
+2. **Sistema de Autenticação MNI**
+   - Autenticação direta com o PJe através do MNI
+   - Transmissão segura de credenciais
+   - Sem armazenamento de senhas do usuário
 
 3. **API REST**
    - Endpoints para consulta de processos
@@ -215,26 +215,15 @@ Códigos HTTP retornados:
 - 404: Documento ou processo não encontrado
 - 500: Erro interno do servidor
 
-## Sistema de Autenticação
+## Autenticação e Segurança
 
-### Modelo de Usuário
-```python
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256))
-    
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-        
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-```
+O sistema não implementa registro de usuários, pois utiliza diretamente as credenciais do PJe para acesso ao MNI. Para utilizar a API, o usuário já deve possuir uma conta válida no PJe com as permissões necessárias para consulta de processos.
 
-### Rotas de Autenticação
-- `/login`: Autenticação de usuários
-- `/register`: Registro de novos usuários
-- `/logout`: Logout de usuários autenticados
+### Segurança das Credenciais
+- Credenciais do MNI são passadas apenas via variáveis de ambiente ou headers HTTP
+- Não é feito armazenamento de credenciais do PJe em banco de dados
+- Conexões são sempre feitas diretamente com o servidor MNI oficial
+- Recomenda-se sempre utilizar HTTPS em produção para proteger as credenciais em trânsito
 
 ## Tratamento de Erros e Logging
 
@@ -291,13 +280,175 @@ def format_process_number(num_processo):
 ### Páginas Principais
 - **Página Inicial**: Interface simplificada para consulta de processos
 - **Debug**: Interface avançada para análise detalhada de processos
-- **Autenticação**: Login e registro de usuários
 
 ### Funcionalidades da Interface
 - Consulta de processos por número
 - Visualização hierárquica de documentos
 - Download direto de documentos
-- Interface administrativa para usuários autorizados
+- Interface técnica para debugging e análise
+
+## Implantação em Nuvem
+
+Este sistema pode ser facilmente implantado em diversos provedores de nuvem. Aqui estão instruções para os mais populares:
+
+### Google Cloud Run
+
+1. **Instalação do Google Cloud SDK**
+   ```bash
+   # Download e instalação do SDK
+   curl https://sdk.cloud.google.com | bash
+   gcloud init
+   ```
+
+2. **Preparação do Dockerfile**
+   ```dockerfile
+   FROM python:3.11-slim
+
+   WORKDIR /app
+
+   COPY requirements.txt .
+   RUN pip install --no-cache-dir -r requirements.txt
+
+   COPY . .
+
+   ENV PORT=8080
+   ENV DATABASE_URL=<seu-database-url>
+   ENV MNI_URL=<seu-mni-url>
+   ENV MNI_CONSULTA_URL=<seu-mni-consulta-url>
+
+   CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 main:app
+   ```
+
+3. **Build e Push da Imagem**
+   ```bash
+   # Construir a imagem
+   gcloud builds submit --tag gcr.io/[PROJECT_ID]/mni-api
+
+   # Implantar no Cloud Run
+   gcloud run deploy mni-api \
+     --image gcr.io/[PROJECT_ID]/mni-api \
+     --platform managed \
+     --allow-unauthenticated \
+     --region us-central1 \
+     --set-env-vars="MNI_URL=<url>,MNI_CONSULTA_URL=<url>"
+   ```
+
+### AWS Elastic Beanstalk
+
+1. **Instalação da CLI do EB**
+   ```bash
+   pip install awsebcli
+   ```
+
+2. **Configuração da Aplicação**
+   ```bash
+   eb init -p python-3.11 mni-api
+   ```
+
+3. **Arquivo de Configuração (Procfile)**
+   ```
+   web: gunicorn --bind 0.0.0.0:5000 main:app
+   ```
+
+4. **Arquivo de Dependências (requirements.txt)**
+   ```
+   flask==3.1.0
+   gunicorn==23.0.0
+   zeep==4.3.1
+   # ... outras dependências
+   ```
+
+5. **Implantação**
+   ```bash
+   eb create mni-api-env
+   
+   # Configurar variáveis de ambiente
+   eb setenv MNI_URL=<url> MNI_CONSULTA_URL=<url>
+   ```
+
+### Microsoft Azure App Service
+
+1. **Instalação da CLI do Azure**
+   ```bash
+   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+   az login
+   ```
+
+2. **Criação do Web App**
+   ```bash
+   # Criar grupo de recursos
+   az group create --name mniResourceGroup --location eastus
+
+   # Criar plano de serviço
+   az appservice plan create --name mniServicePlan --resource-group mniResourceGroup --sku B1 --is-linux
+
+   # Criar web app
+   az webapp create --resource-group mniResourceGroup --plan mniServicePlan --name mni-api --runtime "PYTHON:3.11"
+   
+   # Configurar variáveis de ambiente
+   az webapp config appsettings set --resource-group mniResourceGroup --name mni-api --settings MNI_URL="<url>" MNI_CONSULTA_URL="<url>"
+   ```
+
+3. **Implantação da Aplicação**
+   ```bash
+   # Configurar git para implantação
+   az webapp deployment source config-local-git --name mni-api --resource-group mniResourceGroup
+
+   # Adicionar remote para sua aplicação
+   git remote add azure <deployment-url-from-previous-command>
+   
+   # Push para implantação
+   git push azure main
+   ```
+
+### Heroku
+
+1. **Instalação da CLI do Heroku**
+   ```bash
+   curl https://cli-assets.heroku.com/install.sh | sh
+   heroku login
+   ```
+
+2. **Arquivo de Configuração (Procfile)**
+   ```
+   web: gunicorn main:app
+   ```
+
+3. **Arquivo runtime.txt**
+   ```
+   python-3.11.7
+   ```
+
+4. **Criar e Implantar Aplicação**
+   ```bash
+   heroku create mni-api
+   
+   # Configurar variáveis de ambiente
+   heroku config:set MNI_URL=<url> MNI_CONSULTA_URL=<url>
+   
+   # Implantar
+   git push heroku main
+   
+   # Escalar para pelo menos um dyno
+   heroku ps:scale web=1
+   ```
+
+### Considerações para Implantação em Produção
+
+1. **Segurança**
+   - Configure HTTPS para todas as comunicações
+   - Utilize gerenciamento seguro de segredos (Secret Manager, AWS Secrets, etc.)
+   - Implemente rate limiting para evitar abuso da API
+
+2. **Performance**
+   - Configure autoscaling para lidar com picos de demanda
+   - Implemente cache para consultas frequentes
+   - Utilize CDN para conteúdo estático
+
+3. **Monitoramento**
+   - Configure alertas para falhas e erros
+   - Implementa logging abrangente
+   - Configure health checks para garantir disponibilidade
 
 ## Próximos Passos
 
