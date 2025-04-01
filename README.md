@@ -1,7 +1,7 @@
 # Sistema de Consulta Processual MNI
 
 ## Descrição
-Sistema de consulta processual judicial avançado que utiliza o Modelo Nacional de Interoperabilidade (MNI) para busca e gerenciamento eficiente de documentos processuais, com interface web moderna e intuitiva.
+Sistema avançado de consulta processual judicial, especializado no processamento e análise de documentos judiciais através do Modelo Nacional de Interoperabilidade (MNI), com capacidade de geração e mesclagem de documentos PDF.
 
 ## Funcionalidades Principais
 
@@ -12,12 +12,64 @@ Sistema de consulta processual judicial avançado que utiliza o Modelo Nacional 
 - ✅ Interface de debug para análise detalhada
 - ✅ API REST para integração com outros sistemas
 - ✅ Suporte a credenciais MNI personalizadas
+- ✅ Processamento recursivo de documentos vinculados
+- ✅ Suporte a múltiplos formatos de documentos
+- ✅ Sistema de autenticação de usuários
 
-## Configuração do Ambiente
+## Arquitetura do Sistema
+
+### Estrutura de Diretórios
+```
+├── app.py                 # Configuração principal do Flask
+├── main.py                # Ponto de entrada da aplicação
+├── config.py              # Configurações do MNI e outras variáveis
+├── core.py                # Funções principais de processamento
+├── funcoes_mni.py         # Implementação de integração com o MNI
+├── utils.py               # Funções utilitárias
+├── models.py              # Modelos de banco de dados
+├── controle/              # Funções de controle
+│   ├── __init__.py
+│   ├── exceptions.py      # Classes de exceção personalizadas
+│   └── logger.py          # Configuração de logging
+├── routes/                # Rotas da aplicação
+│   ├── api.py             # API REST
+│   ├── auth.py            # Autenticação de usuários
+│   └── web.py             # Interface web
+└── templates/             # Templates HTML
+    └── base.html          # Template base
+    └── debug.html         # Interface de debug
+    └── index.html         # Página principal
+```
+
+### Componentes Principais
+
+1. **Integração MNI**
+   - Comunicação SOAP com o MNI via biblioteca Zeep
+   - Autenticação flexível via credenciais personalizadas
+   - Processamento de XML complexos do modelo MNI
+   
+2. **Sistema de Autenticação**
+   - Gerenciamento de usuários com Flask-Login
+   - Armazenamento seguro de senhas com hash
+   - Controle de acesso a áreas restritas
+
+3. **API REST**
+   - Endpoints para consulta de processos
+   - Suporte a download de documentos
+   - Autenticação via headers HTTP
+   - Tratamento de erros padronizado
+
+4. **Processamento de Documentos**
+   - Extração hierárquica de documentos
+   - Suporte a múltiplos tipos MIME
+   - Download seguro via arquivos temporários
+   - Sistema de classificação por tipo de documento
+
+## Integração com o MNI
 
 ### Credenciais MNI
 
-O sistema suporta duas formas de fornecer credenciais do MNI:
+O sistema suporta duas formas de fornecer credenciais MNI:
 
 1. **Variáveis de Ambiente** (para uso geral)
    - `MNI_ID_CONSULTANTE`: CPF/CNPJ do consultante 
@@ -27,253 +79,247 @@ O sistema suporta duas formas de fornecer credenciais do MNI:
    - `X-MNI-CPF`: CPF/CNPJ do consultante
    - `X-MNI-SENHA`: Senha do consultante
 
-**Importante**: O CPF/CNPJ deve ser fornecido apenas com números, sem pontos, traços ou barras.
-Exemplo: Use `03909823343` ao invés de `039.098.233-43`
+**Importante**: O CPF/CNPJ deve ser fornecido apenas com números, sem formatação.
+Exemplo: Use `12345678900` ao invés de `123.456.789-00`
 
 ### URLs do MNI
 
-As URLs de acesso ao MNI são configuradas em `config.py`:
+As URLs de acesso são configuradas em `config.py`:
 
 ```python
 MNI_URL = "https://pje.tjce.jus.br/pje1grau/intercomunicacao?wsdl"
 MNI_CONSULTA_URL = 'https://pje.tjce.jus.br/pje1grau/ConsultaPJe?wsdl'
 ```
 
-## Estrutura do Código
+### Fluxo de Comunicação MNI
 
-### Arquivos Principais
-
-- `main.py`: Rotas Flask e lógica de controle
-- `funcoes_mni.py`: Funções de integração com o MNI
-- `controle/exceptions.py`: Exceções personalizadas
-- `templates/`: Templates HTML das páginas
-
-### Fluxo de Execução
-
-1. **Consulta Inicial**
-   - Usuário fornece número do processo
-   - Sistema faz requisição ao MNI
-   - Extrai estrutura completa do processo
-
-2. **Processamento de Documentos**
-   - Identificação de documentos principais
-   - Extração de documentos vinculados
-   - Organização em estrutura hierárquica
+1. **Consulta de Processo**
    ```python
-   doc_info = {
-       'idDocumento': id_principal,
-       'documentos_vinculados': [
-           {'idDocumento': id_vinculado, ...}
-       ]
+   resposta = retorna_processo(num_processo, cpf, senha)
+   ```
+   - Estabelece conexão SOAP com o servidor MNI
+   - Autentica o usuário com as credenciais fornecidas
+   - Processa a resposta XML complexa
+   - Extrai estrutura completa do processo e seus documentos
+
+2. **Consulta de Documento**
+   ```python
+   resposta = retorna_documento_processo(num_processo, num_documento, cpf, senha)
+   ```
+   - Consulta um documento específico dentro do processo
+   - Retorna conteúdo binário para download
+   - Preserva metadados como tipo MIME e descrição
+
+## Processamento de Documentos
+
+### Hierarquia de Documentos
+
+O sistema implementa uma estrutura hierárquica complexa:
+
+1. **Documentos Principais**
+   - Petição Inicial, Decisões, Despachos, Sentenças
+   - Identificados pelo atributo `documento` na resposta MNI
+
+2. **Documentos Vinculados**
+   - Anexos, Procurações, Documentos de Identificação
+   - Identificados pelo atributo `documentoVinculado` na resposta MNI
+
+3. **Algoritmo de Extração**
+   ```python
+   # Pseudocódigo simplificado do algoritmo de extração
+   def procurar_documento(doc_list, target_id):
+       for doc in doc_list:
+           # Verifica documento atual
+           if doc.idDocumento == target_id:
+               return doc
+               
+           # Verifica documentos vinculados (recursivo)
+           if hasattr(doc, 'documentoVinculado'):
+               result = procurar_documento(doc.documentoVinculado, target_id)
+               if result:
+                   return result
+   ```
+
+### Sistema de Download
+
+1. **Processamento de Tipos MIME**
+   ```python
+   # Mapeamento de tipos MIME para extensões de arquivo
+   mime_to_extension = {
+       'application/pdf': '.pdf',
+       'image/jpeg': '.jpg',
+       'image/png': '.png',
+       'text/html': '.html',
+       # ...outros tipos
    }
    ```
 
-3. **Download de Documentos**
-   - Sistema oferece download para cada documento
-   - Identificação automática do tipo MIME
-   - Nomeação adequada dos arquivos
-
-## Hierarquia de Documentos
-
-O sistema implementa uma estrutura hierárquica completa:
-
-1. **Documentos Principais**
-   - Petição Inicial
-   - Decisões
-   - Despachos
-
-2. **Documentos Vinculados**
-   - Procurações
-   - Documentos de Identificação
-   - Comprovantes
-   - Anexos
-
-3. **Relacionamentos**
-   - Um documento principal pode ter múltiplos documentos vinculados
-   - Cada documento mantém seus metadados (tipo, data, descrição)
-
-## Como Usar
-
-1. **Página Principal**
-   - Digite o número do processo no formato CNJ
-   - Opcionalmente, forneça suas credenciais do PJe (CPF/CNPJ e senha)
-   - Para o CPF/CNPJ, use apenas números (ex: 03909823343)
-   - Clique em "Consultar"
-
-2. **Página de Debug**
-   - Mostra estrutura completa do processo
-   - Lista todos os documentos principais e vinculados
-   - Permite download individual de cada documento
-
-3. **Download de Documentos**
-   - Clique no botão "Baixar" ao lado de cada documento
-   - O sistema identificará automaticamente o tipo do arquivo
-   - O download será iniciado com o nome e extensão corretos
-
-## Tratamento de Erros
-
-O sistema implementa tratamento robusto de erros:
-- Validação de número do processo
-- Tratamento de erros de comunicação com MNI
-- Logging detalhado para debugging
-- Mensagens amigáveis para o usuário
-
-## Segurança
-
-- Credenciais MNI em variáveis de ambiente
-- Validação de inputs
-- Tratamento de níveis de sigilo dos documentos
-- Sanitização de dados antes da exibição
-
-## Melhorias e Funcionalidades Implementadas
-
-1. **Extração Completa de Documentos**
-   - Implementada extração de documentos principais
-   - Adicionado suporte a documentos vinculados usando o atributo 'documentoVinculado'
-   - Interface hierárquica para visualização
+2. **Criação de Arquivos Temporários**
    ```python
-   if hasattr(doc, 'documentoVinculado'):
-       for doc_vinc in doc.documentoVinculado:
-           vinc_info = {
-               'idDocumento': getattr(doc_vinc, 'idDocumento', ''),
-               'tipoDocumento': getattr(doc_vinc, 'tipoDocumento', ''),
-               'descricao': getattr(doc_vinc, 'descricao', ''),
-               'dataHora': getattr(doc_vinc, 'dataHora', ''),
-               'mimetype': getattr(doc_vinc, 'mimetype', ''),
-               'nivelSigilo': getattr(doc_vinc, 'nivelSigilo', 0)
-           }
-           doc_info['documentos_vinculados'].append(vinc_info)
-   ```
-
-2. **Sistema de Download**
-   - Download direto de documentos
-   - Identificação automática de tipos MIME
-   - Nomeação adequada dos arquivos
-   ```python
-   extensao = core.mime_to_extension.get(resposta['mimetype'], '.bin')
+   temp_dir = tempfile.mkdtemp()
+   file_path = os.path.join(temp_dir, f'{num_documento}{extensao}')
    with open(file_path, 'wb') as f:
        f.write(resposta['conteudo'])
    ```
 
-3. **Interface de Debug**
-   - Visualização detalhada da estrutura do processo
-   - Exibição de metadados dos documentos
-   - Facilidade para testes e verificações
+3. **Download Seguro via Flask**
+   ```python
+   return send_file(
+       file_path,
+       mimetype=resposta['mimetype'],
+       as_attachment=True,
+       download_name=f'documento_{num_documento}{extensao}'
+   )
+   ```
+
+## API REST
+
+### Endpoints Principais
+
+1. **Consulta de Processo**
+   ```
+   GET /api/v1/processo/<num_processo>
+   ```
+   Exemplo de uso:
+   ```bash
+   curl -X GET "http://seu-servidor.repl.co/api/v1/processo/0000000-00.0000.0.00.0000" \
+     -H "X-MNI-CPF: 12345678900" \
+     -H "X-MNI-SENHA: sua_senha"
+   ```
+
+2. **Download de Documento**
+   ```
+   GET /api/v1/processo/<num_processo>/documento/<num_documento>
+   ```
+   Exemplo de uso:
+   ```bash
+   curl -X GET "http://seu-servidor.repl.co/api/v1/processo/0000000-00.0000.0.00.0000/documento/123456" \
+     -H "X-MNI-CPF: 12345678900" \
+     -H "X-MNI-SENHA: sua_senha" \
+     --output documento.pdf
+   ```
+
+### Tratamento de Erros
+
+O sistema implementa resposta de erros padronizadas:
+```json
+{
+  "erro": "Descrição do erro",
+  "mensagem": "Mensagem amigável para o usuário"
+}
+```
+
+Códigos HTTP retornados:
+- 200: Sucesso
+- 401: Credenciais não fornecidas ou inválidas
+- 404: Documento ou processo não encontrado
+- 500: Erro interno do servidor
+
+## Sistema de Autenticação
+
+### Modelo de Usuário
+```python
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256))
+    
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+        
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+```
+
+### Rotas de Autenticação
+- `/login`: Autenticação de usuários
+- `/register`: Registro de novos usuários
+- `/logout`: Logout de usuários autenticados
+
+## Tratamento de Erros e Logging
+
+### Sistema de Logging
+```python
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+```
+
+### Exceções Personalizadas
+```python
+class ExcecaoConsultaMNI(Exception):
+    """Exception raised for errors during MNI consultation."""
+    pass
+```
+
+### Tratamento de Erros nas Requisições MNI
+```python
+try:
+    client = Client(url)
+    response = client.service.consultarProcesso(**request_data)
+    # Processamento...
+except Fault as e:
+    if "loginFailed" in str(e):
+        error_msg = "Erro de autenticação no MNI"
+    else:
+        error_msg = f"Erro na comunicação SOAP: {str(e)}"
+    logger.error(error_msg)
+    raise ExcecaoConsultaMNI(error_msg)
+```
+
+## Validações e Funções Utilitárias
+
+### Validação de Número de Processo
+```python
+def validate_process_number(num_processo):
+    pattern = r'^\d{7}-\d{2}\.\d{4}\.\d{1}\.\d{2}\.\d{4}$'
+    return bool(re.match(pattern, num_processo))
+```
+
+### Formatação de Número de Processo
+```python
+def format_process_number(num_processo):
+    nums = re.sub(r'\D', '', num_processo)
+    if len(nums) != 20:
+        raise ValueError("Process number must have 20 digits")
+    return f"{nums[:7]}-{nums[7:9]}.{nums[9:13]}.{nums[13]}.{nums[14:16]}.{nums[16:]}"
+```
+
+## Interface Web
+
+### Páginas Principais
+- **Página Inicial**: Interface simplificada para consulta de processos
+- **Debug**: Interface avançada para análise detalhada de processos
+- **Autenticação**: Login e registro de usuários
+
+### Funcionalidades da Interface
+- Consulta de processos por número
+- Visualização hierárquica de documentos
+- Download direto de documentos
+- Interface administrativa para usuários autorizados
 
 ## Próximos Passos
 
 Possíveis melhorias futuras:
-- Implementar cache de consultas
-- Adicionar suporte a mais tipos de documentos
-- Melhorar a interface de usuário
-- Adicionar mais funcionalidades de busca
 
-## Notas Importantes
+1. **Sistema de Cache**
+   - Implementar cache para consultas frequentes
+   - Reduzir o tráfego com o servidor MNI
+   - Melhorar tempo de resposta
 
-1. **Estrutura XML do MNI**
-   - O sistema processa a estrutura XML complexa do MNI
-   - Extrai todos os documentos vinculados usando o atributo 'documentoVinculado'
-   - Mantém a hierarquia original dos documentos
+2. **Mesclagem de PDFs**
+   - Possibilidade de baixar documentos vinculados em um único PDF
+   - Adição de índices e marcadores para navegação
 
-2. **Processamento de Documentos**
-   - Cada documento principal pode ter vários documentos vinculados
-   - A extração é feita recursivamente para garantir que todos os documentos sejam capturados
-   - Os metadados são preservados para cada documento
+3. **Interface Responsiva**
+   - Melhorar a experiência em dispositivos móveis
+   - Implementar interface com React ou Vue.js
 
-3. **Downloads**
-   - Sistema suporta múltiplos tipos de arquivos (PDF, DOC, etc)
-   - Gerencia o download de forma segura usando arquivos temporários
-   - Preserva os tipos MIME originais dos documentos
+4. **Consulta em Lote**
+   - Possibilidade de consultar múltiplos processos simultaneamente
+   - Processamento assíncrono com filas
 
-4. **Estrutura de IDs dos Documentos**
-   - Documentos principais têm seus próprios IDs
-   - Documentos vinculados são identificados pelo atributo 'documentoVinculado'
-   - Cada documento pode ter múltiplos documentos relacionados
-   - O sistema captura e organiza todos os IDs em uma estrutura hierárquica para facilitar o acesso
-
-5. **Tipos de Documentos Suportados**
-   - Petições (formato HTML/PDF)
-   - Documentos de identificação (PDF/Imagens)
-   - Procurações (PDF)
-   - Comprovantes e anexos (formatos diversos)
-   - Sistema detecta automaticamente o tipo MIME para download correto
-
-
-## API REST
-
-O sistema disponibiliza uma API REST para integração com outros sistemas:
-
-### Autenticação
-
-A API permite que cada usuário use suas próprias credenciais do PJe através de headers HTTP:
-
-```bash
-# Headers obrigatórios
-X-MNI-CPF: 03909823343  # Apenas números, sem formatação
-X-MNI-SENHA: sua_senha_aqui
-```
-
-### Endpoints
-
-1. **Consulta de Processo**
-   ```bash
-   # Exemplo com curl
-   curl -X GET "http://seu-servidor.repl.co/api/v1/processo/0000000-00.0000.0.00.0000" \
-     -H "X-MNI-CPF: 03909823343" \
-     -H "X-MNI-SENHA: sua_senha"
-   ```
-   Retorna dados do processo e lista completa de documentos.
-
-   Exemplo de resposta:
-   ```json
-   {
-     "sucesso": true,
-     "mensagem": "Processo consultado com sucesso",
-     "processo": {
-       "numero": "0000000-00.0000.0.00.0000",
-       "classeProcessual": "Classe do Processo",
-       "dataAjuizamento": "2025-03-17",
-       "orgaoJulgador": "Vara Exemplo",
-       "documentos": [
-         {
-           "idDocumento": "123456",
-           "tipoDocumento": "58",
-           "descricao": "Petição Inicial",
-           "dataHora": "20250317000000",
-           "mimetype": "text/html",
-           "documentos_vinculados": [
-             {
-               "idDocumento": "123457",
-               "tipoDocumento": "4050007",
-               "descricao": "Procuração"
-             }
-           ]
-         }
-       ]
-     }
-   }
-   ```
-
-2. **Download de Documento**
-   ```bash
-   # Exemplo com curl
-   curl -X GET "http://seu-servidor.repl.co/api/v1/processo/0000000-00.0000.0.00.0000/documento/123456" \
-     -H "X-MNI-CPF: 03909823343" \
-     -H "X-MNI-SENHA: sua_senha" \
-     --output documento.pdf
-   ```
-   Faz download do documento específico. Retorna o arquivo binário com o Content-Type apropriado.
-
-### Códigos de Status HTTP
-
-- 200: Sucesso
-- 401: Credenciais não fornecidas ou inválidas
-- 404: Documento não encontrado
-- 500: Erro interno do servidor
-
-### Notas sobre a API
-
-- As credenciais são obrigatórias em todas as chamadas
-- Os documentos são retornados em seu formato original (PDF, HTML, etc)
-- A API preserva os tipos MIME originais dos documentos
-- Recomenda-se usar HTTPS em produção para proteger as credenciais
+5. **Extração de Dados Avançada**
+   - Análise de texto dos documentos usando NLP
+   - Extração de informações relevantes como datas, partes, etc.
