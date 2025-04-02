@@ -36,58 +36,6 @@
 </div>
 
 {% if resposta %}
-<div class="card mb-4">
-    <div class="card-header">
-        <h4>Ações Disponíveis</h4>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            {% if num_processo %}
-            <div class="col-md-4 mb-3">
-                <a href="{{ url_for('api.get_peticao_inicial', num_processo=num_processo) }}" 
-                   class="btn btn-info w-100" target="_blank">
-                    <i class="bi bi-file-earmark-text"></i> Visualizar Dados da Petição Inicial (API)
-                </a>
-            </div>
-            <div class="col-md-4 mb-3">
-                <a href="{{ url_for('web.download_peticao_inicial', num_processo=num_processo) }}" 
-                   class="btn btn-primary w-100">
-                    <i class="bi bi-file-earmark-text"></i> Download da Petição Inicial
-                </a>
-            </div>
-            <div class="col-md-4 mb-3">
-                <a href="{{ url_for('web.download_processo_completo', num_processo=num_processo) }}" 
-                   class="btn btn-success w-100">
-                    <i class="bi bi-file-earmark-pdf"></i> Download do Processo Completo (PDF)
-                </a>
-            </div>
-            <div class="col-md-4 mb-3">
-                <a href="{{ url_for('api.get_processo_completo_pdf', num_processo=num_processo) }}" 
-                   class="btn btn-outline-success w-100" target="_blank">
-                    <i class="bi bi-code-slash"></i> API: PDF Completo
-                </a>
-            </div>
-            {% if documento_consultado %}
-            <div class="col-md-4 mb-3">
-                <a href="{{ url_for('api.get_documento_com_anexos_pdf', num_processo=num_processo, num_documento=documento_consultado) }}" 
-                   class="btn btn-outline-info w-100" target="_blank">
-                    <i class="bi bi-code-slash"></i> API: Documento com Anexos
-                </a>
-            </div>
-            {% endif %}
-            <div class="col-md-4 mb-3">
-                <form action="{{ url_for('web.debug_consulta') }}" method="POST" class="d-inline">
-                    <input type="hidden" name="num_processo" value="{{ num_processo }}">
-                    <button type="submit" class="btn btn-outline-primary w-100">
-                        <i class="bi bi-arrow-clockwise"></i> Atualizar Consulta
-                    </button>
-                </form>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
 <div class="card">
     <div class="card-header">
         <h4>Resposta do MNI</h4>
@@ -120,10 +68,6 @@
                                class="btn btn-sm btn-outline-primary mt-1">
                                 <i class="bi bi-download"></i> Baixar
                             </a>
-                            <a href="{{ url_for('web.download_documento_com_anexos', num_processo=num_processo, num_documento=doc_id) }}" 
-                               class="btn btn-sm btn-outline-success mt-1">
-                                <i class="bi bi-file-earmark-zip"></i> Com Anexos
-                            </a>
                         </td>
                         <td>{{ doc_info.dataHora }}</td>
                         <td>{{ doc_info.tipoDocumento }}</td>
@@ -140,10 +84,6 @@
                                         <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=doc_vinc.idDocumento) }}" 
                                            class="btn btn-sm btn-outline-secondary mt-1">
                                             <i class="bi bi-download"></i> Baixar
-                                        </a>
-                                        <a href="{{ url_for('web.download_documento_com_anexos', num_processo=num_processo, num_documento=doc_vinc.idDocumento) }}" 
-                                           class="btn btn-sm btn-outline-success mt-1">
-                                            <i class="bi bi-file-earmark-zip"></i> Com Anexos
                                         </a>
                                     </li>
                                 {% endfor %}
@@ -163,10 +103,6 @@
                                         <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=doc_rel.id) }}" 
                                            class="btn btn-sm btn-outline-secondary mt-1">
                                             <i class="bi bi-download"></i> Baixar
-                                        </a>
-                                        <a href="{{ url_for('web.download_documento_com_anexos', num_processo=num_processo, num_documento=doc_rel.id) }}" 
-                                           class="btn btn-sm btn-outline-success mt-1">
-                                            <i class="bi bi-file-earmark-zip"></i> Com Anexos
                                         </a>
                                     </li>
                                 {% endfor %}
