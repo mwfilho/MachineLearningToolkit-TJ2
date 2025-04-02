@@ -122,6 +122,174 @@ def format_process_number(num_processo):
     # Agora temos exatamente 20 dígitos, podemos formatar
     return f"{nums[:7]}-{nums[7:9]}.{nums[9:13]}.{nums[13]}.{nums[14:16]}.{nums[16:]}"
     
+def generate_document_with_attachments_pdf(num_processo, doc_id, cpf=None, senha=None):
+    """
+    Gera um PDF com um documento específico e seus anexos.
+    
+    Args:
+        num_processo (str): Número do processo
+        doc_id (str): ID do documento principal
+        cpf (str, optional): CPF/CNPJ do consultante
+        senha (str, optional): Senha do consultante
+        
+    Returns:
+        dict: Conteúdo do PDF mesclado ou mensagem de erro
+    """
+    try:
+        from funcoes_mni import retorna_processo, retorna_documento_processo
+        from pdf_utils import merge_pdfs, process_document_content
+        
+        logger.debug(f"\n{'=' * 80}")
+        logger.debug(f"Gerando PDF do documento {doc_id} e seus anexos - Processo {num_processo}")
+        logger.debug(f"{'=' * 80}\n")
+        
+        # 1. Consultar o processo para obter dados do documento e seus anexos
+        resposta_processo = retorna_processo(num_processo, cpf=cpf, senha=senha)
+        
+        if 'msg_erro' in resposta_processo:
+            logger.error(f"Erro ao consultar processo: {resposta_processo['msg_erro']}")
+            return {
+                'sucesso': False,
+                'msg_erro': resposta_processo['msg_erro']
+            }
+        
+        # 2. Encontrar o documento principal e seus anexos
+        documento_principal = None
+        documentos_anexos = []
+        
+        if 'documentos' in resposta_processo:
+            for doc in resposta_processo['documentos']:
+                if doc.get('id_documento') == doc_id:
+                    documento_principal = doc
+                    # Procurar os documentos vinculados
+                    if 'documentos_vinculados' in doc:
+                        documentos_anexos = doc.get('documentos_vinculados', [])
+                    break
+        
+        if not documento_principal:
+            logger.error(f"Documento {doc_id} não encontrado no processo {num_processo}")
+            return {
+                'sucesso': False,
+                'msg_erro': f"Documento {doc_id} não encontrado no processo"
+            }
+        
+        logger.debug(f"Documento principal: {documento_principal.get('descricao')} (ID: {doc_id})")
+        logger.debug(f"Encontrados {len(documentos_anexos)} anexos")
+        
+        # 3. Baixar o documento principal
+        resposta_doc = retorna_documento_processo(num_processo, doc_id, cpf=cpf, senha=senha)
+        
+        if 'msg_erro' in resposta_doc:
+            logger.error(f"Erro ao baixar documento principal: {resposta_doc['msg_erro']}")
+            return {
+                'sucesso': False,
+                'msg_erro': resposta_doc['msg_erro']
+            }
+        
+        # 4. Preparar lista de PDFs para mesclar
+        pdf_files = []
+        
+        # 4.1 Processar o documento principal (convertendo para PDF se necessário)
+        mime_principal = resposta_doc.get('mimetype', 'application/octet-stream')
+        descricao_principal = documento_principal.get('descricao', f'Documento {doc_id}')
+        
+        # Processar o conteúdo (converte para PDF se for HTML ou outro formato suportado)
+        try:
+            conteudo_pdf = process_document_content(
+                resposta_doc['conteudo'], 
+                mime_principal,
+                doc_id,
+                descricao_principal
+            )
+            
+            # Adicionar à lista de PDFs
+            pdf_files.append((
+                conteudo_pdf,
+                descricao_principal,
+                doc_id
+            ))
+            logger.debug(f"Documento principal processado com sucesso")
+        except Exception as e:
+            logger.error(f"Erro ao processar documento principal: {str(e)}")
+            # Continuamos mesmo com erro no documento principal
+        
+        # 4.2 Processar os anexos
+        for i, anexo in enumerate(documentos_anexos):
+            anexo_id = anexo.get('id_documento')
+            descricao_anexo = anexo.get('descricao', f'Anexo {i+1}')
+            
+            if not anexo_id:
+                logger.warning(f"Anexo sem ID encontrado: {descricao_anexo}")
+                continue
+                
+            logger.debug(f"Baixando anexo {anexo_id}: {descricao_anexo}")
+            
+            try:
+                # Baixar o anexo
+                resposta_anexo = retorna_documento_processo(num_processo, anexo_id, cpf=cpf, senha=senha)
+                
+                if 'msg_erro' in resposta_anexo:
+                    logger.warning(f"Erro ao baixar anexo {anexo_id}: {resposta_anexo['msg_erro']}")
+                    continue
+                
+                mime_anexo = resposta_anexo.get('mimetype', 'application/octet-stream')
+                
+                # Processar o conteúdo do anexo (converte para PDF se necessário)
+                conteudo_pdf_anexo = process_document_content(
+                    resposta_anexo['conteudo'], 
+                    mime_anexo,
+                    anexo_id,
+                    descricao_anexo
+                )
+                
+                # Adicionar à lista de PDFs
+                pdf_files.append((
+                    conteudo_pdf_anexo,
+                    descricao_anexo,
+                    anexo_id
+                ))
+                logger.debug(f"Anexo {anexo_id} processado com sucesso")
+            except Exception as e:
+                logger.error(f"Erro ao processar anexo {anexo_id}: {str(e)}")
+                continue
+        
+        # 5. Verificar se temos algum PDF para mesclar
+        if not pdf_files:
+            logger.error("Nenhum documento PDF disponível para mesclar")
+            return {
+                'sucesso': False,
+                'msg_erro': 'Não foi possível processar o documento e seus anexos'
+            }
+        
+        # 6. Mesclar todos os PDFs em um único arquivo
+        logger.debug(f"Mesclando {len(pdf_files)} arquivos PDF")
+        
+        try:
+            pdf_content = merge_pdfs(pdf_files)
+            
+            return {
+                'sucesso': True,
+                'numero_processo': num_processo,
+                'id_documento': doc_id,
+                'descricao': descricao_principal,
+                'total_documentos': len(pdf_files),
+                'pdf_content': pdf_content,
+                'mimetype': 'application/pdf'
+            }
+        except Exception as e:
+            logger.error(f"Erro ao mesclar PDFs: {str(e)}", exc_info=True)
+            return {
+                'sucesso': False,
+                'msg_erro': f'Erro ao mesclar PDFs: {str(e)}'
+            }
+    
+    except Exception as e:
+        logger.error(f"Erro inesperado ao gerar PDF do documento e anexos: {str(e)}", exc_info=True)
+        return {
+            'sucesso': False,
+            'msg_erro': f'Erro inesperado: {str(e)}'
+        }
+
 def generate_complete_process_pdf(num_processo, cpf=None, senha=None):
     """
     Gera um PDF completo com todos os documentos PDF do processo.

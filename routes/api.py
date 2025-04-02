@@ -130,10 +130,15 @@ def download_documento(num_processo, num_documento):
 @api.route('/processo/<num_processo>/peticao-inicial', methods=['GET'])
 def get_peticao_inicial(num_processo):
     """
-    Retorna a petição inicial e seus anexos para o processo informado
+    Retorna dados da petição inicial e seus anexos ou o PDF completo
+    Se parâmetro format=json -> Retorna dados JSON
+    Se parâmetro format=pdf -> Retorna PDF da petição com anexos (padrão)
     """
     try:
-        logger.debug(f"API: Buscando petição inicial do processo {num_processo}")
+        # Verificar se quer dados JSON ou PDF (padrão)
+        format_param = request.args.get('format', 'pdf').lower()
+        
+        logger.debug(f"API: Buscando petição inicial do processo {num_processo} (format={format_param})")
         
         # Verificar e formatar o número do processo
         try:
@@ -156,6 +161,7 @@ def get_peticao_inicial(num_processo):
                 'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
 
+        # Buscar informações da petição inicial
         resposta = retorna_peticao_inicial_e_anexos(num_processo_formatado, cpf=cpf, senha=senha)
 
         if 'msg_erro' in resposta:
@@ -163,16 +169,184 @@ def get_peticao_inicial(num_processo):
                 'erro': resposta['msg_erro'],
                 'mensagem': 'Erro ao buscar petição inicial'
             }), 404
-
-        return jsonify(resposta)
+            
+        # Se não encontrou petição inicial
+        if not resposta.get('peticao_inicial'):
+            return jsonify({
+                'erro': 'Petição inicial não encontrada',
+                'mensagem': 'Este processo não possui petição inicial acessível'
+            }), 404
+        
+        # Se quiser apenas os dados JSON
+        if format_param == 'json':
+            return jsonify(resposta)
+            
+        # Caso contrário, gera o PDF (padrão)
+        # Obter o ID da petição inicial
+        peticao = resposta['peticao_inicial']
+        id_documento = peticao['id_documento']
+        
+        logger.debug(f"API: Gerando PDF da petição inicial {id_documento} e anexos")
+        
+        # Gerar o PDF da petição inicial com seus anexos
+        pdf_resposta = core.generate_document_with_attachments_pdf(
+            num_processo_formatado, 
+            id_documento, 
+            cpf=cpf, 
+            senha=senha
+        )
+        
+        # Verificar se houve erro
+        if not pdf_resposta.get('sucesso', False):
+            return jsonify({
+                'erro': pdf_resposta.get('msg_erro', 'Erro desconhecido'),
+                'mensagem': 'Erro ao gerar PDF da petição inicial'
+            }), 500
+        
+        # Se tiver algum aviso, adicionamos aos logs
+        if 'aviso' in pdf_resposta:
+            logger.warning(f"Aviso ao gerar PDF da petição: {pdf_resposta['aviso']}")
+        
+        # Criar arquivo temporário para download
+        data_atual = datetime.now().strftime("%Y%m%d_%H%M%S")
+        temp_dir = tempfile.mkdtemp()
+        file_path = os.path.join(temp_dir, f'peticao_inicial_{num_processo}_{data_atual}.pdf')
+        
+        # Gravar o PDF em disco
+        with open(file_path, 'wb') as f:
+            f.write(pdf_resposta['pdf_content'])
+        
+        # Retornar o arquivo para download
+        return send_file(
+            file_path,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'peticao_inicial_{num_processo}_completa.pdf'
+        )
 
     except Exception as e:
         logger.error(f"API: Erro ao buscar petição inicial: {str(e)}", exc_info=True)
+        
+        # Se a exceção for durante o processamento do PDF, tentamos retornar um PDF vazio
+        if 'pdf' in request.args.get('format', 'pdf').lower():
+            try:
+                from pdf_utils import create_empty_pdf
+                
+                # Criar PDF vazio com mensagem de erro
+                pdf_content = create_empty_pdf(f"Erro ao gerar PDF da petição inicial: {str(e)}")
+                
+                # Criar arquivo temporário para download
+                data_atual = datetime.now().strftime("%Y%m%d_%H%M%S")
+                temp_dir = tempfile.mkdtemp()
+                file_path = os.path.join(temp_dir, f'erro_peticao_{num_processo}_{data_atual}.pdf')
+                
+                # Gravar o PDF em disco
+                with open(file_path, 'wb') as f:
+                    f.write(pdf_content)
+                
+                # Retornar o arquivo para download
+                return send_file(
+                    file_path,
+                    mimetype='application/pdf',
+                    as_attachment=True,
+                    download_name=f'erro_peticao_{num_processo}.pdf'
+                )
+            except:
+                pass
+                
+        # Se tudo falhar ou estivermos em modo JSON, retorna erro JSON
         return jsonify({
             'erro': str(e),
-            'mensagem': 'Erro ao buscar petição inicial'
+            'mensagem': 'Erro ao processar petição inicial'
         }), 500
         
+@api.route('/processo/<num_processo>/documento/<num_documento>/pdf-completo', methods=['GET'])
+def get_documento_com_anexos_pdf(num_processo, num_documento):
+    """
+    Gera e faz download de um PDF de um documento específico com seus anexos
+    """
+    try:
+        logger.debug(f"API: Gerando PDF do documento {num_documento} com anexos - Processo {num_processo}")
+        
+        # Verificar e formatar o número do processo
+        try:
+            # Tentamos formatar o número do processo
+            num_processo_formatado = core.format_process_number(num_processo)
+            logger.debug(f"Número do processo formatado: {num_processo_formatado}")
+        except ValueError as e:
+            # Se falhar na formatação, retornamos um erro
+            logger.error(f"Erro na formatação do número do processo: {str(e)}")
+            return jsonify({
+                'erro': f"Número de processo inválido: {num_processo}",
+                'mensagem': f"Formato CNJ requerido: NNNNNNN-DD.AAAA.J.TR.OOOO. Erro: {str(e)}"
+            }), 400
+            
+        cpf, senha = get_mni_credentials()
+        
+        # Gerar o PDF do documento e seus anexos
+        resposta = core.generate_document_with_attachments_pdf(num_processo_formatado, num_documento, cpf=cpf, senha=senha)
+        
+        # Verificar se houve erro
+        if not resposta.get('sucesso', False):
+            return jsonify({
+                'erro': resposta.get('msg_erro', 'Erro desconhecido'),
+                'mensagem': 'Erro ao gerar PDF do documento com anexos'
+            }), 500
+        
+        # Se tiver algum aviso, adicionamos aos logs
+        if 'aviso' in resposta:
+            logger.warning(f"Aviso ao gerar PDF: {resposta['aviso']}")
+        
+        # Criar arquivo temporário para download
+        data_atual = datetime.now().strftime("%Y%m%d_%H%M%S")
+        temp_dir = tempfile.mkdtemp()
+        file_path = os.path.join(temp_dir, f'documento_{num_documento}_{data_atual}.pdf')
+        
+        # Gravar o PDF em disco
+        with open(file_path, 'wb') as f:
+            f.write(resposta['pdf_content'])
+        
+        # Retornar o arquivo para download
+        return send_file(
+            file_path,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'documento_{num_documento}_com_anexos.pdf'
+        )
+        
+    except Exception as e:
+        logger.error(f"API: Erro ao gerar PDF do documento com anexos: {str(e)}", exc_info=True)
+        
+        # Mesmo com erro, tentamos retornar um PDF vazio
+        try:
+            from pdf_utils import create_empty_pdf
+            
+            # Criar PDF vazio com mensagem de erro
+            pdf_content = create_empty_pdf(f"Erro ao gerar PDF: {str(e)}")
+            
+            # Criar arquivo temporário para download
+            data_atual = datetime.now().strftime("%Y%m%d_%H%M%S")
+            temp_dir = tempfile.mkdtemp()
+            file_path = os.path.join(temp_dir, f'erro_documento_{num_documento}_{data_atual}.pdf')
+            
+            # Gravar o PDF em disco
+            with open(file_path, 'wb') as f:
+                f.write(pdf_content)
+            
+            # Retornar o arquivo para download
+            return send_file(
+                file_path,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f'erro_documento_{num_documento}.pdf'
+            )
+        except:
+            # Se falhar até a criação do PDF vazio, aí sim retornamos erro JSON
+            return jsonify({
+                'erro': str(e),
+                'mensagem': 'Erro ao gerar PDF do documento com anexos'
+            }), 500
+
 @api.route('/processo/<num_processo>/pdf-completo', methods=['GET'])
 def get_processo_completo_pdf(num_processo):
     """
