@@ -1,0 +1,604 @@
+# Tutorial MNI
+
+De PJe
+
+A integração entre sistemas, por meio da tecnologia "WebService", garante a integridade, inviolabilidade e segurança dos processos judiciais, inclusive quanto ao sigilo processual, quando houver. O intercâmbio de dados é independente de implementações existentes em cada órgão ou instituições públicas e privadas, podendo ser acessado por pessoas físicas, jurídicas ou entidades.
+
+O Modelo Nacional de Interoperabilidade (MNI) representa o padrão para troca de informações processuais no âmbito do Poder Judiciário. A implementação dos serviços está sob responsabilidade dos Tribunais, Órgãos da Justiça e Instituições Privadas interessadas em aderir ao modelo.
+
+Aos interessados em utilizar o MNI do PJe, cabe realizar as seguintes etapas:
+
+- Implementar as operações detalhadas neste tutorial em seus respectivos sistemas;
+- Cadastrar-se no PJe, utilizando usuário e senha. Para mais detalhes, acesse o Manual de utilização do PJe sem certificado digital (http://www.pje.jus.br/wiki//images/2/27/Manual_de_utiliza%C3%A7%C3%A3o_do_PJe_sem_certificado_digital.pdf).
+- Consumir os serviços do Webservice da instalação do PJe.
+
+Para as demais documentações, acesse a página do modelo aqui (http://www.cnj.jus.br/tecnologia-da-informacao/comite-nacional-da-tecnologia-da-informacao-e-comunicacao-do-poder-judiciario/modelo-nacional-de-interoperabilidade) ou veja a descrição sobre interoperabilidade.
+A lista de tribunais que já implantaram o serviço pode ser acessada aqui.
+
+## Conteúdo
+
+1. Acesso aos serviços do Webservice do PJe
+2. Operações utilizadas
+   2.1 1. entregarManifestaçãoProcessual
+      2.1.1 Criando um processo
+      2.1.2 Entrega Avulsa
+      2.1.3 Respondendo aos expedientes do processo
+   2.2 consultarProcesso
+   2.3 consultarAvisosPendentes
+   2.4 consultarTeorComunicacao
+3. Operações secundárias - consultas complementares
+   3.1 consultarAssuntosJudiciais
+   3.2 consultarClassesJudiciais
+   3.3 consultarCompetencias
+   3.4 consultarJurisdicoes
+   3.5 consultarOrgaosJulgadores
+   3.6 consultarOrgaosJulgadoresColegiados
+   3.7 consultarPapeis
+   3.8 consultarPrioridadeProcesso
+   3.9 consultarSalasAudiencia
+   3.10 consultarTiposAudiencia
+   3.11 consultarTiposDocumentoProcessual
+   3.12 consultarTodosTiposDocumentoProcessual
+   3.13 recuperarInformacoesFluxo
+4. Possíveis erros
+
+## Acesso aos serviços do Webservice do PJe
+
+O PJe utiliza a tecnologia Webservice para disponibilizar o acesso às informações processuais e garantir a interoperabilidade do sistema. O acesso ao Webservice ocorre através do diretório de serviços conhecido como WSDL. Para cada instalação do PJe há um conjunto de serviços disponíveis que estarão configurado conforme o detalhamento abaixo.
+
+- Web Service: http://ENDEREÇO DA APLICAÇÃO DO PJe/intercomunicacao?wsdl
+- Consultas complementares: http://ENDEREÇO DA APLICAÇÃO DO PJe/ConsultaPJe?wsdl
+
+Além disto, o CNJ disponibiliza um ambiente de testes para que implementações externas possam acessar o Webservice do PJe. Este ambiente tem como objetivo de auxiliar a equipe de desenvovimento no consumo dos serviços disponíveis no PJe.
+
+- Ambiente de testes (CNJ): https://wwwh.cnj.jus.br/pjemni-2x/intercomunicacao?wsdl
+
+NOTA: Para validação dos XML's, pode-se utilizar a ferramenta gratuita "SOAPUI".
+
+## Operações utilizadas
+
+Atualmente o PJe possui 4 serviços dos 6 previstos no MNI. Os 4 serviços implementados atendem as necessidades comuns de interoperabilidade das informações processuais como Peticionamento Eletrônico, Entrega Avulsa, Consulta de Processo, Consulta de Avisos Pendentes e Ciência de Comunicação:
+---
+1. entregarManifestaçãoProcessual - com a utilização dessa operação será possível criar um processo na base de dados do PJe, anexar documentos a um processo já criado, e também, responder a expedientes em aberto.
+
+2. consultarProcesso - permite visualização do processo, obedecendo aos critérios de permissão de papéis.
+
+3. consultarAvisosPendentes - verifica se há avisos de comunicação ou expedientes pendentes de ciência, retornando um id que identifica o aviso.
+
+4. consultarTeorComunicacao - consulta o conteúdo da comunicação (ou expediente), baixando o documento para leitura, e dá ciência da sua visualização. Para utilizar este serviço, há necessidade de identificar o id do aviso, consultado por meio do serviço consultarAvisosPendentes.
+
+## 1. entregarManifestaçãoProcessual
+
+O serviço entregarManifestacaoProcessual permite a execução das seguintes atividades: Peticionamento, Entrega Avulsa e Resposta de Expediente.
+
+Pelo peticionamento será possível criar um processo na instalação do PJe. Se o processo já existir, as operações Entrega Avulsa ou Resposta de Expediente atualizará um processo já cadastrado no PJe, via WebService. No primeiro caso, a entrega de manifestação deverá conter a numeração do processo que já esteja cadastrado PJe e, ao identificar o processo, o sistema irá incluir os documentos que tiverem anexados. O segundo caso, a Resposta de Expediente, é possível responder uma manifestação processual pendente.
+
+A partir dos serviços consultarAvisosPendentes e consultarTeorComunicacao é possível recuperar a lista de expedientes que precisam de resposta. A entrega de manifestação que conter o parâmetro "mni:idsProcessoParteExpediente" com a lista de identificadores separados por ponto e vírgula irá executar dentro do PJe a atividade de Resposta de Expediente, e os arquivos em anexo serão inseridos no sistema e a situação daquele expediente passará para respondido.
+
+### Criando um processo
+
+O tratamento das informações básicas de cada petição segue as regras definidas internamente na instalação do PJe, como classes, polos, assuntos entre outros atributos. Caso alguma regra interna do PJe não seja respeitada, o envio da petição apresentará um erro e sua possível causa. Por exemplo, a primeira instância pode definir o tipo de pessoa do polo ativo para uma determinada classe, se este tipo não estiver correto na mensagem encaminhada ao WebService, o sistema recusará informando o problema ocorrido. Abaixo seguem os parâmetros que podem ser utilizados no peticionamento:
+
+Clique aqui (http://www.pje.jus.br/wiki/images/9/95/EntregaManifestacaoAdvogado.xml) para acessar um exemplo do serviço.
+
+### Parâmetros de entrada
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| idManifestante | int | Sim | O identificador do órgão de representação processual (MP, defensoria) que efetiva a manifestação. O ideal é que esse identificador seja do Ministério da Fazenda (CPF ou CNPJ) ou o registro individual do processo judicial de uma instância para outra, o identificador de |
+| senhaManifestante | string | Sim | A senha de acesso do órgão de representação processual (MP, defensoria, advogado, devendo conter de 8 a 64 caracteres, mesclando-se letras e números) de utilização do PJe sem certificado digital. (http\://www\.pje.jus.br/wiki//images/2/27/Manual\_de\_utiliza%C3%A7%C3%A3o\_do\_PJe\_sem\_certificado\_digital.pdf) |
+| classeProcessual | int | Sim | Número identificador da classe processual, segundo o padrão estabelecido nas Tabelas Processuais Unificadas. (http\://www\.cnj.jus.br/sgt/consulta\_publica\_classes.php) Pode variar de acordo com a configuração de classes para cada jurisdição. Para mais informações, consultar consultarClassesJudiciais. |
+| codigoLocalidade | int | Sim | Códigos das seções/subseções (jurisdição) da instalação do PJe. Para mais informações, consultar "consultarJurisdicoes()". |
+| competencia | int | Não | Identificador da competência a que ele se destina. O parâmetro é opcional. Caso na Jurisdição de peticionamento, houver potencial conflito de competência (quando mais de uma possuem mais de um Órgão Julgador para o processo ser distribuído), a verificação de competência será realizado o peticionamento conforme a configuração das competências disponibilizadas no consultarCompetencias. |
+| processoVinculado | cnj:tipoVinculacaoProcessual | Não | Elemento destinado a permitir a indicação da existência de um outro processo vinculado. |
+| modalidadeVinculacaoProcesso | string | Não | Tipo de elemento destinado a permitir a identificação entre processos. Valores: 'AP' (apenso); 'AR' (ação rescisória) 'CD' (competência delegada);'CT' (continência); 'CX' (conexão); 'OG' (originário); 'OR' (outro tipo de associação que não os anteriores); 'PD' (dependência); 'RG' (repercussão geral); 'RR' (recurso repetitivo). |
+| prioridade | string | Não | Elemento destinado a permitir a identificação da existência de prioridades legais (além daquelas que não são resultado direto da identificação da classe processual, como mandado de segurança). Na versão 2.0, será texto livre, mas é recomendável utilizar os valores: "IDOSO" "RÉU PRESO" "PERECIMENTO" "MENOR" |
+| valorCausa | int | Não | Valor da relação jurídica. Não usar caracteres especiais, apenas números inteiros. |
+| assistenciaJudiciaria | boolean | Não | Atributo que define se o processo terá assistência judiciária às partes. |
+| nivelSigilo | int | Sim | Nível de sigilo a ser aplicado ao processo. Dever-se-á utilizar os seguintes valores: 0: público, acessível aos servidores do Judiciário e dos demais órgãos públicos de colaboração com a Justiça, aos advogados e a qualquer cidadão - 1: segredo de justiça, acessível aos servidores do Judiciário e dos órgãos públicos de colaboração na administração da Justiça que participem do processo, acessível aos servidores do Judiciário e aos demais órgãos públicos que participem do processo - 3: sigilo médio, acessível aos servidores do órgão em que tramita o processo ou procedimento incidente e àqueles que forem expressamente incluídos - 4: sigilo absoluto, com acesso limitado a usuários qualificados (magistrado, diretor de secretaria/escrivão, oficial de justiça) do órgão em que tramita o processo, às partes que provocaram o incidente e àqueles que forem expressamente incluídos - 5: sigilo absoluto, acessível apenas ao magistrado do órgão em que tramita, aos servidores por ele autorizados e às partes que provocaram o incidente. |
+
+---
+| dataAjuizamento | string | Não | Este atributo corresponde a data de autuação do processo e sem processo após uma consulta. Observação: Na entrega da manifes Atributo genérico, podendo ser usado em diversas situações, tais |
+| - | - | - | - |
+| outroParametro | string | Não | valor="Andamento" nome="mni:situacaoProcesso" - Indica a situ TO DO |
+
+
+### Polo
+
+| polo | string | Sim | Sigla para identificação do tipo de polo. Para polo ativo, usar "AT da lei diverso; "TJ" = Testemunha do juízo; "AD" = Assistente simp |
+| - | - | - | - |
+
+
+### Pessoa Parte
+
+| nome | string | Sim | Nome da parte que compõe o polo do processo. |
+| - | - | - | - |
+| sexo | string | Não | Correspondente a pessoa parte, onde "M" masculino; "F" feminin |
+| nomeGenitor | string | Não | Nome completo do pai da pessoa parte. |
+| nomeGenitora | string | Não | Nome completo da mãe da pessoa parte. |
+| dataNascimento | string | Não | Data do nascimento no formato AAAAMMDD. |
+| dataObito | string | Não | Data do falecimento no formato AAAAMMDD. |
+| numeroDocumentoPrincipal | int | Não | Número do documento principal da pessoa parte, devendo ser u ordem, ou o CNPJ para pessoas jurídicas. O atributo é opcional e documentos ou cujos dados não estão disponíveis. |
+| tipoPessoa | string | Sim | Indicar qual o tipo de pessoa que será integrante do processo. En "fisica";"juridica"; "autoridade"; "orgaorepresentacao". |
+| ns3:pessoaVinculada | cnj:tipoPessoa | Não | Indicação da existência de um relacionamento entre uma autori representa. Exemplo: a escola é vinculada a seu diretor ou reitor |
+| cidadeNatural | string | Não | Local de nascimento da pessoa parte. |
+| estadoNatural | string | Não | Estado de nascimento da pessoa parte. A implementação de codi do campo como se tratando da sigla de duas letras identificadora |
+| nacionalidade | string | Não | País de nascimento da pessoa parte. Exemplo: "BR"-Brasil. Dever 3166-1-alpha-2 (http\://www\.iso.org/iso/english\_country\_names\_a |
+| codigoDocumento | string | Sim | Número do documento identificador vinculado ao tipo de pessoa etc. São uma sequência de caracteres que tornam único o docum |
+| emissorDocumento | string | Sim | Entidade emissora do documento. Exemplo: SSP, Cartórios, Justiç |
+| tipoDocumento | string | Sim | Elemento destinado a permitir a identificação dos diversos tipos se de enumeração dos seguintes tipos: - CI: carteira de identidad título de eleitor - CN: certidão de nascimento - CC: certidão de ca trabalho - RIC: registro individual do cidadão - CMF: cadastro no número no programa de integração social - CEI: cadastro específi trabalho - CP: cadastro em conselhos profissionais - IF: identidad dos Advogados do Brasil - RJC: número de inscrição empresarial |
+| nome | string | Sim | Nome da parte detentora do documento. |
+| outroNome | string | Não | Elemento destinado a permitir a inclusão de outros nomes da pe esse elemento os nomes que NÃO constam em documentos espe principal existentes em documentos específicos, esses nomes dev documento. |
+
+
+### Endereço
+
+| cep | int | Não | CEP da parte do processo. Atributo indicador do código de ender nacional de endereços da ECT. O valor deverá ser uma sequência é opcional para permitir a apresentação de endereços desprovid |
+| - | - | - | - |
+| logradouro | string | Sim | Logradouro vinculado ao CEP, tais como as ruas, avenidas, praça |
+| numero | string | Não | Número vinculado ao CEP, podendo ser número da casa, apartam |
+| complemento | string | Não | Dados adicionais do endereço. |
+| bairro | string | Sim | Parte que compõe a cidade, devendo ser vinculada ao CEP. |
+| cidade | string | Sim | Vinculada ao CEP, ou seja, nome da zona geográfica onde se agru |
+| estado | string | Sim | Sigla do Estado brasileiro, composto por duas letras. Ex: DF |
+| pais | string | Sim | Sigla referente ao país do Estado que compõe o endereço, compo preferencialmente, o código ISO-3166-1-alpha-2 (http\://www\.iso.org/iso/english\_country\_names\_and\_code\_eleme |
+
+
+### Representante Processual
+
+| intimacao | boolean | - | Indicativo verdadeiro (true) ou falso (false) relativo à escolha de ser o(s) preferencial(is) para a realização de intimações. |
+| - | - | - | - |
+| nome | string | Sim | Nome do advogado ou do escritório de advocacia ou órgão de re defensoria pública. A identificação relativa a se tratar de advoga numeroDocumentoPrincipal, caso se trate de CPF, deverá ser tra escritório de advocacia ou órgão de representação de interesses |
+| inscricao | string | Não | Inscrição do advogado ou escritório de advocacia no cadastro da ser preenchido no formato CCDDDDDDDC, sendo os primeiros 'C federativa brasileira em que há a inscrição, os sete digitos 'D' seg zeros ('0') à esquerda caso o número tenha menos de 7 dígitos e inscrição. |
+| numeroDocumentoPrincipal | string | Não | O número RIC ou o CPF, para advogados, ou o CNPJ, para escritó processual (MP, advocacia pública e defensoria pública). |
+
+---
+| tipoRepresentante | string | Sim | Atributo que permite indicar o tipo de representante processual Ministério público; "D" Defensoria pública; "P" outros órgãos de pública em geral). |
+| - | - | - | - |
+
+
+| Assunto Processual | Assunto Processual | Assunto Processual | Assunto Processual |
+| - | - | - | - |
+| principal | boolean | - | Indica se o assunto será o principal do processo. |
+| codigoNacional | int | Sim | Código do assunto processual, segundo SGT. (http\://www\.cnj.jus.br/sgt/consulta\_publica\_assuntos.php). Obtém-se os códigos por meio do serviço consultarAssuntosJudiciais. |
+| assuntoLocal | tns:tipoAssuntoLocal | Não | Elemento destinado a que se possa informar um assunto criado nacional unificada (SGT. (http\://www\.cnj.jus.br/sgt/consulta\_publica\_assuntos.php). |
+| assuntoLocalPai | tns:tipoAssuntoLocal | Não | Assunto local que é o pai imediato deste assunto, se o pai não for um assunto nacional. |
+| codigoAssunto | int | Não | Atributo destinado a incluir a informação relativa ao código numérico do assunto local. |
+| codigoPaiNacional | int | Não | Atributo destinado à entrada do código de assunto nacional de que o assunto local é filho. |
+| descricao | string | Não | Texto descritivo do assunto processual. |
+
+
+| Documento | Documento | Documento | Documento |
+| - | - | - | - |
+| idDocumento | string | Não | Identificador do Documento. |
+| idDocumentoVinculado | string | Não | Identificador do documento principal caso este documento seja um anexo. |
+| tipoDocumento | string | Sim | Código do tipo de documento disponível no serviço "ConsultaPJe". Este código variará dependendo da instalação do PJe. |
+| dataHora | string | Não | Sequencia de ano+dia+mês/hora+minuto+segundo. Atributo destinado a indicar que o documento foi recebido pelo Poder Judiciário. É opcional no envio. |
+| descricao | string | Não | Descrição do documento. |
+| hash | string | Não | Resumo matemático do documento enviado pelo algoritmo SHA256. |
+| nivelSigilo | int | Sim | Nível de sigilo a ser aplicado à comunicação. Dever-se-á utilizar o nível 0, acessível a todos os servidores do Judiciário e dos demais órgãos públicos de colaboração, bem como aos advogados e a qualquer cidadão - 1: segredo de justiça, acessível aos servidores dos órgãos públicos de colaboração na administração da Justiça, no mínimo, acessível aos servidores do Judiciário, às partes que provocaram o processo e aos órgãos de colaboração na administração da Justiça - 3: sigilo médio, acessível aos servidores do processo, às partes que lhe deram início e àqueles que forem expressamente indicados e a classes de servidores qualificados (magistrado, diretor de secretaria, oficial de justiça) do órgão em que tramita o processo, às partes que lhe deram início e àqueles expressamente indicados - 5: sigilo absoluto, acessível apenas ao magistrado do órgão em que tramita o processo, aos indicados e às partes que provocaram o incidente. |
+| tipoDocumento | string | Sim | Atributo destinado a permitir a indicação do código nacional do documento. O tipo aqui indicado deve ser um dos tipos de documento ou petição inicial previstas na \[Resolução CNJ 46 (http\://www\.cnj.jus.br/busca-atos-adm?documento=2625)]. Este atributo deve, necessariamente, ser informado. |
+| conteudo | xs:base64Binary | Sim | Arquivo convertido em Base64. |
+| mimetype | string | Sim | Tipo do arquivo que será enviado, seguindo o seguinte domínio: Serão aceitos os seguintes tipos de arquivos: pdf (máximo até 3Mb), mpeg (máximo até 50Mb), mp3 (máximo até 5Mb), png (máximo até 3Mb), mp4 (máximo até 10Mb). |
+
+
+| Assinatura | Assinatura | Assinatura | Assinatura |
+| - | - | - | - |
+| assinatura | string | Sim | Contem os dados em Base64 do arquivo de assinatura do documento. Caso os dados sejam P7S, é necessário informar os dados da assinatura. |
+| algoritmoHash | string | Sim | Algoritmo utilizado para gerar a assinatura: MD5withRSA, SHA1withRSA, SHA256withRSA. Atualmente, o mais utilizado é o SHA256withRSA. |
+| cadeiaCertificado | string | Sim | String do certificado. Caso seja do tipo PEM é necessário incluir inclusive o "BEGIN CERTIFICATE". |
+| codificacaoCertificado | string | Sim | Codificação utilizada no certificado: "PEM" ou "PkiPath". |
+| dataAssinatura | tipoData | Não | Data e Hora da assinatura, obedecendo a sequencia de ano+dia+mês/hora+minuto+segundo. |
+| signatarioLogin | cnj:tipoSignatarioSimples | Não | Informação referente a signatário que fez uso de login e senha para assinar o documento. |
+
+
+| Parâmetros de saída | Parâmetros de saída | Parâmetros de saída |
+| - | - | - |
+| Parâmetro | Tipo | Descrição |
+| sucesso | boolean | Indica se houve sucesso na requisição. |
+| mensagem | string | Mensagem que indica o retorno correto da requisição |
+| protocoloRecebimento | int | Número do processo que foi gerado na requisição. |
+| dataOperacao | string | Data e hora da criação do processo. |
+| recibo | xs:base64Binary | Comprovante do protocolo do processo, que contém os dados básicos do processo. |
+
+
+## Entrega Avulsa
+
+O tratamento das informações básicas de cada petição segue as regras definidas internamente na instalação do PJe. A entrega avulsa utiliza o serviço de manifestação processual onde é obrigatório o preenchimento do número do processo e os parâmetros referente aos documentos que serão anexados ao processo.
+
+A operação atualizará um processo já cadastrado no PJe, via WebService.
+
+Para realizar o peticionamento avulso de um processo, o usuário deve possuir o número completo do processo para o qual ele deseja se manifestar.
+---
+
+tornar participante.
+Essa numeração pertencerá apenas a aplicação atual do PJe (jurisdição), ou seja, para outras aplicações do PJe a numeração será considerada
+inexistente.
+
+Ao peticionar um processo, o sistema verificará se o solicitante já está cadastrado como parte no processo. Quando o mesmo já compor a
+parte no processo, seu peticionamento será negado. Apenas usuários que não figurarem como parte, poderão peticionar.
+
+Quando o usuário for advogado ou procurador, e estes já estiverem habilitados no processo, deverão utilizar o procedimento normal de
+peticionamento digital. Somente advogados e procuradores podem assinar digitalmente as petições avulsas.
+
+Para acessar um exemplo de código xml, clique aqui. (http://www.pje.jus.br/wiki/images/f/f9/PeticionamentoAvulsoPDF.xml)
+
+## Parâmetros de entrada
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| idManifestante | int | Sim | O identificador do órgão de representação processual (MP, defensoria pública, advocacia pública) que efetiva a manifestação. O ideal é que esse identificador seja o número de inscrição do manifestante no Ministério da Fazenda (CPF ou CNPJ) ou o registro individual do cidadão (RIC). No caso de transferência de processo judicial de uma instância para outra, o identificador deverá ser o tribunal remetente. |
+| senhaManifestante | string | Sim | A senha de acesso do órgão de representação processual (MP, defensoria pública, advocacia pública) ou advogado, devendo conter de 8 a 64 caracteres, mesclando-se letras e números. Para mais detalhes sobre a forma de utilização do PJe sem certificado digital. (http\://www\.pje.jus.br/wiki//images/2/27/Manual\_de\_utiliza%C3%A7%C3%A3o\_do\_PJe\_sem\_certificado\_digital.pdf) |
+| numeroProcesso | int | Sim | Possuir o número do processo no qual deseja fazer um peticionamento avulso. O número do processo deve estar de acordo com as regras definidas pela Resolução 65. |
+| orgaoJulgador - codigoOrgao | string | Não | Identificador do órgão julgador do processo. Os id's podem ser consultados por meio do serviço consultarOrgaosJulgadores. |
+| orgaoJulgador - nomeOrgao | string | Não | Descrição do órgão julgador do processo. Os nomes podem ser consultados por meio do serviço consultarOrgaosJulgadores. |
+
+
+### Documento
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| idDocumento | int | Não | Identificador do documento. |
+| idDocumentoVinculado | int | Não | Identificador do documento principal caso este documento seja um anexo. |
+| tipoDocumento | string | Sim | Código do tipo de documento disponível no ConsultaPJe - Ex.: 58 - Petição Inicial, 118A - Informação |
+| dataHora | date | Não | Data e hora da inclusão do documento. |
+| mimetype | string | Sim | Tipo do arquivo que será enviado, seguindo o seguinte domínio: application/pdf ou html/text". |
+| nivelSigilo | int | Não | Onde, os valores são de 0 a 5, 0 sem sigilo e > 0 sigiloso. |
+| hash | string | Não | Hash do conteúdo do documento. |
+| descricao | string | Não | Descrição do documento. |
+| tipoDocumentoLocal | int | Não | Sem regra. |
+| conteudo | string | Sim | O conteúdo do arquivo P7S deve ser convertido para Base64 conforme a string abaixo Note que para os arquivos P7S não há necessidade das tags de assinatura e cadeia de certificado pois estes dados estão codificados no conteúdo do arquivo. |
+
+
+### Assinatura
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| assinatura | string | Sim | Contem os dados em Base64 do arquivo de assinatura do documento. Para arquivos em PDF ou que sejam P7S, é necessário informar os dados da assinatura. |
+| algoritmoHash | string | Sim | Algoritmo utilizado para gerar a assinatura: MD5withRSA, SHA1withRSA, SHA256withRSA ou ASN1. Atualmente, o mais utilizado é o SHA256withRSA. |
+| cadeiaCertificado | string | Sim | String do certificado. Caso seja do tipo PEM é necessário incluir inclusive as strings "BEGIN CERTIFICATE" e "END CERTIFICATE". |
+| codificacaoCertificado | string | Sim | Codificação utilizada no certificado: "PEM" ou "PkiPath". |
+| dataEnvio | string | Sim | Data e Hora de envio, obedecendo a sequencia de ano+mês+dia+hora+minuto+segundo (ex.:2016-02-29T09:00:00) |
+
+
+## Parâmetros de saída
+
+| Parâmetro | Tipo | Descrição |
+| - | - | - |
+| sucesso | bollean | Indica se houve sucesso na entrega do peticionamento. |
+| mensagem | string | Mensagem que indica o retorno com sucesso do peticionamento. |
+| protocoloRecebimento | int | Número do processo que foi peticionado o documento. |
+| dataOperacao | string | Data e hora do peticionamento avulso. |
+| recibo | xs:base64Binary | Comprovante do protocolo do processo, que contém os dados básicos do processo. |
+
+
+## Respondendo aos expedientes do processo
+
+Para concretizar a comunicação processual (usando o serviço "consultarAvisosPendentes"), será necessário que se tome ciência de algum ato
+de comunicação, antes de responder aos expedientes do processo. Para tomar ciência da comunicação, obrigatoriamente, o serviço
+"consultarTeorComunicacao" deverá ser usado. Somente assim será possível responder ao expediente, usando os parâmetros nome
+"mni:idsProcessoParteExpediente" e o valor com a sequência de ID's dos expedientes.
+
+---
+
+## Parâmetros de entrada
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| idManifestante | int | Sim | CPF ou CNPJ do usuário que deseja acessar o sistema. É o mesmo parâmetro utilizado no peticionamento do processo. |
+| senhaManifestante | int | Sim | Senha cadastrada pelo usuário do sistema. É o mesmo parâmetro utilizado no peticionamento do processo. |
+| numeroProcesso | int | Sim | Número do processo que se deseja responder o expediente. O número do processo judicial deve estar de acordo com as regras definidas pela Resolução 65. |
+
+
+### Documento
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| dataHora | string | Não | Sequencia de ano+dia+mês/hora+minuto+segundo. É o mesmo parâmetro utilizado no peticionamento do processo. |
+| descricao | string | Não | Descrição do documento. É o mesmo parâmetro utilizado no peticionamento do processo. |
+| hash | string | Não | Resumo matemático do documento enviado pelo algoritmo SHA-256. É o mesmo parâmetro utilizado no peticionamento do processo. |
+| mimetype | string | Sim | Tipo do arquivo que será enviado. É o mesmo parâmetro utilizado no peticionamento do processo. |
+| nivelSigilo | int | Não | Nível de sigilo a ser aplicado à comunicação. É o mesmo parâmetro utilizado no peticionamento do processo. |
+| tipoDocumento | string | Sim | Atributo destinado a permitir a indicação do código nacional do tipo de documento que está sendo enviado. O tipo aqui indicado deve ser um dos tipos de documento ou petições previstos nas tabelas de complementos previstas na \[Resolução CNJ 46 (http\://www\.cnj.jus.br/busca-atos-adm?documento=2615%7C) ]. O código do tipo deve, necessariamente, ser informado. É o mesmo parâmetro utilizado no peticionamento do processo. |
+| conteudo | xs:base64Binary | Sim | Arquivo convertido em Base64. o mesmo parâmetro utilizado no peticionamento do processo. |
+
+
+Assinatura (contendo todos os parâmetros obrigatórios descritos no peticionamento do processo.)
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| dataEnvio | string | Não | Data e hora do envio do expediente, seguindo o padrão ano+mês+dia+hora+minuto+segundo. |
+
+
+### Parâmetros
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| nome="mni:idsProcessoParteExpediente" | string | Sim | Atributo do objeto "ManifestacaoProcessual", que define que a entrega será uma resposta de um expediente. |
+| valor="?" | int | Sim | Sequência de ID´s dos expedientes (documentos), separados por ";" caso haja mais que um expediente. Utilize o serviço consultarAvisosPendentes para recuperar a lista de id's. |
+
+
+## Parâmetros de saída
+
+| Parâmetro | Tipo | Descrição |
+| - | - | - |
+| sucesso | bollean | Indica se houve sucesso na entrega da resposta do expediente. |
+| mensagem | string | Manifestação processual recebida com sucesso. |
+| protocoloRecebimento | int | Número do processo que foi gerado na requisição. |
+| dataOperacao | string | Data e hora da resposta da requisição. |
+| recibo | string | Comprovante do protocolo do processo, que contém os dados básicos do processo. |
+
+
+## consultarProcesso
+
+O serviço consultarProcesso retorna um processo judicial se o nível de sigilo interno permitir a consulta pelo requerente. O retorno da requisição consiste no processo em si, com as informações dos polos, classe, assunto, movimentações entre outras informações conforme especificação do serviço.
+
+Para acessar um exemplo de código xml, clique aqui (http://www.pje.jus.br/wiki/images/7/7b/ConsultarProcesso.xml) .
+
+### Parâmetros de entrada
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| idConsultante | int | Sim | O identificador do órgão de representação processual (MP, defensoria pública, advocacia pública) ou do advogado que efetiva a consulta. O ideal é que esse identificador seja o número de inscrição do consultante no Ministério da Fazenda (CPF ou CNPJ) ou o registro individual do cidadão(RIC). |
+| senhaConsultante | int | Sim | A senha de acesso do órgão de representação processual (MP, defensoria pública, advocacia pública) ou do advogado. |
+
+---
+
+| numeroProcesso | int | Sim | O número do processo judicial, conforme as regras definidas pela Resolução 65. |
+| - | - | - | - |
+| dataReferencia | date | Não | Data não obrigatória, utilizada para restringir a pesquisa. |
+| movimentos | boolean | Não | Se true exibe a estrutura com lista de movimentos do processo. |
+| incluirCabecalho | boolean | Não | Se true exibe o cabecalho com os dados básico do processo. |
+| incluirDocumentos | boolean | Não | Se true exibe a estrutura com a lista de documentos do processo. |
+
+
+## Parâmetros de saída
+
+| Parâmetro | Tipo | Descrição |
+| - | - | - |
+| sucesso | boolean | Indica se houve sucesso na consulta do processo. |
+| mensagem | string | Mensagem informando que o processo foi consultado com sucesso. |
+| recibo | xs:base64Binary | Comprovante do protocolo do processo, que contém os dados básicos do processo. |
+
+
+## consultarAvisosPendentes
+
+A operação consultarAvisosPendentes serve para pesquisar se há alguma comunicação em aberto para uma parte do processo (ou expedientes pendentes de ciência), podendo ser intimações, notificações, citações, etc. Pode ser específica em relação a uma parte representada ou relativa aos processos em que o consultante opera como órgão de representação processual (MP, defensoria pública, advocacia pública, escritório de advocacia e advogado).
+
+O retorno da operação listará todas os id's das comunicações destinadas à pessoa parte ou seu representante legal. Caso não haja aviso pendente, o retorno será uma lista vazia.
+
+### Parâmetros de entrada
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| idRepresentado | int | Não | CPF ou CPNJ da pessoa parte a quem se destina a comunicação processual. |
+| idConsultante | int | Sim | O identificador do órgão de representação processual (MP, defensoria pública, advocacia pública) ou do advogado que efetiva a consulta. O ideal é que esse identificador seja o número de inscrição do consultante no Ministério da Fazenda (CPF ou CNPJ) ou o registro individual do cidadão(RIC). |
+| senhaConsultante | string | Sim | A senha de acesso do órgão de representação processual (MP, defensoria pública, advocacia pública) ou do advogado. |
+| dataReferencia | string | Não | Data base para realização da pesquisa de comunicações. O retorno da requisição apresentará todas as comunicações abertas até a data informada. |
+| tipoPendencia | string | Não | Definidor dos tipos possíveis de comunicações pendentes: 'PC' (pendentes de ciência); 'PR' (pendentes de resposta); 'AM' (ambos). |
+
+
+## consultarTeorComunicacao
+
+O serviço consultarTeorComunicacao consulta o teor específico de uma comunicação processual pendente (ou um expediente pendente). No ato desta consulta, se o expediente em questão está pendente de ciência, o sistema registra automaticamente a ciência desse expediente. O retorno dessa operação consiste em baixar o documento e ver o seu conteúdo, dando ciência no teor e iniciando a contagem de prazos do processo.
+
+### Parâmetros de entrada
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| idRepresentado | int | Sim | CPF de uma das partes representado. |
+| idConsultante | int | Sim | O identificador do órgão de representação processual (MP, defensoria pública, advocacia pública) ou do advogado que efetiva a consulta. O ideal é que esse identificador seja o número de inscrição do consultante no Ministério da Fazenda (CPF ou CNPJ) ou o registro individual do cidadão(RIC). |
+| senhaConsultante | int | Sim | A senha de acesso do órgão de representação processual (MP, defensoria pública, advocacia pública) ou do advogado. |
+| numeroProcesso | int | Sim | Número do processo utilizado para consultar o documento da comunicação. |
+| identificadorAviso | int | Sim | Id do aviso pendente de ciência. |
+
+
+Para acessar um exemplo de código xml, clique aqui. (http://www.pje.jus.br/wiki/images/1/10/ConsultarTeorComunicacaoExemplo.xml)
+
+## Operações secundárias - consultas complementares
+
+Com o objetivo de auxiliar no envio de algumas informações, o PJe fornece serviços de consulta sobre configurações e tabelas básicas referentes à instalação do PJe. Para utilizar as operações, utilize o endereço http://ENDEREÇO DA APLICAÇÃO DO PJe/ConsultaPJe?wsdl. Abaixo segue a descrição de cada uma das operações.
+
+### consultarAssuntosJudiciais
+
+O serviço consultarAssuntosJudiciais consulta o assunto judicial informado e retorna uma lista de assuntos processuais disponíveis no PJe para o peticionamento eletrônico, conforme a Jurisdição e Classe informados.
+O código é utilizado para definir o parâmetro codigoNacional no assunto da mensagem, quando o serviço
+---
+entregarManifestacaoProcessual for utilizado.
+O retorno dessa operação será o código e a descrição do assunto.
+
+Parâmetros de entrada
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| id | int | Sim | Id da Jurisdição. |
+| codigo | int | Sim | Código da classe. |
+
+
+## consultarClassesJudiciais
+
+O serviço consultarClassesJudiciais irá retornar uma lista de classes judicias utilizadas em uma jurisdição.
+
+Parâmetros de entrada
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| id | int | Sim | Id da Jurisdição. |
+
+
+## consultarCompetencias
+
+O serviço consultarCompetencias consulta a competência e retorna uma lista de competências disponíveis no PJe, conforme a Jurisdição, Classe e Assunto informados.
+
+Parâmetros de entrada
+
+| Parâmetro | Tipo | Obrigatório? | Descrição |
+| - | - | - | - |
+| id | int | Sim | Id da competência. |
+| codigo | int | Sim | Código da classe. |
+| codigo | int | Sim | Código do assunto. |
+
+
+## consultarJurisdicoes
+
+O serviço consultarJurisdicoes consulta a(s) jurisdição(ões) utilizada(s) no endereço do arquivo WSDL. Não há parâmetro de entrada e o retorno apresenta a descrição da jurisdição e o id do código da jurisdição.
+
+Parâmetros de saída
+
+| Parâmetro | Tipo | Descrição |
+| - | - | - |
+| descricao | string | Nome da jurisdição cadastrada. |
+| id | int | Exibe o id referente à jurisdição que foi apresentada. |
+
+
+## consultarOrgaosJulgadores
+
+O serviço consultarOrgaosJulgadores consulta quais órgãos compõem a jurisdição utilizada no endereço do arquivo WSDL. Não há parâmetro de entrada e o retorno deste serviço apresenta todos os órgãos julgadores cadastrados no PJe.
+
+Parâmetros de saída
+
+| Parâmetro | Tipo | Descrição |
+| - | - | - |
+| descricao | string | Nome do órgão julgador cadastrado. |
+| id | int | Exibe o id referente ao órgão julgador que foi apresentado. |
+
+
+## consultarOrgaosJulgadoresColegiados
+
+O serviço consultarOrgaosJulgadoresColegiados retornará a lista de órgãos julgadores colegiados disponíveis na instalação do PJe. Não há parâmetro de entrada e no retorno do serviço lista todos os órgãos julgadores colegiados cadastrados no PJe, de acordo com a instalação fornecida no endereço wasdl.
+
+Parâmetros de saída
+
+| Parâmetro | Tipo | Descrição |
+| - | - | - |
+| descricao | string | Nome do órgão julgador colegiado cadastrado. |
+| id | int | Exibe o id referente ao órgão julgador colegiado que foi apresentado. |
+
+---
+consultarPapeis
+
+O serviço consultarPapeis apresenta quais são as permissões de papéis do CPF/CNPJ informado no parâmetro de consulta. Para a versão atual do MNI não há um parâmetro que defina o perfil do usuário e isso impossibilita que usuários com várias localizações defina qual operfil desejado no momento da utilização do serviço.
+
+Parâmetros de saída
+
+| Parâmetro | Tipo | Descrição |
+| - | - | - |
+| identificador | int | Número do identificador do usuário cadastrado com o devido papel. |
+| nome | string | Nome do usuário cadastrado/papel. |
+
+
+consultarPrioridadeProcesso
+
+O serviço consultarPrioridadeProcesso não possui parâmetro de entrada e seu retorno consiste em apresentar quais são as prioridades processuais existem para a instalação do PJe onde será utilizado o MNI.
+
+Parâmetros de saída
+
+| Parâmetro | Tipo | Descrição |
+| - | - | - |
+| descricao | string | Nome da prioridade do processo cadastrada. |
+| id | int | Exibe o id referente à prioridade que foi apresentada. |
+
+
+consultarSalasAudiencia
+
+O serviço consultarSalasAudiencia possui parâmetro de entrada e seu retorno consiste em apresentar os dados referente à sala de audiência informada através do Id cadastrado no PJe.
+
+Parâmetros de saída
+
+| Parâmetro | Tipo | Descrição |
+| - | - | - |
+| id | int | Exibe o id referente à sala de audiência que foi apresentada. |
+
+
+consultarTiposAudiencia
+
+O serviço consultarTiposAudiencia retorna todos os tipos de audiência cadastrados no PJe, com a descrição e id correspondente à cada tipo de audiência.
+
+Parâmetros de saída
+
+| Parâmetro | Tipo | Descrição |
+| - | - | - |
+| descricao | string | Nome do tipo de audiência cadastrado. |
+| id | int | Exibe o id referente ao tipo de audiência que foi apresentada. |
+
+
+consultarTiposDocumentoProcessual
+
+TO DO
+
+consultarTodosTiposDocumentoProcessual
+
+O serviço consultarTodosTiposDocumentoProcessual lista os tipos de documentos processuais, com seu código e descrição, todos específicos para a instalação do PJe que utilizará o MNI.
+
+Parâmetros de saída
+
+| Parâmetro | Tipo | Descrição |
+| - | - | - |
+| descricao | string | Nome do documento processual cadastrado. |
+| codigo | int | Exibe o código referente ao tipo de documentos processual que foi apresentado. |
+
+
+recuperarInformacoesFluxo
+
+TO DO
+---
+# Possíveis erros
+
+| Mensagem | Orientação |
+| - | - |
+| Erro ao protocolar processo: a classe judicial escolhida 'Exige ente ou autoridade' no polo ativo ou passivo. | A classe escolhida exige a presença de um Ente ou Autoridade em um dos polos. Nesses casos, as tags que compõe a Pessoa Parte deverão conter, obrigatoriamente, os parâmetros tipoPessoa="autoridade" e nome="Nome da autoridade". Já os dados da Autoridade devem ser representados pela pessoa vinculada. Para acessar um exemplo de código xml, clique aqui. (http\://www\.pje.jus.br/wiki/images/6/69/EntregaManifestacaoComAdvogadoAT-AutoridadePA.xml) |
+| O expediente \<número do expediente> não pode ser respondido. Favor verificar as condições: se o expediente está fechado ou se o expediente não teve ciência dada ou se o usuário não tem permissão para responder o expediente. | Erro no expediente. Verificar qual das situações ocasiona a exceção. |
+| Acesso não Autorizado! | Problemas de autenticação. Deve-se verificar o login e senha de acesso ao sistema, informando um valor para o parâmetro 'idManifestante' ou 'senhaManifestante'. |
+| Documento de identificação não informado para parte '\<nome da parte>' | Como regra do MNI, após as tags que definem a pessoa parte de um dos polos, existe a necessidade de listar os tipos de documentos vinculados a pessoa. Para evitar tal erro, utilizar a tag \<documento nome="?" tipoDocumento="?" emissorDocumento="?" codigoDocumento="?"/> para indicar os documentos de identificação. |
+| O advogado "\<nome do advogado>", usuário manifestante, deve ser informado como representante de ao menos uma parte do polo ativo. | Se o usuário manifestante for um advogado, obrigatoriamente, deverá ser representante de uma parte do polo ativo. |
+| Processo de número "\<número do processo>" não encontrado! | O sistema valida se o usuário consultante tem permissão de acesso a processos sigilosos. |
+| Número da classe judicial "\<código da classe>" inválido! | O sistema verifica que o usuário informou um número de classe inválido, e apresenta a mensagem de sucesso com valor "false" e a mensagem que a classe escolhida não existe. |
+| codigoLocalidade "\<id da jurisdição>" inválido! | O sistema verifica que o usuário o usuário informou um codigoLocalidade inválido, que não está cadastrado no sistema, e apresenta a mensagem "jurisdição não encontrada". |
+| Assunto de código "\<id do assunto>" inválido | O assunto informado não pertence a classe judicial escolhida. Nesses casos, recomendamos utilizar o serviço consultarAssuntosJudiciais. |
+| dao.sgbd.error.propertyValue | Erro genérico, sendo necessária uma análise no código. |
+| Há mais de uma competência possível para o processo: \<id> Plenário, \<id> Corregedoria | Existe mais de uma competência possível na jurisdição referente à classe, assuntos ou partes selecionadas. Será necessário realizar uma consulta de Competência (consultarCompetencias) e informar seu código em competencia="?". |
+| Usuário ou senha inválidos. | Ocorre quando é informado um ou mais parâmetros inválidos. |
+| Parametro pje:fluxo:incidental:sempreDisparar não cadastrado na base | Problemas de validação. Deve-se verificar os parâmetros informados. |
+| Não foi definido uma modalidade identificador de documento. | Verificar se parâmetro tipoDocumento contem as siglas predefinidas para a intercomunicação. Exemplo tipoDocumento="TIT" (errado); tipoDocumento="TE" (certo). |
+| Usuário advogado não pode cadastrar advogados no polo passivo. | Se o usuário logado for um advogado, não será possível o cadastro de outro advogado no polo passivo do processo. |
+| Erro ao autuar processo: Não há petição inicial anexada ao processo. | Verificar o tipo de documento informado. |
+| Jurisdição não encontrada. | Informar uma jurisdição cadastrada na base de dados. Para consultar as jurisdições, utilize o serviço consultarJurisdicoes. |
+| A classe judicial escolhida está inativa na jurisdição/localidade escolhida e não pode ser utilizada para protocolo. | Informar uma jurisdição cadastrada na base de dados. Para consultar as jurisdições, utilize o serviço consultarJurisdicoes. |
+| Erro ao consultar o tipo do documento "\<nome do documento>", erro: null | Informar um tipo de documento alfanumérico válido. |
+| A informação de endereço das partes e seus representantes no polo ativo é obrigatória. Indique o endereço para a pessoa \<nome da pessoa>. | Verificar se o endereço foi informado para a pessoa parte do polo ativo. |
+| Parâmetro tipoPessoa não informado! | Indicar qual o tipo de pessoa (fisica; juridica; autoridade; orgaorepresentacao) associada ao processo. |
+| Documento '58-Petição inicial' sem assinatura, não é possível juntar documento sem assinatura. | Informar um conteúdo do tipo arquivo P7S convertido para Base64 que já esteja com assinatura e cadeia de certificado. |
+| Informe o CEP com 8 posições. | Verificar a ausência ou informação incorreta do parâmetro CEP referente ao endereço de alguma das partes envolvidas no envio do processo. |
+| Não foi especificado nome para a parte. | Informar um nome para a parte. Verificar o preenchimento do parâmetro nome de um dos polos. |
+| Tipo de arquivo informado não confere com seu conteúdo. O conteúdo é do tipo application/octet-stream e o tipo informado é application/pdf. | O erro ocorre quando é trocado algum caractere do parâmetro conteúdo. |
+| Parâmetro codigoDocumento não informado! | Informar o parâmetro codigoDocumento, vinculado ao tipo de pessoa. |
+
+---
+| Parâmetro emissorDocumento não informado! | Informar o parâmetro emissorDocumento. |
+| - | - |
+| Não foi definido um nome para o representante processual. | Informar no parâmetro um representante processual. |
+| Assuntos processuais não informados. | O assunto processual é obrigatório para o peticionamento. Indicar o código por meio do parâmetro codigoNacional. |
+| Classe processual não informada. | Informar a classe judicial. |
+| A prioridade "\<nome da prioridade processual>" não existe e não pode ser utilizada. | Informar uma prioridade existente na base de dados. Utilize o serviço consultarPrioridadeProcesso. |
+| O arquivo 'Petição inicial' do tipo 'text/html' não é permitido. | Verificar o tipo de documento informado. |
+| O arquivo '\<nome do arquivo>.html' do tipo 'text/html' não é permitido. | Verificar o tipo de documento informado. |
+| Falha na validação da assinatura do documento, verifique se o certificado foi enviado no formato válido e se a assinatura está no formato base64, erro: assinatura não corresponde aos dados do certificado. | Informar uma assinatura válida para o documento. |
+| O arquivo 'Petição inicial' do tipo 'application/octet-stream' não é permitido. | Informar um tipo de arquivo válido. Verifique o parâmetro mimetype. |
+| Polos processuais não informados. | Informar os polos. |
+| Documentação não informada. | Os documentos são obrigatórios na criação do processo. Indicar os parâmetros que enviam os dados dos documentos processuais. |
+| Tipo de documento inválido para esta manifestação: \<id do tipo de documento> | Consultar quais documentos podem ser enviados pelo papel utilizado. Para consultar, utilizar o serviço consultarTiposDocumentoProcessual. |
+| Dados básicos ou número do processo para peticionamento intermediário não informados. | Verificar os parâmetros obrigatórios para criação de processo. |
+| A autoridade \<nome> não está vinculada a nenhuma pessoa jurídica. | Informar a PJ vinculada a autoridade, usando os parâmetros: \<pessoaVinculada nome="Pessoa Vinculada" numeroDocumentoPrincipal="09.189.499/0001-00" tipoPessoa="juridica"/> |
+| CPF com número de dígitos diferente de 11. | Verificar se o parâmetro tipoPessoa condiz com o numero informado em numeroDocumentoPrincipal. |
+| CNPJ com número de dígitos diferente de 14. | Verificar se o parâmetro tipoPessoa condiz com o numero informado em numeroDocumentoPrincipal. |
+| Selecione ao menos um endereço para a pessoa '\<nome da parte>'. | Os parâmetros de endereço são obrigatórios. |
+| O documento não foi anexado. | Verificar se há documento anexado, ou se há alguma quebra de linha no conteúdo ou na assinatura, ou se o documento está com os dados de assinatura. |
+| Documento \<nome do documento>' sem assinatura, não é possível juntar documento sem assinatura. | Verificar a assinatura do documento. |
+| Não foram encontrados expedientes pendentes de ciência. | Informar um idConsultante de um consultante que possua expedientes pendentes de ciência. |
+| A senha foi bloqueada. Solicite uma nova senha para efetuar o desbloqueio. | Solicitar uma nova senha. |
+
+
+Disponível em "https://www.pje.jus.br/wiki/index.php?title=Tutorial_MNI&oldid=25129"
+
+- Esta página foi modificada pela última vez às 19h14min de 16 de março de 2018.
+- Esta página foi acessada 650 855 vezes.

@@ -1,0 +1,360 @@
+Utilização do PJe
+
+De PJe
+
+O PJe está instalado em produção em alguns tribunais. Esta página agrega informações sobre
+a utilização do sistema na Justiça Federal, na Justiça dos Estados, na Justiça Militar dos Estados
+e na Justiça do Trabalho.
+
+ Conteúdo
+
+      1 Contatos
+      2 Estatísticas
+           2.1 Outubro de 2014
+           2.2 Novembro de 2014
+           2.3 Janeiro de 2015
+      3 Serviço de Interoperabilidade (MNI)
+
+Contatos
+
+Aqui temos a lista de dos tribunais que utilizam o PJe com seus respectivos contatos e links
+para acesso:
+
+     Justiça do trabalho (http://www.csjt.jus.br/pje-jt)
+
+     CJF/TNU (http://www.cjf.jus.br/cjf/tnu)
+
+     TJCE (http://www.tjce.jus.br/principal/default.asp)
+
+     TJRS (http://www.tjrs.jus.br/site/processos/portal_processo_eletronico/)
+
+     TJGO (http://www.tjgo.jus.br/index.php/tribunal/pje)
+
+     TJRO (http://www.tjro.jus.br/)
+
+     TJDFT (http://www.tjdft.jus.br/pje)
+
+     TRF 5ª região (http://www.trf5.jus.br/index.php?
+     option=com_content&view=article&id=476&Itemid=403&//) (Justiça federal em Alagoas,
+     Ceará, Paraíba, Pernambuco, Rio Grande do Norte e Sergipe.)
+
+     TJBA (http://www5.tjba.jus.br/pjeinformacoes/)
+          Fale conosco (http://www5.tjba.jus.br/pjeinformacoes/?page_id=629)
+
+     TJMA (http://sistemas2.tjma.jus.br/sisanalise/?acesso=pje&area=410&item=0)
+
+     TJMG (http://www.tjmg.jus.br/portal/processos/andamento-processual/menu-em-
+     abas/pje.htm)
+
+     TJMT (http://www.tjmt.jus.br/pje/Conteudo/)
+
+     TJPE (http://www.tjpe.jus.br/web/processo-judicial-eletronico/)
+---
+         Contatos
+              Suporte: (81) 2123.9500
+              Email: pje.atendimento@tjpe.jus.br
+
+    TJPB (http://www.tjpb.jus.br/servicos/pje/)
+         Contatos
+              Suporte ao usuário interno/externo: (83) 3216-1435 / 1429 / 1404 / 1819
+              E-mail: pje.atendimento@tjpb.jus.br
+
+    TJRN (http://www.tjrn.jus.br/pje/index.php/acesso-ao-pje)
+         Contatos
+              Suporte ao servidor: (84) 3616-6404
+              Suporte ao advogado: (84) 3616-9364
+              E-mail: pje.atendimento@tjrn.jus.br
+
+    TJRR (http://www.tjrr.jus.br/pje)
+
+    CNJ (http://www.cnj.jus.br/pjecnj)
+         Contatos
+              Suporte ao usuário interno/externo: (61) 2326-5353
+              E-mail: pje.suporte@cnj.jus.br
+
+Estatísticas
+
+Aqui manteremos dados que denotam a evolução do uso do PJe nos tribunais em que está
+instalado. Listaremos, para os tribunais que o utilizam, a quantidade de varas e a quantidade
+de processos em tramitação no PJe por tribunal.
+
+Outubro de 2014
+
+Novembro de 2014
+
+  Esfera   Tribunal Instância     Qtd    Qtd órgãos    Desde    Versão   Observação
+                               processos julgadores              PJe
+Estadual   TJDFT     1ª        5.366     10          25/07/2014 1.7.0.2
+           TJRN      1ª        48.938    93          16/05/2013 1.6.5.18
+           TJRN      2ª        428       9           19/12/2013 1.6.5.18
+           TJMG      1ª        10.527    86          13/09/2012 1.6.5.14
+           TJMT      1ª        8.212     3           13/12/2011 1.4.6.3
+           TJRO      1ª        2.980     8           07/07/2014 1.6.5.18 A quantidade de
+                                                                       processos e a
+                                                                       quantidade de
+                                                                       órgãos
+                                                                       julgadores
+                                                                       foram
+                                                                       atualizadas em
+                                                                       01/10/2014, pois
+                                                                       até o presente
+                                                                       momento o
+                                                                       Tribunal não
+                                                                       enviou a
+---
+                                                                         atualização
+                                                                         desses dados.
+           TJRR      1ª        2.834      1          29/01/2013 1.4.6.2
+           TJPB      1ª        39.729     35         01/06/2011 1.6.5.18
+           TJPB      2ª        1.700      34         01/04/2012 1.6.5.18
+           TJPE      1ª        217.157    132        31/03/2011 1.6.5.15
+           TJPE      2ª        3.291      26         27/07/2014 1.6.5.15
+           TJMA      1ª        415        4          22/10/2013 1.6.5.18
+           TJGO      1ª        380        11         28/07/2014 1.6.5.18
+           TJBA      1ª        266        4          18/09/2014 1.6.5.18
+                                                                         A quantidade de
+                                                                         processos e a
+                                                                         quantidade de
+                                                                         órgãos
+                                                                         julgadores
+                                                                         foram
+           TJRS      1ª        652        3          01/04/2014 1.6.5.13 atualizadas em
+                                                                         01/10/2014, pois
+                                                                         até o presente
+                                                                         momento o
+                                                                         Tribunal não
+                                                                         enviou a
+                                                                         atualização
+                                                                         desses dados.
+           TJCE      1ª        13.369     41         12/05/2014 1.6.5.18
+Federal    TRF5      1ª        62.503     81         01/04/2014 P9.1.9
+                                                                         A quantidade de
+                                                                         processos e a
+                                                                         quantidade de
+                                                                         órgãos
+                                                                         julgadores
+                                                                         foram
+           TRF5      2ª        18.316     19         12/05/2014 P9.1.9   atualizadas em
+                                                                         14/10/2014, pois
+                                                                         até o presente
+                                                                         momento o
+                                                                         Tribunal não
+                                                                         enviou a
+                                                                         atualização
+                                                                         desses dados.
+Trabalhista TRTS     1ª e 2ª   2.204.294  1246       dezembro   1.4.8.2  A quantidade de
+                                                     de 2011             processos e a
+                                                                         quantidade de
+                                                                         órgãos
+                                                                         julgadores
+                                                                         foram
+                                                                         atualizadas em
+                                                                         01/10/2014, pois
+                                                                         até o presente
+                                                                         momento o
+                                                                         Tribunal não
+---
+                                                                         enviou a
+                                                                         atualização
+                                                                         desses dados.
+Especial   CNJ       2ª        50.716     15         28/02/2014 1.7.0.0
+                                                                         A quantidade de
+                                                                         processos e a
+                                                                         quantidade de
+                                                                         órgãos
+                                                                         julgadores
+                                                                         foram
+           CJF(TNU) 2ª         20         11         Janeiro de 1.6.4.5  atualizadas em
+                                                     2014                01/10/2014, pois
+                                                                         até o presente
+                                                                         momento o
+                                                                         Tribunal não
+                                                                         enviou a
+                                                                         atualização
+                                                                         desses dados.
+Total                          2.692.093  1.846
+
+Janeiro de 2015
+
+   Esfera   Tribunal Instância     Qtd       Qtd                Versão
+                                processos   órgãos     Desde     PJe      Observação
+                                           julgadores
+
+Estadual    TJDFT     1ª        10.169     10         25/07/2014 1.7.0.2  Atualizado em
+                                                                          29/01/15
+
+            TJDFT     2ª        97         3          17/12/2014 1.7.0.2  Atualizado em
+                                                                          29/01/15
+                                                                          Atualizado em
+            TJRN      1ª        55.746     80         16/05/2013 1.6.5.18 01/12 - Sem
+                                                                          respostas
+                                                                          Atualizado em
+            TJRN      2ª        519        9          19/12/2013 1.6.5.18 01/12 - Sem
+                                                                          respostas
+
+            TJMG      1ª        19.171     95         13/09/2012 1.6.5.14 Atualizado em
+                                                                          28/01/15
+
+            TJMT      1ª        9.842      23         13/12/2011 1.4.6.3  Atualizado em
+                                                                          29/01/15
+
+            TJRO      1ª        14.311     50         07/07/2014 1.6.5.21 Atualizado em
+                                                                          29/01/15
+
+            TJRR      1ª        3.007      1          29/01/2013 1.4.6.2  Atualizado em
+                                                                          29/01/15
+
+            TJPB      1º        47.131     36         01/06/2011 1.6.5.21 Atualizado em
+                                                                          29/01/15
+
+            TJPB      2º        2.006      32         01/04/2012 1.6.5.21 Atualizado em
+                                                                          29/01/15
+
+            TJPE      1º        291.589    162        31/03/2011 1.6.5.21 Atualizado em
+                                                                          30/01/12
+---
+            TJPE      2º        4.840     26         27/07/2014 1.6.5.21 Atualizado em
+                                                                         30/01/12
+
+            TJMA      1º        11.738    38         22/10/2013 1.6.5.21 Atualizado em
+                                                                         29/01/15
+
+            TJMA      2º        96        1          19/12/2014 1.6.5.21 Atualizado em
+                                                                         29/01/15
+                                                                         Previsão de
+                                                                         implantação de
+                                                                         12 unidades de
+            TJGO      1º        889       15         28/07/2014 1.6.5.21 2º grau dia
+                                                                         15/12.
+                                                                         Atualizado em
+                                                                         29/01/15
+                                                                         Há mais 20
+                                                                         órgãos
+                                                                         julgadores com
+                                                                         o PJe
+                                                                         implantado,
+                                                                         porém
+            TJBA      1º        804       62         18/09/2014 1.6.5.18 aguardando o
+                                                                         decurso do
+                                                                         prazo de 30
+                                                                         dias para que
+                                                                         torne-se
+                                                                         obrigatório.
+                                                                         Atualizado em
+                                                                         29/01/15
+
+            TJRS      1º        1.082     80         01/04/2014 1.6.5.13 Atualizado em
+                                                                         29/01/15
+
+            TJCE      1º        22.016    41         12/05/2014 1.6.5.21 Atualizado em
+                                                                         28/01/15
+
+            TJPA      1º        227       3          30/10/2014 1.6.5.21 Atualizado em
+                                                                         28/01/15
+                                                                         O sistema está
+                                                                         em produção ,
+                                                                         estará
+                                                                         obrigatório a
+                                                                         partir de 15/12.
+                                                                         Está em uso
+                                                                         somente no 1º
+                                                                         grau em duas
+Militar     TJMMG     1º        13        3          11/11/2014 1.6.5.17 classes cíveis,
+                                                                         quais sejam:
+                                                                         procedimento
+                                                                         ordinário
+                                                                         (classe 7) e
+                                                                         impugnação ao
+                                                                         valor da causa.
+                                                                         Atualizado em
+                                                                         29/01/15
+
+Federal     TRF1      1º        832       19         01/12/2014 1.7.0.3  Atualizado em
+                                                                         29/01/15
+---
+              TRF1    2º        118        28         01/12/2014 1.7.0.3   Atualizado em
+                                                                           29/01/15
+
+              TRF5    1º        61.331     81         01/04/2014 P9.2.3    Atualizado em
+                                                                           03/02/15
+
+              TRF5    2º        21.567     19         12/05/2014 P9.2.3    Atualizado em
+                                                                           03/02/15
+                                                                           Até o presente
+                                                                           momento o
+                                                                           Tribunal não
+                                                                           enviou a
+
+ Trabalhista  TRTS    1º e 2º   2.204.294  1246       dezembro    1.4.8.2  atualização dos
+                                                      de 2011              dados.
+                                                                           Informações
+                                                                           constantes
+                                                                           foram
+                                                                           atualizadas em
+                                                                           01/10/2014
+
+ Especial     CNJ     2ª        52.477     15         28/02/2014 1.7.1     Atualizado em
+                                                                           29/01/15
+                                                                           "Ainda não foi
+              CJF(TNU) 2ª       20         11         Janeiro de  1.6.5.14 finalizada a
+                                                      2014                 implantação do
+                                                                           PJe na TNU.
+ Dados
+ constantes
+ referentes a
+ quantidade
+ de
+ processos e
+ de órgãos
+ julgadores
+ foram
+ atualizadas
+ em
+ 01/10/2014"
+ Total                          2.835.932  2.189
+
+Serviço de Interoperabilidade (MNI)
+
+Apresentamos a lista dos endereços de intercomunicação das instalações do PJe nos tribunais
+que já implantaram PJe em produção.
+Mais informações sobre interoperabilidade leia aqui.
+
+ Tribunal Instância Versão Versão                    Endereço WSDL
+                      PJe    MNI
+ TJDFT    1ª        1.7.0.2  2.2.2  https://tjdf199.tjdft.jus.br/pje/intercomunicacao?wsdl
+ TJRN     1ª        1.6.5.18 2.2    https://pje.tjrn.jus.br/pje1grau/intercomunicacao?wsdl
+ TJRN     2ª        1.6.5.18 2.2    https://pje.tjrn.jus.br/pje2grau/intercomunicacao?wsdl
+ TJMG     1ª        1.6.5.14 2.2    http://pje.tjmg.jus.br/pje/intercomunicacao?wsdl
+---
+ TJMT      1ª         1.4.6.3  2.1    http://pje.tjmt.jus.br/pje/intercomunicacao?wsdl
+ TJMT      2ª         1.4.6.3  2.1    http://pje2.tjmt.jus.br/pje2/intercomunicacao?wsdl
+ TJRO      1ª         1.6.5.18 2.2    http://pje.tjro.jus.br/pg/intercomunicacao?wsdl
+ TJRO      2ª         1.6.5.18 2.2    http://pje.tjro.jus.br/sg/intercomunicacao?wsdl
+ TJRR      1ª         1.4.6.2  2.1    http://pje.tjrr.jus.br/pje/intercomunicacao?wsdl
+ TJPB      1ª         1.6.5.18 2.2    https://pje.tjpb.jus.br/pje/intercomunicacao?wsdl
+ TJPB      2ª         1.6.5.18 2.2    https://pje.tjpb.jus.br/pje2g/intercomunicacao?wsdl
+ TJPE      1ª         1.6.5.15 2.2    https://www.tjpe.jus.br/pje/intercomunicacao?wsdl
+ TJPE      2ª         1.6.5.15 2.2    https://www.tjpe.jus.br/pje2g/intercomunicacao?wsdl
+ TJMA      1ª         1.6.5.18 2.2    https://pje.tjma.jus.br/pje/intercomunicacao?wsdl
+ TJMA      2ª         1.6.5.18 2.2    https://pje2.tjma.jus.br/pje2g/intercomunicacao?wsdl
+ TJGO      1ª         1.6.5.18 2.2    https://www.tjgo.jus.br/pje/intercomunicacao?wsdl
+ TJBA      1ª         1.6.5.18 2.2    https://pje.tjba.jus.br/intercomunicacao?wsdl
+ TJRS      1ª         1.6.5.13 2.2    http://www.tjrs.jus.br/pje/intercomunicacao?wsdl
+ TJCE      1ª         1.6.5.18 2.2    https://pje.tjce.jus.br/pje1grau/intercomunicacao?wsdl
+ TJCE      2ª         1.6.5.18 2.2    https://pje.tjce.jus.br/pje2grau/intercomunicacao?wsdl
+                                      https://pje.jfal.jus.br/pje/intercomunicacao?wsdl
+                                      https://pje.jfce.jus.br/pje/intercomunicacao?wsdl
+ TRF5      1ª         P9.1.9   2.2.2  https://pje.jfpb.jus.br/pje/intercomunicacao?wsdl
+                                      https://pje.jfpe.jus.br/pje/intercomunicacao?wsdl
+                                      https://pje.jfse.jus.b/pje/intercomunicacao?wsdl
+                                      https://pje.jfrn.jus.br/pje/intercomunicacao?wsdl
+ TRF5      2ª         P9.1.9   2.2.2  https://pje.trf5.jus.br/pje/intercomunicacao?wsdl
+
+ CNJ       2ª         1.7.0.0  2.2.2  https://www.cnj.jus.br/pjecnjinterno/intercomunicacao?
+                                      wsdl
+ CJF(TNU) 2ª          1.6.4.5  2.2    http://www2.cjf.jus.br/pje/intercomunicacao?wsdl
+ TJES      1ª         1.7.1.1  2.2.2  https://sistemas.tjes.jus.br/pje/intercomunicacao?wsdl
+Disponível em "https://www.pje.jus.br/wiki/index.php?title=Utilização_do_PJe&oldid=17404"
+
+     Esta página foi modificada pela última vez às 12h28min de 12 de maio de 2015.
+     Esta página foi acessada 98 089 vezes.
