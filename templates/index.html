@@ -3,12 +3,12 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8">
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header">
                 <h4>Consulta de Processo</h4>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('web.debug_consulta') }}">
+                <form method="POST" action="{{ url_for('web.debug_consulta') }}" id="consulta-form">
                     <div class="mb-3">
                         <label for="num_processo" class="form-label">Número do Processo</label>
                         <input type="text" class="form-control" id="num_processo" name="num_processo" 
@@ -27,10 +27,94 @@
                                placeholder="Sua senha do PJe">
                         <div class="form-text">Opcional. Se não fornecido, usará as credenciais padrão do sistema.</div>
                     </div>
-                    <button type="submit" class="btn btn-primary">Consultar</button>
+                    <button type="submit" class="btn btn-primary">Consultar Processo Completo</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h4>Downloads Rápidos</h4>
+            </div>
+            <div class="card-body">
+                <form class="mb-4" id="download-peticao-form">
+                    <h5 class="mb-3">Download da Petição Inicial</h5>
+                    <div class="mb-3">
+                        <label for="peticao_num_processo" class="form-label">Número do Processo</label>
+                        <input type="text" class="form-control" id="peticao_num_processo" 
+                               placeholder="0000000-00.0000.0.00.0000" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-file-earmark-text"></i> Download da Petição Inicial
+                    </button>
+                </form>
+
+                <hr>
+
+                <form class="mb-4" id="download-pdf-form">
+                    <h5 class="mb-3">Download do Processo Completo (PDF)</h5>
+                    <div class="mb-3">
+                        <label for="pdf_num_processo" class="form-label">Número do Processo</label>
+                        <input type="text" class="form-control" id="pdf_num_processo" 
+                               placeholder="0000000-00.0000.0.00.0000" required>
+                    </div>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-file-earmark-pdf"></i> Download do Processo Completo (PDF)
+                    </button>
+                </form>
+
+                <hr>
+
+                <form class="mb-4" id="download-documento-form">
+                    <h5 class="mb-3">Download de Documento Específico</h5>
+                    <div class="mb-3">
+                        <label for="doc_num_processo" class="form-label">Número do Processo</label>
+                        <input type="text" class="form-control" id="doc_num_processo" 
+                               placeholder="0000000-00.0000.0.00.0000" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="doc_id" class="form-label">ID do Documento</label>
+                        <input type="text" class="form-control" id="doc_id" 
+                               placeholder="ID do documento a ser baixado" required>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="bi bi-download"></i> Download do Documento
+                    </button>
                 </form>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Formulário de petição inicial
+    document.getElementById('download-peticao-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var numProcesso = document.getElementById('peticao_num_processo').value.trim();
+        if(numProcesso) {
+            window.location.href = "{{ url_for('web.download_peticao_inicial', num_processo='') }}" + numProcesso;
+        }
+    });
+    
+    // Formulário de PDF completo
+    document.getElementById('download-pdf-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var numProcesso = document.getElementById('pdf_num_processo').value.trim();
+        if(numProcesso) {
+            window.location.href = "{{ url_for('web.download_processo_completo', num_processo='') }}" + numProcesso;
+        }
+    });
+    
+    // Formulário de documento específico
+    document.getElementById('download-documento-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var numProcesso = document.getElementById('doc_num_processo').value.trim();
+        var docId = document.getElementById('doc_id').value.trim();
+        if(numProcesso && docId) {
+            window.location.href = "{{ url_for('web.download_documento', num_processo='', num_documento='') }}" + numProcesso + "/" + docId;
+        }
+    });
+});
+</script>
 {% endblock %}

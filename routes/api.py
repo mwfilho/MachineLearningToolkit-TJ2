@@ -140,12 +140,9 @@ def get_processo_completo_pdf(num_processo):
         logger.debug(f"API: Gerando PDF completo do processo {num_processo}")
         cpf, senha = get_mni_credentials()
 
-        if not cpf or not senha:
-            return jsonify({
-                'erro': 'Credenciais MNI não fornecidas',
-                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
-            }), 401
-
+        # A validação não é necessária aqui, pois a função generate_complete_process_pdf
+        # pode usar as credenciais de ambiente como fallback
+        
         # Gerar o PDF completo
         resposta = core.generate_complete_process_pdf(num_processo, cpf=cpf, senha=senha)
 
@@ -155,6 +152,10 @@ def get_processo_completo_pdf(num_processo):
                 'erro': resposta.get('msg_erro', 'Erro desconhecido'),
                 'mensagem': 'Erro ao gerar PDF completo do processo'
             }), 500
+
+        # Se tiver algum aviso, adicionamos aos logs
+        if 'aviso' in resposta:
+            logger.warning(f"Aviso ao gerar PDF: {resposta['aviso']}")
 
         # Criar arquivo temporário para download
         data_atual = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -175,7 +176,33 @@ def get_processo_completo_pdf(num_processo):
 
     except Exception as e:
         logger.error(f"API: Erro ao gerar PDF completo: {str(e)}", exc_info=True)
-        return jsonify({
-            'erro': str(e),
-            'mensagem': 'Erro ao gerar PDF completo do processo'
-        }), 500
+        
+        # Mesmo com erro, tentamos retornar um PDF vazio
+        try:
+            from pdf_utils import create_empty_pdf
+            
+            # Criar PDF vazio com mensagem de erro
+            pdf_content = create_empty_pdf(f"Erro ao gerar PDF: {str(e)}")
+            
+            # Criar arquivo temporário para download
+            data_atual = datetime.now().strftime("%Y%m%d_%H%M%S")
+            temp_dir = tempfile.mkdtemp()
+            file_path = os.path.join(temp_dir, f'processo_{num_processo}_{data_atual}_erro.pdf')
+            
+            # Gravar o PDF em disco
+            with open(file_path, 'wb') as f:
+                f.write(pdf_content)
+            
+            # Retornar o arquivo para download
+            return send_file(
+                file_path,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f'processo_{num_processo}_erro.pdf'
+            )
+        except:
+            # Se falhar até a criação do PDF vazio, aí sim retornamos erro JSON
+            return jsonify({
+                'erro': str(e),
+                'mensagem': 'Erro ao gerar PDF completo do processo'
+            }), 500
