@@ -21,22 +21,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", os.environ.get('SECRET_KEY', 'dev'))
 
 # Configure SQLAlchemy
-# Construct database URL from components if DATABASE_URL is not available
-if os.environ.get("DATABASE_URL"):
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
-elif all([os.environ.get(key) for key in ["PGUSER", "PGPASSWORD", "PGHOST", "PGPORT", "PGDATABASE"]]):
-    pg_user = os.environ.get("PGUSER")
-    pg_pass = os.environ.get("PGPASSWORD")
-    pg_host = os.environ.get("PGHOST")
-    pg_port = os.environ.get("PGPORT")
-    pg_db = os.environ.get("PGDATABASE")
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
-    logger.debug(f"Constructed database URL from components: postgresql://{pg_user}:***@{pg_host}:{pg_port}/{pg_db}")
-else:
-    # Fallback to SQLite for development
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
-    logger.warning("Using SQLite as fallback database. Not recommended for production.")
-
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
