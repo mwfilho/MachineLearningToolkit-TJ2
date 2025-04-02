@@ -361,3 +361,117 @@ def consultar_classe_processual(classe_processual, codigoLocalidade):
     except Exception as e:
         logger.error(f"Erro ao consultar classe processual: {str(e)}")
         return "Erro na consulta"
+        
+def retorna_peticao_inicial_e_anexos(num_processo, cpf=None, senha=None):
+    """
+    Retorna a petição inicial do processo e seus anexos.
+    
+    Args:
+        num_processo (str): Número do processo
+        cpf (str, optional): CPF/CNPJ do consultante. Se não fornecido, usa o padrão do ambiente
+        senha (str, optional): Senha do consultante. Se não fornecida, usa o padrão do ambiente
+        
+    Returns:
+        dict: Dados da petição inicial e seus anexos ou mensagem de erro
+    """
+    try:
+        logger.debug(f"\n{'=' * 80}")
+        logger.debug(f"Buscando petição inicial e anexos do processo {num_processo}")
+        logger.debug(f"{'=' * 80}\n")
+        
+        # 1. Consultar o processo completo
+        resposta_processo = retorna_processo(num_processo, cpf=cpf, senha=senha)
+        
+        if not resposta_processo.sucesso:
+            return {
+                "numero_processo": num_processo,
+                "msg_erro": f"Erro ao consultar o processo: {resposta_processo.mensagem}"
+            }
+            
+        if not hasattr(resposta_processo.processo, 'documento'):
+            return {
+                "numero_processo": num_processo,
+                "msg_erro": "Processo não contém documentos"
+            }
+        
+        # 2. Procurar a petição inicial
+        docs = resposta_processo.processo.documento
+        if not isinstance(docs, list):
+            docs = [docs]
+            
+        # Lista para armazenar a petição inicial e seus anexos
+        resultado = {
+            "numero_processo": num_processo,
+            "peticao_inicial": None,
+            "anexos": []
+        }
+        
+        # Primeiro, encontrar a petição inicial (geralmente o primeiro documento do processo)
+        # ou documentos com tipos específicos que indicam petição inicial
+        peticao_inicial = None
+        
+        # Códigos comuns para petição inicial, pode variar dependendo do tribunal
+        codigos_peticao_inicial = ['1', '2', '3', '4', '5', '6']  # Códigos típicos para petição inicial
+        
+        for doc in docs:
+            # Verificar se o documento é uma petição inicial pelo tipo ou pela descrição
+            tipo_doc = str(getattr(doc, 'tipoDocumento', ''))
+            descricao = str(getattr(doc, 'descricao', '')).lower()
+            
+            if (tipo_doc in codigos_peticao_inicial or 
+                'inicial' in descricao or 
+                'petição inicial' in descricao):
+                peticao_inicial = doc
+                break
+        
+        # Se não encontrarmos usando os critérios acima, pegar o primeiro documento do processo
+        if not peticao_inicial and docs:
+            peticao_inicial = docs[0]
+            
+        # 3. Se encontramos a petição inicial, adicionar ao resultado e buscar seus anexos
+        if peticao_inicial:
+            # Dados básicos da petição inicial
+            resultado["peticao_inicial"] = {
+                'id_documento': getattr(peticao_inicial, 'idDocumento', ''),
+                'tipo_documento': getattr(peticao_inicial, 'tipoDocumento', ''),
+                'descricao': getattr(peticao_inicial, 'descricao', ''),
+                'data_hora': getattr(peticao_inicial, 'dataHora', ''),
+                'mimetype': getattr(peticao_inicial, 'mimetype', '')
+            }
+            
+            # 4. Buscar anexos da petição inicial
+            if hasattr(peticao_inicial, 'documentoVinculado'):
+                docs_vinc = peticao_inicial.documentoVinculado
+                if not isinstance(docs_vinc, list):
+                    docs_vinc = [docs_vinc]
+                
+                for anexo in docs_vinc:
+                    resultado["anexos"].append({
+                        'id_documento': getattr(anexo, 'idDocumento', ''),
+                        'tipo_documento': getattr(anexo, 'tipoDocumento', ''),
+                        'descricao': getattr(anexo, 'descricao', ''),
+                        'data_hora': getattr(anexo, 'dataHora', ''),
+                        'mimetype': getattr(anexo, 'mimetype', '')
+                    })
+        else:
+            return {
+                "numero_processo": num_processo,
+                "msg_erro": "Não foi possível identificar a petição inicial"
+            }
+            
+        return resultado
+        
+    except ExcecaoConsultaMNI as e:
+        error_msg = f"Erro na consulta MNI: {str(e)}"
+        logger.error(error_msg)
+        return {
+            "numero_processo": num_processo,
+            "msg_erro": error_msg
+        }
+    except Exception as e:
+        error_msg = f"Erro inesperado: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {
+            "numero_processo": num_processo,
+            "msg_erro": error_msg
+        }

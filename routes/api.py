@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, send_file, request
 import os
 import logging
-from funcoes_mni import retorna_processo, retorna_documento_processo
+from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
 from utils import extract_mni_data
 import core
 import tempfile
@@ -96,4 +96,36 @@ def download_documento(num_processo, num_documento):
         return jsonify({
             'erro': str(e),
             'mensagem': 'Erro ao baixar documento'
+        }), 500
+        
+@api.route('/processo/<num_processo>/peticao-inicial', methods=['GET'])
+def get_peticao_inicial(num_processo):
+    """
+    Retorna a petição inicial e seus anexos para o processo informado
+    """
+    try:
+        logger.debug(f"API: Buscando petição inicial do processo {num_processo}")
+        cpf, senha = get_mni_credentials()
+
+        if not cpf or not senha:
+            return jsonify({
+                'erro': 'Credenciais MNI não fornecidas',
+                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+            }), 401
+
+        resposta = retorna_peticao_inicial_e_anexos(num_processo, cpf=cpf, senha=senha)
+
+        if 'msg_erro' in resposta:
+            return jsonify({
+                'erro': resposta['msg_erro'],
+                'mensagem': 'Erro ao buscar petição inicial'
+            }), 404
+
+        return jsonify(resposta)
+
+    except Exception as e:
+        logger.error(f"API: Erro ao buscar petição inicial: {str(e)}", exc_info=True)
+        return jsonify({
+            'erro': str(e),
+            'mensagem': 'Erro ao buscar petição inicial'
         }), 500
