@@ -87,18 +87,39 @@ def validate_process_number(num_processo):
 def format_process_number(num_processo):
     """
     Format process number to CNJ standard.
+    Handles various input formats and tries to standardize them.
 
     Args:
-        num_processo (str): Process number to format
+        num_processo (str): Process number to format (can be in various formats)
 
     Returns:
-        str: Formatted process number
+        str: Formatted process number in CNJ standard format (NNNNNNN-DD.AAAA.J.TR.OOOO)
+        
+    Raises:
+        ValueError: If the process number doesn't have enough digits or is invalid
     """
+    if not num_processo:
+        raise ValueError("Número de processo não fornecido")
+        
+    # Remove qualquer caractere que não seja dígito
     nums = re.sub(r'\D', '', num_processo)
-
-    if len(nums) != 20:
-        raise ValueError("Process number must have 20 digits")
-
+    
+    # Verificar se temos dígitos suficientes
+    if len(nums) < 15:
+        raise ValueError(f"Número de processo com poucos dígitos: {len(nums)}. São necessários 20 dígitos")
+        
+    # Se tiver menos de 20 dígitos mas mais de 15, tenta completar com zeros
+    if len(nums) < 20 and len(nums) >= 15:
+        logger.warning(f"Número de processo incompleto ({len(nums)} dígitos). Tentando completar com zeros...")
+        # Adiciona zeros à direita para completar 20 dígitos
+        nums = nums.ljust(20, '0')
+        
+    # Se tiver mais de 20 dígitos, usa apenas os primeiros 20
+    if len(nums) > 20:
+        logger.warning(f"Número de processo com muitos dígitos ({len(nums)}). Usando apenas os primeiros 20.")
+        nums = nums[:20]
+        
+    # Agora temos exatamente 20 dígitos, podemos formatar
     return f"{nums[:7]}-{nums[7:9]}.{nums[9:13]}.{nums[13]}.{nums[14:16]}.{nums[16:]}"
     
 def generate_complete_process_pdf(num_processo, cpf=None, senha=None):

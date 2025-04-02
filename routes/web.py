@@ -104,11 +104,22 @@ def download_documento(num_processo, num_documento):
     try:
         logger.debug(f"Baixando documento {num_documento} do processo {num_processo}")
         
+        # Verificar e formatar o número do processo
+        try:
+            # Tentamos formatar o número do processo
+            num_processo_formatado = core.format_process_number(num_processo)
+            logger.debug(f"Número do processo formatado: {num_processo_formatado}")
+        except ValueError as e:
+            # Se falhar na formatação, enviamos um erro amigável
+            logger.error(f"Erro na formatação do número do processo: {str(e)}")
+            flash(f"Número de processo inválido: {num_processo}. Use o formato CNJ completo: NNNNNNN-DD.AAAA.J.TR.OOOO", "error")
+            return render_template('index.html')
+            
         # Obter credenciais do formulário, se disponíveis
         cpf = request.args.get('cpf') or os.environ.get('MNI_ID_CONSULTANTE')
         senha = request.args.get('senha') or os.environ.get('MNI_SENHA_CONSULTANTE')
         
-        resposta = retorna_documento_processo(num_processo, num_documento, cpf=cpf, senha=senha)
+        resposta = retorna_documento_processo(num_processo_formatado, num_documento, cpf=cpf, senha=senha)
 
         if 'msg_erro' in resposta:
             flash(resposta['msg_erro'], 'error')
@@ -141,11 +152,22 @@ def download_peticao_inicial(num_processo):
     try:
         logger.debug(f"Baixando petição inicial do processo {num_processo}")
         
+        # Verificar e formatar o número do processo
+        try:
+            # Tentamos formatar o número do processo
+            num_processo_formatado = core.format_process_number(num_processo)
+            logger.debug(f"Número do processo formatado: {num_processo_formatado}")
+        except ValueError as e:
+            # Se falhar na formatação, enviamos um erro amigável
+            logger.error(f"Erro na formatação do número do processo: {str(e)}")
+            flash(f"Número de processo inválido: {num_processo}. Use o formato CNJ completo: NNNNNNN-DD.AAAA.J.TR.OOOO", "error")
+            return render_template('index.html')
+            
         # Obter credenciais do formulário, se disponíveis
         cpf = request.args.get('cpf') or os.environ.get('MNI_ID_CONSULTANTE')
         senha = request.args.get('senha') or os.environ.get('MNI_SENHA_CONSULTANTE')
         
-        resposta = retorna_peticao_inicial_e_anexos(num_processo, cpf=cpf, senha=senha)
+        resposta = retorna_peticao_inicial_e_anexos(num_processo_formatado, cpf=cpf, senha=senha)
 
         if 'msg_erro' in resposta:
             flash(resposta['msg_erro'], 'error')
@@ -194,12 +216,23 @@ def download_processo_completo(num_processo):
     try:
         logger.debug(f"Web: Gerando PDF completo do processo {num_processo}")
         
+        # Verificar e formatar o número do processo
+        try:
+            # Tentamos formatar o número do processo
+            num_processo_formatado = core.format_process_number(num_processo)
+            logger.debug(f"Número do processo formatado: {num_processo_formatado}")
+        except ValueError as e:
+            # Se falhar na formatação, enviamos um erro amigável
+            logger.error(f"Erro na formatação do número do processo: {str(e)}")
+            flash(f"Número de processo inválido: {num_processo}. Use o formato CNJ completo: NNNNNNN-DD.AAAA.J.TR.OOOO", "error")
+            return render_template('index.html')
+        
         # Obter credenciais do formulário, se disponíveis
         cpf = request.args.get('cpf') or os.environ.get('MNI_ID_CONSULTANTE')
         senha = request.args.get('senha') or os.environ.get('MNI_SENHA_CONSULTANTE')
         
-        # Gerar o PDF completo
-        resposta = core.generate_complete_process_pdf(num_processo, cpf=cpf, senha=senha)
+        # Gerar o PDF completo com o número de processo formatado
+        resposta = core.generate_complete_process_pdf(num_processo_formatado, cpf=cpf, senha=senha)
 
         # Verificar se houve erro
         if not resposta.get('sucesso', False):

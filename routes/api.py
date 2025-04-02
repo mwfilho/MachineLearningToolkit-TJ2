@@ -33,6 +33,20 @@ def get_processo(num_processo):
     """
     try:
         logger.debug(f"API: Consultando processo {num_processo}")
+        
+        # Verificar e formatar o número do processo
+        try:
+            # Tentamos formatar o número do processo
+            num_processo_formatado = core.format_process_number(num_processo)
+            logger.debug(f"Número do processo formatado: {num_processo_formatado}")
+        except ValueError as e:
+            # Se falhar na formatação, retornamos um erro
+            logger.error(f"Erro na formatação do número do processo: {str(e)}")
+            return jsonify({
+                'erro': f"Número de processo inválido: {num_processo}",
+                'mensagem': f"Formato CNJ requerido: NNNNNNN-DD.AAAA.J.TR.OOOO. Erro: {str(e)}"
+            }), 400
+            
         cpf, senha = get_mni_credentials()
 
         if not cpf or not senha:
@@ -41,7 +55,7 @@ def get_processo(num_processo):
                 'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
 
-        resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
+        resposta = retorna_processo(num_processo_formatado, cpf=cpf, senha=senha)
 
         # Extrair dados relevantes
         dados = extract_mni_data(resposta)
@@ -61,6 +75,20 @@ def download_documento(num_processo, num_documento):
     """
     try:
         logger.debug(f"API: Download do documento {num_documento} do processo {num_processo}")
+        
+        # Verificar e formatar o número do processo
+        try:
+            # Tentamos formatar o número do processo
+            num_processo_formatado = core.format_process_number(num_processo)
+            logger.debug(f"Número do processo formatado: {num_processo_formatado}")
+        except ValueError as e:
+            # Se falhar na formatação, retornamos um erro
+            logger.error(f"Erro na formatação do número do processo: {str(e)}")
+            return jsonify({
+                'erro': f"Número de processo inválido: {num_processo}",
+                'mensagem': f"Formato CNJ requerido: NNNNNNN-DD.AAAA.J.TR.OOOO. Erro: {str(e)}"
+            }), 400
+        
         cpf, senha = get_mni_credentials()
 
         if not cpf or not senha:
@@ -69,7 +97,7 @@ def download_documento(num_processo, num_documento):
                 'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
 
-        resposta = retorna_documento_processo(num_processo, num_documento, cpf=cpf, senha=senha)
+        resposta = retorna_documento_processo(num_processo_formatado, num_documento, cpf=cpf, senha=senha)
 
         if 'msg_erro' in resposta:
             return jsonify({
@@ -106,6 +134,20 @@ def get_peticao_inicial(num_processo):
     """
     try:
         logger.debug(f"API: Buscando petição inicial do processo {num_processo}")
+        
+        # Verificar e formatar o número do processo
+        try:
+            # Tentamos formatar o número do processo
+            num_processo_formatado = core.format_process_number(num_processo)
+            logger.debug(f"Número do processo formatado: {num_processo_formatado}")
+        except ValueError as e:
+            # Se falhar na formatação, retornamos um erro
+            logger.error(f"Erro na formatação do número do processo: {str(e)}")
+            return jsonify({
+                'erro': f"Número de processo inválido: {num_processo}",
+                'mensagem': f"Formato CNJ requerido: NNNNNNN-DD.AAAA.J.TR.OOOO. Erro: {str(e)}"
+            }), 400
+            
         cpf, senha = get_mni_credentials()
 
         if not cpf or not senha:
@@ -114,7 +156,7 @@ def get_peticao_inicial(num_processo):
                 'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
 
-        resposta = retorna_peticao_inicial_e_anexos(num_processo, cpf=cpf, senha=senha)
+        resposta = retorna_peticao_inicial_e_anexos(num_processo_formatado, cpf=cpf, senha=senha)
 
         if 'msg_erro' in resposta:
             return jsonify({
@@ -138,13 +180,27 @@ def get_processo_completo_pdf(num_processo):
     """
     try:
         logger.debug(f"API: Gerando PDF completo do processo {num_processo}")
+        
+        # Verificar e formatar o número do processo
+        try:
+            # Tentamos formatar o número do processo
+            num_processo_formatado = core.format_process_number(num_processo)
+            logger.debug(f"Número do processo formatado: {num_processo_formatado}")
+        except ValueError as e:
+            # Se falhar na formatação, retornamos um erro
+            logger.error(f"Erro na formatação do número do processo: {str(e)}")
+            return jsonify({
+                'erro': f"Número de processo inválido: {num_processo}",
+                'mensagem': f"Formato CNJ requerido: NNNNNNN-DD.AAAA.J.TR.OOOO. Erro: {str(e)}"
+            }), 400
+            
         cpf, senha = get_mni_credentials()
 
         # A validação não é necessária aqui, pois a função generate_complete_process_pdf
         # pode usar as credenciais de ambiente como fallback
         
-        # Gerar o PDF completo
-        resposta = core.generate_complete_process_pdf(num_processo, cpf=cpf, senha=senha)
+        # Gerar o PDF completo com o número formatado
+        resposta = core.generate_complete_process_pdf(num_processo_formatado, cpf=cpf, senha=senha)
 
         # Verificar se houve erro
         if not resposta.get('sucesso', False):
