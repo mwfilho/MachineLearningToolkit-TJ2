@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, send_file, flash
 import tempfile
 import os
 import logging
-from funcoes_mni import retorna_processo, retorna_documento_processo
+from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
 from utils import extract_mni_data
 import core
 
@@ -95,6 +95,36 @@ def debug_documento():
     except Exception as e:
         logger.error(f"Erro na consulta do documento: {str(e)}", exc_info=True)
         flash(f'Erro na consulta do documento: {str(e)}', 'error')
+        return render_template('debug.html')
+
+@web.route('/debug/peticao-inicial', methods=['POST'])
+def debug_peticao_inicial():
+    num_processo = request.form.get('num_processo')
+    cpf = request.form.get('cpf')
+    senha = request.form.get('senha')
+    
+    try:
+        logger.debug(f"Consultando petição inicial: Processo={num_processo}")
+        resposta = retorna_peticao_inicial_e_anexos(
+            num_processo,
+            cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
+            senha=senha or os.environ.get('MNI_SENHA_CONSULTANTE')
+        )
+        
+        if 'msg_erro' in resposta:
+            flash(resposta['msg_erro'], 'error')
+            return render_template('debug.html')
+            
+        logger.debug(f"Petição inicial encontrada: {resposta}")
+        return render_template('debug.html', 
+                               resposta=resposta,
+                               peticao_inicial=resposta.get('peticao_inicial'),
+                               anexos=resposta.get('anexos', []),
+                               num_processo=num_processo)
+                               
+    except Exception as e:
+        logger.error(f"Erro na consulta da petição inicial: {str(e)}", exc_info=True)
+        flash(f'Erro na consulta da petição inicial: {str(e)}', 'error')
         return render_template('debug.html')
 
 @web.route('/download_documento/<num_processo>/<num_documento>')
