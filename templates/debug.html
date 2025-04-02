@@ -113,10 +113,17 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h6 class="fw-bold mb-0">ID: {{ peticao_inicial.id_documento }}</h6>
-                            <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=peticao_inicial.id_documento) }}" 
-                                class="btn btn-primary">
-                                <i class="bi bi-download"></i> Baixar
-                            </a>
+                            <div>
+                                <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=peticao_inicial.id_documento) }}" 
+                                    class="btn btn-primary">
+                                    <i class="bi bi-download"></i> Baixar
+                                </a>
+                                <a href="{{ url_for('web.download_peticao_completa', num_processo=num_processo) }}" 
+                                   class="btn btn-success ms-2" 
+                                   title="Baixar petição inicial e anexos em um único PDF">
+                                    <i class="bi bi-file-earmark-pdf"></i> Baixar Completo
+                                </a>
+                            </div>
                         </div>
                         
                         <div class="mb-2">
@@ -130,6 +137,10 @@
                         </div>
                         <div class="mb-2">
                             <span class="fw-bold">Formato:</span> {{ peticao_inicial.mimetype }}
+                        </div>
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-info-circle-fill"></i> 
+                            Clique em <strong>Baixar Completo</strong> para obter um único arquivo PDF contendo a petição inicial e todos os seus anexos.
                         </div>
                     </div>
                 </div>
