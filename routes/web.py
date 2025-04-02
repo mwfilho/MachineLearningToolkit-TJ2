@@ -90,7 +90,7 @@ def debug_documento():
         }
 
         logger.debug(f"Documento encontrado: {doc_info}")
-        return render_template('debug.html', resposta=doc_info)
+        return render_template('debug.html', resposta=doc_info, num_processo=num_processo)
 
     except Exception as e:
         logger.error(f"Erro na consulta do documento: {str(e)}", exc_info=True)

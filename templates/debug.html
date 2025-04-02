@@ -36,6 +36,30 @@
 </div>
 
 {% if resposta %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h4>Ações Disponíveis</h4>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% if num_processo %}
+            <div class="col-md-6 mb-3">
+                <a href="{{ url_for('api.get_peticao_inicial', num_processo=num_processo) }}" 
+                   class="btn btn-primary w-100" target="_blank">
+                    <i class="bi bi-file-earmark-text"></i> Visualizar Petição Inicial e Anexos
+                </a>
+            </div>
+            <div class="col-md-6 mb-3">
+                <a href="{{ url_for('api.get_processo_completo_pdf', num_processo=num_processo) }}" 
+                   class="btn btn-success w-100" target="_blank">
+                    <i class="bi bi-file-earmark-pdf"></i> Download do Processo Completo (PDF)
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-header">
         <h4>Resposta do MNI</h4>

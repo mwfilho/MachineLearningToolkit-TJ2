@@ -20,6 +20,28 @@
     </div>
 </div>
 
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Ações do Processo</h4>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6 mb-2">
+                <a href="{{ url_for('api.get_peticao_inicial', num_processo=processo.numero) }}" 
+                   class="btn btn-primary w-100" target="_blank">
+                    <i class="bi bi-file-earmark-text"></i> Visualizar Petição Inicial e Anexos
+                </a>
+            </div>
+            <div class="col-md-6 mb-2">
+                <a href="{{ url_for('api.get_processo_completo_pdf', num_processo=processo.numero) }}" 
+                   class="btn btn-success w-100" target="_blank">
+                    <i class="bi bi-file-earmark-pdf"></i> Download do Processo Completo (PDF)
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h4 class="mb-0">Documentos do Processo</h4>
