@@ -9,6 +9,7 @@ Sistema avançado de consulta processual judicial, especializado no processament
 - ✅ Extração completa de documentos principais e vinculados
 - ✅ Visualização hierárquica de documentos do processo
 - ✅ Download de documentos processuais
+- ✅ Localização automática de petição inicial e seus anexos
 - ✅ Interface de debug para análise detalhada
 - ✅ API REST para integração com outros sistemas
 - ✅ Suporte a credenciais MNI personalizadas
@@ -110,6 +111,14 @@ MNI_CONSULTA_URL = 'https://pje.tjce.jus.br/pje1grau/ConsultaPJe?wsdl'
    - Retorna conteúdo binário para download
    - Preserva metadados como tipo MIME e descrição
 
+3. **Consulta de Petição Inicial e Anexos**
+   ```python
+   resposta = retorna_peticao_inicial_e_anexos(num_processo, cpf, senha)
+   ```
+   - Identifica automaticamente a petição inicial do processo
+   - Localiza todos os anexos vinculados à petição inicial
+   - Retorna estrutura organizada com petição e seus anexos
+
 ## Processamento de Documentos
 
 ### Hierarquia de Documentos
@@ -199,6 +208,49 @@ O sistema implementa uma estrutura hierárquica complexa:
      --output documento.pdf
    ```
 
+3. **Consulta de Petição Inicial e Anexos**
+   ```
+   GET /api/v1/processo/<num_processo>/peticao-inicial
+   ```
+   Retorna a petição inicial do processo e todos os seus anexos vinculados.
+   
+   Exemplo de uso:
+   ```bash
+   curl -X GET "http://seu-servidor.repl.co/api/v1/processo/0000000-00.0000.0.00.0000/peticao-inicial" \
+     -H "X-MNI-CPF: 12345678900" \
+     -H "X-MNI-SENHA: sua_senha"
+   ```
+   
+   Exemplo de resposta:
+   ```json
+   {
+     "numero_processo": "0000000-00.0000.0.00.0000",
+     "peticao_inicial": {
+       "id_documento": "123456",
+       "tipo_documento": "2",
+       "descricao": "Petição Inicial",
+       "data_hora": "2023-05-15T14:30:00",
+       "mimetype": "application/pdf"
+     },
+     "anexos": [
+       {
+         "id_documento": "123457",
+         "tipo_documento": "3",
+         "descricao": "Procuração",
+         "data_hora": "2023-05-15T14:30:01",
+         "mimetype": "application/pdf"
+       },
+       {
+         "id_documento": "123458",
+         "tipo_documento": "4",
+         "descricao": "Documento de Identificação",
+         "data_hora": "2023-05-15T14:30:02",
+         "mimetype": "application/pdf"
+       }
+     ]
+   }
+   ```
+
 ### Tratamento de Erros
 
 O sistema implementa resposta de erros padronizadas:
@@ -285,6 +337,7 @@ def format_process_number(num_processo):
 - Consulta de processos por número
 - Visualização hierárquica de documentos
 - Download direto de documentos
+- Busca e visualização da petição inicial e seus anexos
 - Interface técnica para debugging e análise
 
 ## Implantação em Nuvem
