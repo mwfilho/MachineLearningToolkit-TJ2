@@ -5,6 +5,7 @@ from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_pe
 from utils import extract_mni_data
 import core
 import tempfile
+from datetime import datetime
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -128,4 +129,53 @@ def get_peticao_inicial(num_processo):
         return jsonify({
             'erro': str(e),
             'mensagem': 'Erro ao buscar petição inicial'
+        }), 500
+        
+@api.route('/processo/<num_processo>/pdf-completo', methods=['GET'])
+def get_processo_completo_pdf(num_processo):
+    """
+    Gera e faz download de um PDF completo contendo todos os documentos do processo
+    """
+    try:
+        logger.debug(f"API: Gerando PDF completo do processo {num_processo}")
+        cpf, senha = get_mni_credentials()
+
+        if not cpf or not senha:
+            return jsonify({
+                'erro': 'Credenciais MNI não fornecidas',
+                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+            }), 401
+
+        # Gerar o PDF completo
+        resposta = core.generate_complete_process_pdf(num_processo, cpf=cpf, senha=senha)
+
+        # Verificar se houve erro
+        if not resposta.get('sucesso', False):
+            return jsonify({
+                'erro': resposta.get('msg_erro', 'Erro desconhecido'),
+                'mensagem': 'Erro ao gerar PDF completo do processo'
+            }), 500
+
+        # Criar arquivo temporário para download
+        data_atual = datetime.now().strftime("%Y%m%d_%H%M%S")
+        temp_dir = tempfile.mkdtemp()
+        file_path = os.path.join(temp_dir, f'processo_{num_processo}_{data_atual}.pdf')
+
+        # Gravar o PDF em disco
+        with open(file_path, 'wb') as f:
+            f.write(resposta['pdf_content'])
+
+        # Retornar o arquivo para download
+        return send_file(
+            file_path,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'processo_{num_processo}_completo.pdf'
+        )
+
+    except Exception as e:
+        logger.error(f"API: Erro ao gerar PDF completo: {str(e)}", exc_info=True)
+        return jsonify({
+            'erro': str(e),
+            'mensagem': 'Erro ao gerar PDF completo do processo'
         }), 500
