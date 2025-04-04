@@ -3,7 +3,7 @@ import tempfile
 import os
 import logging
 from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
-from utils import extract_mni_data
+from utils import extract_mni_data, extract_capa_processo
 import core
 
 # Configure logging
@@ -155,3 +155,32 @@ def download_documento(num_processo, num_documento):
         logger.error(f"Erro ao baixar documento: {str(e)}", exc_info=True)
         flash(f'Erro ao baixar documento: {str(e)}', 'error')
         return render_template('index.html')
+
+@web.route('/debug/capa', methods=['POST'])
+def debug_capa_processo():
+    num_processo = request.form.get('num_processo')
+    cpf = request.form.get('cpf')
+    senha = request.form.get('senha')
+
+    try:
+        logger.debug(f"Consultando capa do processo: {num_processo}")
+        resposta = retorna_processo(
+            num_processo,
+            cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
+            senha=senha or os.environ.get('MNI_SENHA_CONSULTANTE'),
+            incluir_documentos=False  # Não incluir documentos para melhor performance
+        )
+
+        # Extrair apenas os dados da capa do processo
+        dados = extract_capa_processo(resposta)
+        logger.debug(f"Dados da capa extraídos: {dados}")
+
+        return render_template('debug.html', 
+                           resposta=dados,
+                           capa_processo=True,
+                           num_processo=num_processo)  
+
+    except Exception as e:
+        logger.error(f"Erro na consulta da capa: {str(e)}", exc_info=True)
+        flash(f'Erro na consulta da capa: {str(e)}', 'error')
+        return render_template('debug.html')

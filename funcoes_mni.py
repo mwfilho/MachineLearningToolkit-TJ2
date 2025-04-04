@@ -77,7 +77,7 @@ def debug_estrutura_documento(doc, nivel=0, prefixo=''):
         else:
             debug_estrutura_documento(doc.documentos, nivel + 1, "[Lista] ")
 
-def retorna_processo(num_processo, cpf=None, senha=None):
+def retorna_processo(num_processo, cpf=None, senha=None, incluir_documentos=True):
     """
     Consulta um processo judicial via MNI.
 
@@ -85,6 +85,8 @@ def retorna_processo(num_processo, cpf=None, senha=None):
         num_processo (str): Número do processo no formato CNJ
         cpf (str, optional): CPF/CNPJ do consultante. Se não fornecido, usa o padrão do ambiente
         senha (str, optional): Senha do consultante. Se não fornecida, usa o padrão do ambiente
+        incluir_documentos (bool, optional): Se True, inclui informações sobre documentos do processo. 
+                                           Se False, obtém apenas dados da capa do processo.
 
     Returns:
         EasyDict: Dados do processo consultado
@@ -98,6 +100,7 @@ def retorna_processo(num_processo, cpf=None, senha=None):
 
     logger.debug(f"\n{'=' * 80}\nIniciando consulta ao processo {num_processo}\n{'=' * 80}")
     logger.debug(f"Usando consultante: {cpf_consultante}")
+    logger.debug(f"Incluindo documentos: {incluir_documentos}")
 
     request_data = {
         'idConsultante': cpf_consultante,
@@ -105,7 +108,7 @@ def retorna_processo(num_processo, cpf=None, senha=None):
         'numeroProcesso': num_processo,
         'movimentos': True,
         'incluirCabecalho': True,
-        'incluirDocumentos': True
+        'incluirDocumentos': incluir_documentos
     }
 
     try:

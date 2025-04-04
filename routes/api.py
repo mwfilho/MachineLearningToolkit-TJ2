@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, send_file, request
 import os
 import logging
 from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
-from utils import extract_mni_data
+from utils import extract_mni_data, extract_capa_processo
 import core
 import tempfile
 
@@ -128,4 +128,34 @@ def get_peticao_inicial(num_processo):
         return jsonify({
             'erro': str(e),
             'mensagem': 'Erro ao buscar petição inicial'
+        }), 500
+        
+@api.route('/processo/<num_processo>/capa', methods=['GET'])
+def get_capa_processo(num_processo):
+    """
+    Retorna apenas os dados da capa do processo (sem documentos),
+    incluindo dados básicos, assuntos, polos e movimentações
+    """
+    try:
+        logger.debug(f"API: Consultando capa do processo {num_processo}")
+        cpf, senha = get_mni_credentials()
+
+        if not cpf or not senha:
+            return jsonify({
+                'erro': 'Credenciais MNI não fornecidas',
+                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+            }), 401
+
+        # Usando o parâmetro incluir_documentos=False para melhor performance
+        resposta = retorna_processo(num_processo, cpf=cpf, senha=senha, incluir_documentos=False)
+
+        # Extrair apenas os dados da capa do processo
+        dados = extract_capa_processo(resposta)
+        return jsonify(dados)
+
+    except Exception as e:
+        logger.error(f"API: Erro ao consultar capa do processo: {str(e)}", exc_info=True)
+        return jsonify({
+            'erro': str(e),
+            'mensagem': 'Erro ao consultar capa do processo'
         }), 500
