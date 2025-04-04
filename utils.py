@@ -109,17 +109,140 @@ def extract_capa_processo(resposta):
             logger.debug(f"Atributos disponíveis no objeto processo: {dir(processo)}")
             
             # Dados básicos do processo
-            dados_processo = {
-                'numero': getattr(processo, 'numero', ''),
-                'classeProcessual': getattr(processo, 'classeProcessual', ''),
-                'dataAjuizamento': getattr(processo, 'dataAjuizamento', ''),
-                'valorCausa': getattr(processo, 'valorCausa', ''),
-                'nivelSigilo': getattr(processo, 'nivelSigilo', 0),
-                'intervencaoMP': getattr(processo, 'intervencaoMP', False),
-                'movimentacoes': [],
-                'assuntos': [],
-                'polos': []
-            }
+            dados_processo = {}
+            # Inicializar listas vazias
+            dados_processo['movimentacoes'] = []
+            dados_processo['assuntos'] = []
+            dados_processo['polos'] = []
+            
+            # Verificar se os dados básicos estão na raiz do processo ou em dadosBasicos
+            if hasattr(processo, 'dadosBasicos'):
+                logger.debug("Encontrado nó dadosBasicos no processo")
+                dados_basicos = processo.dadosBasicos
+                logger.debug(f"Atributos de dadosBasicos: {dir(dados_basicos)}")
+                
+                dados_processo['numero'] = getattr(dados_basicos, 'numero', '')
+                dados_processo['classeProcessual'] = getattr(dados_basicos, 'classeProcessual', '')
+                dados_processo['dataAjuizamento'] = getattr(dados_basicos, 'dataAjuizamento', '')
+                dados_processo['valorCausa'] = getattr(dados_basicos, 'valorCausa', '')
+                dados_processo['nivelSigilo'] = getattr(dados_basicos, 'nivelSigilo', 0)
+                dados_processo['intervencaoMP'] = getattr(dados_basicos, 'intervencaoMP', False)
+                
+                # Verificar órgão julgador em dadosBasicos
+                if hasattr(dados_basicos, 'orgaoJulgador'):
+                    orgao = dados_basicos.orgaoJulgador
+                    logger.debug(f"Atributos do órgão julgador (em dadosBasicos): {dir(orgao)}")
+                    dados_processo['orgaoJulgador'] = getattr(orgao, 'nomeOrgao', '')
+                    dados_processo['jurisdicao'] = getattr(orgao, 'codigoOrgao', '')
+                
+                # Verificar assuntos em dadosBasicos
+                if hasattr(dados_basicos, 'assunto'):
+                    assuntos = dados_basicos.assunto if isinstance(dados_basicos.assunto, list) else [dados_basicos.assunto]
+                    for assunto in assuntos:
+                        dados_processo['assuntos'].append({
+                            'codigo': getattr(assunto, 'codigoNacional', ''),
+                            'descricao': getattr(assunto, 'descricao', ''),
+                            'principal': getattr(assunto, 'principal', False)
+                        })
+                        
+                # Verificar polos em dadosBasicos
+                if hasattr(dados_basicos, 'polo'):
+                    logger.debug("Processando polos do processo em dadosBasicos")
+                    polos = dados_basicos.polo if isinstance(dados_basicos.polo, list) else [dados_basicos.polo]
+                    
+                    for polo in polos:
+                        logger.debug(f"Atributos do polo (em dadosBasicos): {dir(polo)}")
+                        polo_info = {
+                            'polo': getattr(polo, 'polo', ''),
+                            'partes': []
+                        }
+                        
+                        if hasattr(polo, 'parte'):
+                            partes = polo.parte if isinstance(polo.parte, list) else [polo.parte]
+                            
+                            for parte in partes:
+                                logger.debug(f"Atributos da parte (em dadosBasicos): {dir(parte)}")
+                                parte_info = {
+                                    'nome': '',
+                                    'documento': ''
+                                }
+                                
+                                # Verificar se a parte tem o atributo 'pessoa'
+                                if hasattr(parte, 'pessoa'):
+                                    pessoa = parte.pessoa
+                                    logger.debug(f"Atributos da pessoa (em dadosBasicos): {dir(pessoa)}")
+                                    parte_info['nome'] = getattr(pessoa, 'nome', '')
+                                    # Verificar se existe documento da pessoa
+                                    if hasattr(pessoa, 'documento') and pessoa.documento:
+                                        docs = pessoa.documento if isinstance(pessoa.documento, list) else [pessoa.documento]
+                                        if docs:
+                                            parte_info['documento'] = getattr(docs[0], 'codigoDocumento', '')
+                                else:
+                                    parte_info['nome'] = getattr(parte, 'nome', '')
+                                    parte_info['documento'] = getattr(parte, 'numeroDocumentoPrincipal', '')
+                                
+                                # Adicionar advogados se existirem
+                                if hasattr(parte, 'advogado'):
+                                    advogados = parte.advogado if isinstance(parte.advogado, list) else [parte.advogado]
+                                    parte_info['advogados'] = []
+                                    
+                                    for adv in advogados:
+                                        logger.debug(f"Atributos do advogado (em dadosBasicos): {dir(adv)}")
+                                        parte_info['advogados'].append({
+                                            'nome': getattr(adv, 'nome', ''),
+                                            'numeroOAB': getattr(adv, 'numeroOAB', '')
+                                        })
+                                
+                                polo_info['partes'].append(parte_info)
+                        
+                        dados_processo['polos'].append(polo_info)
+                        
+                # Verificar movimentações em dadosBasicos
+                if hasattr(dados_basicos, 'movimento'):
+                    logger.debug("Processando movimentações do processo em dadosBasicos")
+                    movs = dados_basicos.movimento if isinstance(dados_basicos.movimento, list) else [dados_basicos.movimento]
+                    
+                    for mov in movs:
+                        logger.debug(f"Atributos da movimentação (em dadosBasicos): {dir(mov)}")
+                        
+                        mov_info = {
+                            'dataHora': getattr(mov, 'dataHora', ''),
+                            'complemento': []
+                        }
+                        
+                        # Verificar estrutura da movimentação
+                        if hasattr(mov, 'movimentoNacional'):
+                            mov_nac = mov.movimentoNacional
+                            logger.debug(f"Atributos da movimentação nacional (em dadosBasicos): {dir(mov_nac)}")
+                            mov_info['codigoMovimento'] = getattr(mov_nac, 'codigoNacional', '')
+                            mov_info['descricao'] = getattr(mov_nac, 'descricao', '')
+                            
+                            # Verificar se tem complemento
+                            if hasattr(mov_nac, 'complemento'):
+                                comps = mov_nac.complemento if isinstance(mov_nac.complemento, list) else [mov_nac.complemento]
+                                for comp in comps:
+                                    mov_info['complemento'].append(str(comp))
+                        else:
+                            mov_info['codigoMovimento'] = getattr(mov, 'codigoNacional', '')
+                            mov_info['descricao'] = getattr(mov, 'descricao', '')
+                            
+                            # Verificar se tem complemento
+                            if hasattr(mov, 'complemento'):
+                                comps = mov.complemento if isinstance(mov.complemento, list) else [mov.complemento]
+                                for comp in comps:
+                                    mov_info['complemento'].append(str(comp))
+                        
+                        dados_processo['movimentacoes'].append(mov_info)
+            else:
+                # Caso os dados estejam na raiz do processo
+                logger.debug("Buscando dados básicos na raiz do objeto processo")
+                dados_processo['numero'] = getattr(processo, 'numero', '')
+                dados_processo['classeProcessual'] = getattr(processo, 'classeProcessual', '')
+                dados_processo['dataAjuizamento'] = getattr(processo, 'dataAjuizamento', '')
+                dados_processo['valorCausa'] = getattr(processo, 'valorCausa', '')
+                dados_processo['nivelSigilo'] = getattr(processo, 'nivelSigilo', 0)
+                dados_processo['intervencaoMP'] = getattr(processo, 'intervencaoMP', False)
+            
             
             # Extrair informações do órgão julgador
             if hasattr(processo, 'orgaoJulgador'):
