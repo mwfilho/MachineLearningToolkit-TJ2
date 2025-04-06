@@ -323,31 +323,29 @@ def gerar_cabecalho_processo(dados_processo):
     # Dados básicos
     if 'processo' in dados_processo:
         proc = dados_processo['processo']
-        pdf.drawString(72, y, f"Classe: {proc.get('classe', 'N/A')}")
+        
+        # Classe processual
+        classe_desc = ''
+        if proc.get('classeProcessual'):
+            classe_desc = f"Classe: {proc.get('classeProcessual', 'N/A')}"
+        pdf.drawString(72, y, classe_desc)
         y -= 20
         
-        # Assuntos
-        if proc.get('assuntos'):
-            pdf.drawString(72, y, "Assuntos:")
-            y -= 20
-            for assunto in proc.get('assuntos', []):
-                pdf.drawString(90, y, f"- {assunto}")
-                y -= 15
-                
         # Órgão julgador
         if proc.get('orgaoJulgador'):
-            y -= 5
             pdf.drawString(72, y, f"Órgão Julgador: {proc.get('orgaoJulgador', 'N/A')}")
             y -= 20
             
-        # Valor da causa
-        if proc.get('valorCausa'):
-            pdf.drawString(72, y, f"Valor da Causa: R$ {proc.get('valorCausa', 0):.2f}")
-            y -= 20
-            
-        # Data de distribuição
-        if proc.get('dataDistribuicao'):
-            pdf.drawString(72, y, f"Data de Distribuição: {proc.get('dataDistribuicao', 'N/A')}")
+        # Data de ajuizamento
+        if proc.get('dataAjuizamento'):
+            data_str = proc.get('dataAjuizamento')
+            # Formatar data se estiver no formato YYYYMMDD
+            if len(data_str) == 8:
+                try:
+                    data_str = f"{data_str[6:8]}/{data_str[4:6]}/{data_str[0:4]}"
+                except:
+                    pass
+            pdf.drawString(72, y, f"Data de Ajuizamento: {data_str}")
             y -= 30
     
     # Adicionar lista de documentos

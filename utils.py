@@ -51,14 +51,18 @@ def extract_mni_data(resposta):
                     logger.debug(f"\nProcessando documento: {id_doc}")
 
                     # 1. Verifica se é um documento vinculado (tem idDocumentoVinculado)
+                    is_vinculado = False
                     if hasattr(doc, 'idDocumentoVinculado'):
                         id_principal = getattr(doc, 'idDocumentoVinculado')
                         if id_principal:
+                            is_vinculado = True
                             if id_principal not in vinculados:
                                 vinculados[id_principal] = []
                             vinculados[id_principal].append(doc_info)
                             logger.debug(f"  É vinculado ao documento: {id_principal}")
-                            continue
+                    
+                    # Não usar 'continue' para permitir documentos vinculados 
+                    # também serem processados como principais se necessário
 
                     # 2. Verifica se tem documentos vinculados como elementos
                     if hasattr(doc, 'documentoVinculado'):
@@ -87,22 +91,34 @@ def extract_mni_data(resposta):
                 logger.debug(f"\nTotal de documentos principais: {len(principais)}")
                 logger.debug(f"Total de documentos vinculados: {sum(len(v) for v in vinculados.values())}")
                 
-                # Formatar documentos para API
+                # Formatar documentos para API (incluindo tanto principais quanto vinculados)
                 documentos_api = []
-                for doc in principais:
+                
+                # Função recursiva para adicionar documentos e seus vinculados
+                def adicionar_documento_e_vinculados(doc_info):
+                    # Adicionar o documento atual
                     doc_api = {
-                        'id': doc['idDocumento'],
-                        'tipoDocumento': doc['descricao'] or f"Tipo {doc['tipoDocumento']}",
-                        'dataDocumento': doc['dataHora'],
-                        'mimetype': doc['mimetype'],
+                        'id': doc_info['idDocumento'],
+                        'tipoDocumento': doc_info['descricao'] or f"Tipo {doc_info['tipoDocumento']}",
+                        'dataDocumento': doc_info['dataHora'],
+                        'mimetype': doc_info['mimetype'],
                     }
                     documentos_api.append(doc_api)
+                    
+                    # Processar recursivamente os documentos vinculados
+                    for doc_vinc in doc_info.get('documentos_vinculados', []):
+                        adicionar_documento_e_vinculados(doc_vinc)
+                
+                # Processar todos os documentos principais e seus vinculados
+                for doc in principais:
+                    adicionar_documento_e_vinculados(doc)
                 
                 # Adicionar ao objeto 'documentos' para uso na API
                 dados['documentos'] = documentos_api
                 logger.debug(f"Documentos processados para API: {len(documentos_api)}")
                 if len(documentos_api) > 0:
                     logger.debug(f"Primeiro documento: {documentos_api[0]}")
+                logger.debug(f"Documentos principais: {len(principais)}, Total de documentos (com vinculados): {len(documentos_api)}")
 
         return dados
     except Exception as e:
