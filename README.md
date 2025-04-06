@@ -21,93 +21,106 @@ API para consulta de processos judiciais através do Modelo Nacional de Interope
    - `GET /api/v1/processo/<num_processo>/peticao-inicial`
    - Retorna a petição inicial e seus anexos.
 
-## Como Testar
+## Autenticação
 
-Interface de Depuração: `/debug`
+Todas as requisições exigem credenciais MNI, que podem ser fornecidas através dos headers:
+- `X-MNI-CPF` - CPF/CNPJ do consultante
+- `X-MNI-SENHA` - Senha do consultante
+
+## Como usar com cURL
+
+### Consultar processo completo
+```bash
+curl -X GET "http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000" \
+  -H "X-MNI-CPF: seu_cpf_ou_cnpj" \
+  -H "X-MNI-SENHA: sua_senha"
+```
+
+### Consultar apenas a capa do processo
+```bash
+curl -X GET "http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/capa" \
+  -H "X-MNI-CPF: seu_cpf_ou_cnpj" \
+  -H "X-MNI-SENHA: sua_senha"
+```
+
+### Baixar um documento específico
+```bash
+curl -X GET "http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/documento/12345" \
+  -H "X-MNI-CPF: seu_cpf_ou_cnpj" \
+  -H "X-MNI-SENHA: sua_senha" \
+  --output documento.pdf
+```
+
+### Consultar petição inicial e anexos
+```bash
+curl -X GET "http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/peticao-inicial" \
+  -H "X-MNI-CPF: seu_cpf_ou_cnpj" \
+  -H "X-MNI-SENHA: sua_senha"
+```
+
+## Como usar com Postman
+
+1. Abra o Postman e crie uma nova requisição.
+
+2. Selecione o método `GET` e insira a URL de um dos endpoints:
+   - `http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000`
+   - `http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/capa`
+   - `http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/documento/12345`
+   - `http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/peticao-inicial`
+
+3. Na aba "Headers", adicione as credenciais MNI:
+   - Key: `X-MNI-CPF` | Value: `seu_cpf_ou_cnpj`
+   - Key: `X-MNI-SENHA` | Value: `sua_senha`
+
+4. Clique em "Send" para enviar a requisição.
+
+5. Para o endpoint de download de documentos, o arquivo será baixado automaticamente.
+
+## Exemplo de Resposta JSON
+
+### Consulta de processo
+```json
+{
+  "processo": {
+    "numero": "0000000-00.0000.0.00.0000",
+    "classe": "Procedimento Comum Cível",
+    "assuntos": ["Indenização por Dano Material", "Indenização por Dano Moral"],
+    "dataDistribuicao": "2022-01-01T10:00:00",
+    "orgaoJulgador": "1ª Vara Cível",
+    "valorCausa": 10000.0
+  },
+  "documentos": [
+    {
+      "id": "12345",
+      "tipoDocumento": "Petição Inicial",
+      "dataDocumento": "2022-01-01T09:30:00",
+      "mimetype": "application/pdf"
+    },
+    {
+      "id": "12346",
+      "tipoDocumento": "Procuração",
+      "dataDocumento": "2022-01-01T09:35:00",
+      "mimetype": "application/pdf"
+    }
+  ],
+  "movimentacoes": [
+    {
+      "dataMovimentacao": "2022-01-02T11:00:00",
+      "descricao": "Despacho - Cite-se o réu"
+    },
+    {
+      "dataMovimentacao": "2022-01-01T10:00:00",
+      "descricao": "Distribuído por sorteio"
+    }
+  ]
+}
+```
+
+## Interface de Depuração
+
+Para testar a API de forma interativa, você pode usar a interface de depuração disponível em:
+- `/debug` - Interface principal
 - `/debug/consulta` - Processo completo
 - `/debug/capa` - Apenas capa do processo
 - `/debug/documento` - Documento específico
 - `/debug/peticao-inicial` - Petição inicial
-
-## Publicação na AWS (Guia Detalhado)
-
-### 1. Obter o código-fonte
-
-Clone o repositório do GitHub:
-```
-git clone https://github.com/seu-usuario/api-mni.git
-cd api-mni
-```
-
-### 2. Preparar o ambiente local
-
-Instale e configure a AWS CLI:
-```
-pip install awscli
-aws configure
-# Insira AWS Access Key ID
-# Insira AWS Secret Access Key
-# Defina a região (ex: us-east-1)
-```
-
-### 3. Configurar a aplicação
-
-Crie arquivos necessários para o Elastic Beanstalk:
-```
-# Crie um arquivo Procfile
-echo "web: gunicorn --bind 0.0.0.0:5000 main:app" > Procfile
-
-# Verifique se requirements.txt está atualizado
-pip freeze > requirements.txt
-```
-
-### 4. Configurar Elastic Beanstalk
-
-Instale e configure a EB CLI:
-```
-pip install awsebcli
-eb init
-# Selecione a região
-# Selecione Python como plataforma
-# Selecione Python 3.11
-```
-
-### 5. Configurar variáveis de ambiente
-
-Crie um arquivo `.ebextensions/01_environment.config`:
-```
-option_settings:
-  aws:elasticbeanstalk:application:environment:
-    MNI_URL: https://pje.tjce.jus.br/pje1grau/intercomunicacao?wsdl
-    MNI_CONSULTA_URL: https://pje.tjce.jus.br/pje1grau/ConsultaPJe?wsdl
-  aws:elasticbeanstalk:container:python:
-    WSGIPath: main:app
-```
-
-### 6. Criar ambiente e fazer deploy
-
-```
-# Criar ambiente de produção
-eb create api-mni-production
-
-# Configurar credenciais MNI (não armazene em repositórios!)
-eb setenv MNI_ID_CONSULTANTE=seu_cpf MNI_SENHA_CONSULTANTE=sua_senha
-
-# Fazer deploy
-eb deploy
-
-# Abrir a aplicação no navegador
-eb open
-```
-
-### 7. Configurar HTTPS (recomendado)
-
-1. No console AWS, solicite um certificado SSL no AWS Certificate Manager
-2. Configure o load balancer para usar HTTPS
-3. Use o Route 53 para configurar um domínio personalizado
-
-### 8. Monitoramento
-
-1. Configure CloudWatch para alertas de CPU, memória e erros
-2. Verifique logs regularmente: `eb logs`
-3. Configure métricas personalizadas para monitorar a performance da API
