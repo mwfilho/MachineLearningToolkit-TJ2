@@ -5,6 +5,7 @@ from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_pe
 from utils import extract_mni_data, extract_capa_processo
 import core
 import tempfile
+import io
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -158,4 +159,66 @@ def get_capa_processo(num_processo):
         return jsonify({
             'erro': str(e),
             'mensagem': 'Erro ao consultar capa do processo'
+        }), 500
+        
+@api.route('/processo/<num_processo>/pdf', methods=['GET'])
+def download_processo_completo(num_processo):
+    """
+    Faz download de todos os documentos do processo em um único PDF
+    """
+    try:
+        logger.debug(f"API: Gerando PDF único para todos os documentos do processo {num_processo}")
+        cpf, senha = get_mni_credentials()
+
+        if not cpf or not senha:
+            return jsonify({
+                'erro': 'Credenciais MNI não fornecidas',
+                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+            }), 401
+            
+        # Validar o formato do número do processo
+        if not core.validate_process_number(num_processo):
+            try:
+                # Tentar formatar o número do processo
+                num_processo = core.format_process_number(num_processo)
+            except ValueError:
+                return jsonify({
+                    'erro': 'Número de processo inválido',
+                    'mensagem': 'O número de processo deve seguir o padrão CNJ (NNNNNNN-NN.NNNN.N.NN.NNNN)'
+                }), 400
+                
+        # Processar documentos e gerar PDF único
+        pdf_content, result = core.merge_process_documents(num_processo, cpf=cpf, senha=senha)
+        
+        if result['status'] == 'error' or pdf_content is None:
+            logger.error(f"Erro ao gerar PDF único: {result.get('message', 'Erro desconhecido')}")
+            return jsonify({
+                'erro': 'Falha ao gerar PDF',
+                'mensagem': result.get('message', 'Não foi possível gerar o PDF único'),
+                'detalhes': result.get('stats', {})
+            }), 500
+            
+        # Retornar o PDF para download
+        # Criar nome de arquivo baseado no número do processo
+        safe_filename = num_processo.replace('.', '_').replace('-', '_')
+        
+        # Criar arquivo temporário para download
+        temp_dir = tempfile.mkdtemp()
+        file_path = os.path.join(temp_dir, f'processo_{safe_filename}.pdf')
+        
+        with open(file_path, 'wb') as f:
+            f.write(pdf_content)
+            
+        return send_file(
+            file_path,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'processo_{num_processo}.pdf'
+        )
+        
+    except Exception as e:
+        logger.error(f"API: Erro ao gerar PDF único: {str(e)}", exc_info=True)
+        return jsonify({
+            'erro': str(e),
+            'mensagem': 'Erro ao gerar PDF único com os documentos do processo'
         }), 500
