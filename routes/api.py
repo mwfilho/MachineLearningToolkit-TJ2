@@ -199,7 +199,7 @@ def gerar_pdf_completo(num_processo):
         if not dados.get('documentos'):
             return jsonify({
                 'erro': 'Processo sem documentos',
-                'mensagem': 'O processo não possui documentos para gerar PDF'
+                'mensagem': 'O processo não possui documentos para gerar PDF ou não foi possível acessá-los com as credenciais fornecidas'
             }), 404
             
         documentos = dados['documentos']
@@ -390,22 +390,32 @@ def processar_documento(num_processo, id_documento, tipo_documento, cpf, senha, 
         
         if 'msg_erro' in resposta:
             logger.error(f"Erro ao obter documento {id_documento}: {resposta['msg_erro']}")
-            return None
-            
-        if not resposta.get('conteudo'):
-            logger.warning(f"Documento {id_documento} sem conteúdo")
-            return None
+            # Criar um PDF informativo sobre o erro
+            arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
+            pdf_path = f"{arquivo_temp}.pdf"
+            message = f"Erro ao obter documento {id_documento}: {resposta['msg_erro']}"
+            create_info_pdf(message, pdf_path, id_documento, tipo_documento)
+            return {'id': id_documento, 'caminho_pdf': pdf_path}
             
         mimetype = resposta.get('mimetype', '')
-        conteudo = resposta.get('conteudo')
+        conteudo = resposta.get('conteudo', b'')  # Garantir que conteúdo nunca seja None
+        
+        # Verificar se temos conteúdo válido
+        if not conteudo:
+            logger.warning(f"Documento {id_documento} sem conteúdo")
+            # Criar um PDF informativo sobre o erro
+            arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
+            pdf_path = f"{arquivo_temp}.pdf"
+            message = f"Documento {id_documento} ({tipo_documento}) não possui conteúdo"
+            create_info_pdf(message, pdf_path, id_documento, tipo_documento)
+            return {'id': id_documento, 'caminho_pdf': pdf_path}
         
         # Caminho para o arquivo temporário
         arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
         
         # Variável para armazenar o caminho do PDF final
         pdf_path = None
-        
-        # Processar baseado no tipo MIME
+            
         if mimetype == 'application/pdf':
             # Já é PDF, salvar diretamente
             pdf_path = f"{arquivo_temp}.pdf"
@@ -428,7 +438,12 @@ def processar_documento(num_processo, id_documento, tipo_documento, cpf, senha, 
             except Exception as e:
                 logger.error(f"Erro ao converter HTML para PDF: {str(e)}")
                 # Tenta criar um PDF simples com o texto
-                create_text_pdf(conteudo.decode('utf-8', errors='ignore'), pdf_path, id_documento, tipo_documento)
+                try:
+                    texto_html = conteudo.decode('utf-8', errors='ignore')
+                    create_text_pdf(texto_html, pdf_path, id_documento, tipo_documento)
+                except Exception as ex:
+                    logger.error(f"Erro secundário ao processar HTML: {str(ex)}")
+                    return None
                 
         elif mimetype in ['text/plain', 'text/xml']:
             # Converter texto para PDF
