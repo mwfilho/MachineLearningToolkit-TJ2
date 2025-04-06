@@ -196,7 +196,12 @@ def gerar_pdf_completo(num_processo):
         resposta_processo = retorna_processo(num_processo, cpf=cpf, senha=senha)
         dados = extract_mni_data(resposta_processo)
         
-        if not dados.get('documentos'):
+        if not dados.get('documentos') or len(dados.get('documentos', [])) == 0:
+            # Logar quantos documentos foram encontrados em cada estrutura para debug
+            docs_originais = dados.get('processo', {}).get('documentos', [])
+            logger.debug(f"Documentos no formato original: {len(docs_originais)}")
+            logger.debug(f"Documentos no formato API: {len(dados.get('documentos', []))}")
+            
             return jsonify({
                 'erro': 'Processo sem documentos',
                 'mensagem': 'O processo não possui documentos para gerar PDF ou não foi possível acessá-los com as credenciais fornecidas'
@@ -204,6 +209,7 @@ def gerar_pdf_completo(num_processo):
             
         documentos = dados['documentos']
         logger.debug(f"Encontrados {len(documentos)} documentos no processo {num_processo}")
+        logger.debug(f"Primeiro documento: {documentos[0] if documentos else 'Nenhum'}")
         
         # Criar diretório temporário para armazenar arquivos
         temp_dir = tempfile.mkdtemp()

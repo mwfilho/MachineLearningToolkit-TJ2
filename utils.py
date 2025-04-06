@@ -86,6 +86,23 @@ def extract_mni_data(resposta):
                 dados['processo']['documentos'] = principais
                 logger.debug(f"\nTotal de documentos principais: {len(principais)}")
                 logger.debug(f"Total de documentos vinculados: {sum(len(v) for v in vinculados.values())}")
+                
+                # Formatar documentos para API
+                documentos_api = []
+                for doc in principais:
+                    doc_api = {
+                        'id': doc['idDocumento'],
+                        'tipoDocumento': doc['descricao'] or f"Tipo {doc['tipoDocumento']}",
+                        'dataDocumento': doc['dataHora'],
+                        'mimetype': doc['mimetype'],
+                    }
+                    documentos_api.append(doc_api)
+                
+                # Adicionar ao objeto 'documentos' para uso na API
+                dados['documentos'] = documentos_api
+                logger.debug(f"Documentos processados para API: {len(documentos_api)}")
+                if len(documentos_api) > 0:
+                    logger.debug(f"Primeiro documento: {documentos_api[0]}")
 
         return dados
     except Exception as e:

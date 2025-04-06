@@ -88,9 +88,20 @@ def debug_pdf_completo():
         # Obter processo 
         resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
         dados = extract_mni_data(resposta)
+        logger.debug(f"Verificando documentos para o processo {num_processo}")
         
-        if not dados.get('documentos'):
-            flash('O processo não possui documentos para gerar PDF ou não foi possível acessá-los.', 'error')
+        # Verificar sucesso da consulta
+        if not dados.get('sucesso'):
+            flash(f'Erro na consulta: {dados.get("mensagem", "Erro desconhecido")}', 'error')
+            return render_template('debug.html')
+            
+        # Verificar se há documentos (agora usando o novo formato)
+        if not dados.get('documentos') or len(dados.get('documentos', [])) == 0:
+            # Mostrar quantos documentos foram encontrados nos logs
+            docs_originais = dados.get('processo', {}).get('documentos', [])
+            logger.debug(f"Documentos no formato original: {len(docs_originais)}")
+            
+            flash('O processo não tem documentos disponíveis ou você não tem permissão para acessá-los.', 'error')
             return render_template('debug.html')
             
         # Para permitir download direto, definimos headers customizados para API
