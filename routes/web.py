@@ -18,10 +18,6 @@ def index():
 @web.route('/debug')
 def debug():
     return render_template('debug.html')
-    
-@web.route('/debug/pdf')
-def debug_pdf_form():
-    return render_template('debug_pdf_form.html')
 
 @web.route('/debug/consulta', methods=['POST'])
 def debug_consulta():
@@ -188,60 +184,3 @@ def debug_capa_processo():
         logger.error(f"Erro na consulta da capa: {str(e)}", exc_info=True)
         flash(f'Erro na consulta da capa: {str(e)}', 'error')
         return render_template('debug.html')
-
-@web.route('/debug/pdf-completo', methods=['POST'])
-def debug_pdf_completo():
-    num_processo = request.form.get('num_processo')
-    cpf = request.form.get('cpf')
-    senha = request.form.get('senha')
-    
-    try:
-        logger.debug(f"Gerando PDF completo do processo: {num_processo}")
-        
-        if not core.validate_process_number(num_processo):
-            try:
-                # Tentar formatar o número do processo
-                num_processo = core.format_process_number(num_processo)
-            except ValueError:
-                flash('Número de processo inválido. Formato esperado: NNNNNNN-NN.NNNN.N.NN.NNNN', 'error')
-                return render_template('debug.html')
-        
-        # Processar documentos e gerar PDF único
-        pdf_content, result = core.merge_process_documents(
-            num_processo, 
-            cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
-            senha=senha or os.environ.get('MNI_SENHA_CONSULTANTE')
-        )
-        
-        if result['status'] == 'error' or pdf_content is None:
-            error_msg = result.get('message', 'Erro desconhecido ao gerar PDF')
-            logger.error(f"Erro ao gerar PDF único: {error_msg}")
-            flash(f'Erro ao gerar PDF único: {error_msg}', 'error')
-            return render_template('debug_pdf_form.html', 
-                                  erro_pdf=error_msg,
-                                  stats_pdf=result.get('stats', {}),
-                                  num_processo=num_processo)
-        
-        # Criar arquivo temporário para download
-        safe_filename = num_processo.replace('.', '_').replace('-', '_')
-        temp_dir = tempfile.mkdtemp()
-        file_path = os.path.join(temp_dir, f'processo_{safe_filename}.pdf')
-        
-        with open(file_path, 'wb') as f:
-            f.write(pdf_content)
-            
-        # Exibir estatísticas sobre o PDF gerado
-        stats = result.get('stats', {})
-        flash(f'PDF gerado com sucesso! {stats.get("pdf_documents", 0)} PDFs e {stats.get("html_documents", 0)} HTMLs processados.', 'success')
-        
-        return send_file(
-            file_path,
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=f'processo_{num_processo}.pdf'
-        )
-        
-    except Exception as e:
-        logger.error(f"Erro ao gerar PDF único: {str(e)}", exc_info=True)
-        flash(f'Erro ao gerar PDF único: {str(e)}', 'error')
-        return render_template('debug_pdf_form.html', erro_pdf=str(e))

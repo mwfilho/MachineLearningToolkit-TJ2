@@ -3,7 +3,7 @@
 {% block content %}
 <div class="card mb-4">
     <div class="card-header">
-        <h4>Debug MNI</h4> <a href="/debug/pdf" class="btn btn-danger btn-sm ms-2"><i class="bi bi-file-earmark-pdf"></i> Gerar PDF Completo</a>
+        <h4>Debug MNI</h4>
     </div>
     <div class="card-body">
         <div class="row">
@@ -114,43 +114,6 @@
                                 <input type="password" class="form-control" id="senha" name="senha">
                             </div>
                             <button type="submit" class="btn btn-info w-100">Localizar Petição Inicial</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-        
-        <div class="row mt-4">
-            <div class="col-md-6 mx-auto">
-                <form method="POST" action="{{ url_for('web.debug_pdf_completo') }}" class="mb-4">
-                    <div class="card">
-                        <div class="card-header bg-danger text-white">
-                            <h5 class="mb-0">Gerar PDF Completo do Processo</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <label for="num_processo" class="form-label">Número do Processo</label>
-                                <input type="text" class="form-control" id="num_processo" name="num_processo" 
-                                    placeholder="0000000-00.0000.0.00.0000" required
-                                    data-bs-toggle="tooltip" 
-                                    title="Digite o número do processo para gerar um único PDF com todos os documentos">
-                            </div>
-                            <div class="mb-3">
-                                <label for="cpf" class="form-label">CPF/CNPJ Consultante (opcional)</label>
-                                <input type="text" class="form-control" id="cpf" name="cpf" 
-                                    placeholder="Apenas números">
-                            </div>
-                            <div class="mb-3">
-                                <label for="senha" class="form-label">Senha (opcional)</label>
-                                <input type="password" class="form-control" id="senha" name="senha">
-                            </div>
-                            <div class="alert alert-warning">
-                                <i class="bi bi-exclamation-triangle"></i> 
-                                Esta operação pode levar alguns minutos dependendo do número de documentos no processo.
-                            </div>
-                            <button type="submit" class="btn btn-danger w-100">
-                                <i class="bi bi-file-earmark-pdf"></i> Gerar PDF Completo
-                            </button>
                         </div>
                     </div>
                 </form>
