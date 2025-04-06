@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h4>Debug MNI</h4>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <form method="POST" action="{{ url_for('web.debug_consulta') }}" class="mb-4">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">Consulta Completa</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="num_processo" class="form-label">Número do Processo</label>
+                                <input type="text" class="form-control" id="num_processo" name="num_processo" 
+                                    placeholder="0000000-00.0000.0.00.0000" required
+                                    data-bs-toggle="tooltip" 
+                                    title="Digite o número do processo para ver sua estrutura completa e hierarquia de documentos">
+                            </div>
+                            <div class="mb-3">
+                                <label for="cpf" class="form-label">CPF/CNPJ Consultante (opcional)</label>
+                                <input type="text" class="form-control" id="cpf" name="cpf" 
+                                    placeholder="Apenas números">
+                            </div>
+                            <div class="mb-3">
+                                <label for="senha" class="form-label">Senha (opcional)</label>
+                                <input type="password" class="form-control" id="senha" name="senha">
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Consultar Estrutura</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="col-md-4">
+                <form method="POST" action="{{ url_for('web.debug_capa_processo') }}" class="mb-4">
+                    <div class="card">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0">Consulta Capa</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="num_processo" class="form-label">Número do Processo</label>
+                                <input type="text" class="form-control" id="num_processo" name="num_processo" 
+                                    placeholder="0000000-00.0000.0.00.0000" required
+                                    data-bs-toggle="tooltip" 
+                                    title="Digite o número do processo para ver apenas os dados da capa, sem documentos">
+                            </div>
+                            <div class="mb-3">
+                                <label for="cpf" class="form-label">CPF/CNPJ Consultante (opcional)</label>
+                                <input type="text" class="form-control" id="cpf" name="cpf" 
+                                    placeholder="Apenas números">
+                            </div>
+                            <div class="mb-3">
+                                <label for="senha" class="form-label">Senha (opcional)</label>
+                                <input type="password" class="form-control" id="senha" name="senha">
+                            </div>
+                            <button type="submit" class="btn btn-warning w-100">Consultar Capa</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="col-md-4">
+                <form method="POST" action="{{ url_for('web.debug_pdf_completo') }}" class="mb-4">
+                    <div class="card">
+                        <div class="card-header bg-danger text-white">
+                            <h5 class="mb-0">PDF Completo do Processo</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="num_processo" class="form-label">Número do Processo</label>
+                                <input type="text" class="form-control" id="num_processo" name="num_processo" 
+                                       placeholder="0000000-00.0000.0.00.0000" required
+                                       data-bs-toggle="tooltip" 
+                                       title="Digite o número do processo para gerar um PDF único com todos os documentos">
+                            </div>
+                            <div class="mb-3">
+                                <label for="cpf" class="form-label">CPF/CNPJ Consultante (opcional)</label>
+                                <input type="text" class="form-control" id="cpf" name="cpf" 
+                                       placeholder="Apenas números">
+                            </div>
+                            <div class="mb-3">
+                                <label for="senha" class="form-label">Senha (opcional)</label>
+                                <input type="password" class="form-control" id="senha" name="senha">
+                            </div>
+                            <div class="alert alert-warning small">
+                                <i class="bi bi-exclamation-triangle-fill"></i> Esta operação pode demorar alguns minutos dependendo da quantidade de documentos no processo.
+                            </div>
+                            <button type="submit" class="btn btn-danger w-100">Gerar PDF Completo</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <form method="POST" action="{{ url_for('web.debug_documento') }}" class="mb-4">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">Consulta Documento</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="num_processo" class="form-label">Número do Processo</label>
+                                <input type="text" class="form-control" id="num_processo" name="num_processo" 
+                                    placeholder="0000000-00.0000.0.00.0000" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="id_documento" class="form-label">ID do Documento</label>
+                                <input type="text" class="form-control" id="id_documento" name="id_documento" 
+                                    placeholder="ID do documento" required
+                                    data-bs-toggle="tooltip" 
+                                    title="Digite o ID do documento específico que deseja consultar">
+                            </div>
+                            <button type="submit" class="btn btn-success w-100">Consultar Documento</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="col-md-4">
+                <form method="POST" action="{{ url_for('web.debug_peticao_inicial') }}" class="mb-4">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Petição Inicial e Anexos</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="num_processo" class="form-label">Número do Processo</label>
+                                <input type="text" class="form-control" id="num_processo" name="num_processo" 
+                                    placeholder="0000000-00.0000.0.00.0000" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="cpf" class="form-label">CPF/CNPJ Consultante (opcional)</label>
+                                <input type="text" class="form-control" id="cpf" name="cpf" 
+                                    placeholder="Apenas números">
+                            </div>
+                            <div class="mb-3">
+                                <label for="senha" class="form-label">Senha (opcional)</label>
+                                <input type="password" class="form-control" id="senha" name="senha">
+                            </div>
+                            <button type="submit" class="btn btn-info w-100">Consultar Petição Inicial</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        {% if resposta %}
+        <div class="card mt-4">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Resposta</h5>
+            </div>
+            <div class="card-body">
+                {% if resposta.num_processo and resposta.id_documento %}
+                <!-- Detalhes de documento específico -->
+                <h4>Documento</h4>
+                <table class="table table-striped">
+                    <tr>
+                        <th>Processo</th>
+                        <td>{{ resposta.num_processo }}</td>
+                    </tr>
+                    <tr>
+                        <th>ID Documento</th>
+                        <td>{{ resposta.id_documento }}</td>
+                    </tr>
+                    <tr>
+                        <th>Tipo</th>
+                        <td>{{ resposta.id_tipo_documento }}</td>
+                    </tr>
+                    <tr>
+                        <th>Mimetype</th>
+                        <td>{{ resposta.mimetype }}</td>
+                    </tr>
+                    <tr>
+                        <th>Conteúdo</th>
+                        <td>{{ resposta.conteudo }}</td>
+                    </tr>
+                </table>
+                <a href="{{ url_for('web.download_documento', num_processo=resposta.num_processo, num_documento=resposta.id_documento) }}" class="btn btn-primary">
+                    <i class="bi bi-download"></i> Baixar Documento
+                </a>
+                
+                {% elif peticao_inicial %}
+                <!-- Petição inicial e anexos -->
+                <h4>Petição Inicial e Anexos</h4>
+                
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Petição Inicial</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-striped">
+                            <tr>
+                                <th>ID</th>
+                                <td>{{ peticao_inicial.id }}</td>
+                            </tr>
+                            <tr>
+                                <th>Tipo</th>
+                                <td>{{ peticao_inicial.tipo }}</td>
+                            </tr>
+                            <tr>
+                                <th>Download</th>
+                                <td>
+                                    <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=peticao_inicial.id) }}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-download"></i> Baixar
+                                    </a>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                {% if anexos %}
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Anexos ({{ anexos|length }})</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>ID</th>
+                                    <th>Tipo</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for anexo in anexos %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td>{{ anexo.id }}</td>
+                                    <td>{{ anexo.tipo }}</td>
+                                    <td>
+                                        <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=anexo.id) }}" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-download"></i> Baixar
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-info">Nenhum anexo encontrado para a petição inicial.</div>
+                {% endif %}
+                
+                {% elif capa_processo %}
+                <!-- Capa do processo -->
+                <h4>Capa do Processo</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0">Dados Básicos</h5>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-striped">
+                                    {% if resposta.processo %}
+                                    <tr>
+                                        <th>Número</th>
+                                        <td>{{ resposta.processo.numero }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Classe</th>
+                                        <td>{{ resposta.processo.classe }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Órgão Julgador</th>
+                                        <td>{{ resposta.processo.orgaoJulgador }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Data Distribuição</th>
+                                        <td>{{ resposta.processo.dataDistribuicao }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Valor da Causa</th>
+                                        <td>R$ {{ resposta.processo.valorCausa }}</td>
+                                    </tr>
+                                    {% endif %}
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0">Assuntos</h5>
+                            </div>
+                            <div class="card-body">
+                                {% if resposta.processo and resposta.processo.assuntos %}
+                                <ul class="list-group list-group-flush">
+                                    {% for assunto in resposta.processo.assuntos %}
+                                    <li class="list-group-item">{{ assunto }}</li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <p>Nenhum assunto cadastrado.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Movimentações</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if resposta.movimentacoes %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Descrição</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for mov in resposta.movimentacoes %}
+                                    <tr>
+                                        <td>{{ mov.dataMovimentacao }}</td>
+                                        <td>{{ mov.descricao }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p>Nenhuma movimentação encontrada.</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% elif documentos_hierarquia %}
+                <!-- Hierarquia de documentos do processo -->
+                <h4>Documentos do Processo</h4>
+                
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>ID</th>
+                                <th>Tipo</th>
+                                <th>Data</th>
+                                <th>Documentos Relacionados</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for doc in documentos_hierarquia %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ doc.id }}</td>
+                                <td>{{ doc.tipo }}</td>
+                                <td>{{ doc.data }}</td>
+                                <td>
+                                    {% if doc.docs_relacionados %}
+                                    <ul class="list-unstyled">
+                                    {% for doc_rel in doc.docs_relacionados %}
+                                        <li>
+                                            <strong>{{ doc_rel.tipo }}</strong> 
+                                            (ID: {{ doc_rel.id }})
+                                            {% if doc_rel.data %}Data: {{ doc_rel.data }}{% endif %}
+                                            <br>
+                                            <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=doc_rel.id) }}" 
+                                               class="btn btn-sm btn-outline-secondary mt-1">
+                                                <i class="bi bi-download"></i> Baixar
+                                            </a>
+                                        </li>
+                                    {% endfor %}
+                                    </ul>
+                                    {% else %}
+                                    <em>Nenhum documento relacionado</em>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <!-- Resposta genérica -->
+                <pre class="bg-light p-3 border rounded"><code>{{ resposta|tojson(indent=2) }}</code></pre>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

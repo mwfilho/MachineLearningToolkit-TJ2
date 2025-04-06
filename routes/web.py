@@ -67,6 +67,29 @@ def debug_consulta():
         flash(f'Erro na consulta: {str(e)}', 'error')
         return render_template('debug.html')
 
+@web.route('/debug/pdf-completo', methods=['POST'])
+def debug_pdf_completo():
+    num_processo = request.form.get('num_processo')
+    cpf = request.form.get('cpf')
+    senha = request.form.get('senha')
+    
+    if not num_processo:
+        flash('Número do processo é obrigatório', 'error')
+        return render_template('debug.html')
+    
+    try:
+        logger.debug(f"Redirecionando para geração de PDF completo: Processo={num_processo}")
+        
+        # Redirecionar para o endpoint da API com os parâmetros necessários
+        # Credenciais serão obtidas pelos headers ou variáveis de ambiente padrão
+        return redirect(url_for('api.gerar_pdf_completo', num_processo=num_processo))
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar PDF completo: {str(e)}", exc_info=True)
+        flash(f'Erro ao gerar PDF completo: {str(e)}', 'error')
+        return render_template('debug.html')
+
+
 @web.route('/debug/documento', methods=['POST'])
 def debug_documento():
     num_processo = request.form.get('num_processo')
