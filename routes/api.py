@@ -1,6 +1,5 @@
 from flask import Blueprint, jsonify, send_file, request
 import os
-import gc
 import logging
 from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
 from utils import extract_mni_data, extract_capa_processo
@@ -227,87 +226,43 @@ def gerar_pdf_completo(num_processo):
         # Determinar o máximo de workers baseado na quantidade de documentos
         max_workers = min(10, len(documentos))  # Limita a 10 threads simultâneas
         
-        # Processar documentos em lotes para economizar memória
-        tamanho_lote = 5  # Processar apenas 5 documentos por vez
-        total_docs = len(documentos)
-        pdf_paths = []
-        
-        for inicio_lote in range(0, total_docs, tamanho_lote):
-            fim_lote = min(inicio_lote + tamanho_lote, total_docs)
-            lote_atual = documentos[inicio_lote:fim_lote]
-            logger.info(f"Processando lote de documentos {inicio_lote+1}-{fim_lote} de {total_docs}")
+        # Usar ThreadPoolExecutor para processamento paralelo
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Mapear a função de processamento para cada documento
+            future_to_doc = {
+                executor.submit(
+                    processar_documento, 
+                    num_processo, doc['id'], 
+                    doc.get('tipoDocumento', ''), 
+                    cpf, senha, temp_dir
+                ): doc 
+                for doc in documentos
+            }
             
-            # Limitar o número máximo de workers ao tamanho do lote
-            lote_max_workers = min(max_workers, len(lote_atual)) 
-            
-            # Usar ThreadPoolExecutor para processamento paralelo do lote atual
-            with concurrent.futures.ThreadPoolExecutor(max_workers=lote_max_workers) as executor:
-                # Mapear a função de processamento para cada documento do lote
-                future_to_doc = {
-                    executor.submit(
-                        processar_documento, 
-                        num_processo, doc['id'], 
-                        doc.get('tipoDocumento', ''), 
-                        cpf, senha, temp_dir
-                    ): (doc, documentos.index(doc))  # Incluir índice original 
-                    for doc in lote_atual
-                }
-                
-                # Processar resultados conforme forem concluídos
-                for future in concurrent.futures.as_completed(future_to_doc):
-                    doc, indice_original = future_to_doc[future]
-                    try:
-                        resultado = future.result()
-                        if resultado and resultado.get('caminho_pdf'):
-                            try:
-                                # Armazenar caminho e ID para processar na ordem correta depois
-                                logger.debug(f"Documento {doc['id']} processado com sucesso")
-                                pdf_paths.append({
-                                    'id': doc['id'],
-                                    'caminho': resultado['caminho_pdf'],
-                                    'index': indice_original  # Manter a ordem original
-                                })
-                                processados += 1
-                            except Exception as e:
-                                logger.error(f"Erro ao registrar documento {doc['id']}: {str(e)}", exc_info=True)
-                                erros += 1
-                        else:
-                            logger.warning(f"Documento {doc['id']} não gerou PDF válido")
+            # Processar resultados conforme forem concluídos
+            for future in concurrent.futures.as_completed(future_to_doc):
+                doc = future_to_doc[future]
+                try:
+                    resultado = future.result()
+                    if resultado and resultado.get('caminho_pdf'):
+                        try:
+                            logger.debug(f"Adicionando documento {doc['id']} ao PDF combinado")
+                            pdf_merger.append(resultado['caminho_pdf'])
+                            processados += 1
+                        except Exception as e:
+                            logger.error(f"Erro ao adicionar documento {doc['id']} ao PDF: {str(e)}")
                             erros += 1
-                    except Exception as e:
-                        logger.error(f"Erro ao processar documento {doc['id']}: {str(e)}", exc_info=True)
+                    else:
+                        logger.warning(f"Documento {doc['id']} não gerou PDF válido")
                         erros += 1
-            
-            # Liberar um pouco de memória antes de processar o próximo lote
-            gc.collect()
-        
-        # Ordenar PDFs conforme a ordem original dos documentos
-        pdf_paths.sort(key=lambda x: x['index'])
-        
-        # Adicionar PDFs ao merger na ordem correta (também em lotes para economizar memória)
-        for i, pdf_info in enumerate(pdf_paths):
-            try:
-                logger.debug(f"Adicionando documento {i+1}/{len(pdf_paths)} ao PDF combinado")
-                pdf_merger.append(pdf_info['caminho'])
-                
-                # A cada 10 documentos, liberar memória
-                if (i + 1) % 10 == 0:
-                    gc.collect()
-            except Exception as e:
-                logger.error(f"Erro ao adicionar documento {pdf_info['id']} ao PDF: {str(e)}", exc_info=True)
-                erros += 1
-                processados -= 1  # Ajustar contador
+                except Exception as e:
+                    logger.error(f"Erro ao processar documento {doc['id']}: {str(e)}")
+                    erros += 1
         
         if processados == 0:
-            erros_message = f"Total de erros: {erros}"
-            if erros > 0:
-                erros_message += ". Verifique os logs para mais detalhes."
-                
             return jsonify({
                 'erro': 'Falha no processamento',
-                'mensagem': f'Não foi possível processar nenhum documento do processo {num_processo}. {erros_message}',
-                'total_documentos': len(documentos),
-                'erros': erros
+                'mensagem': 'Não foi possível processar nenhum documento'
             }), 500
             
         # Gerar o arquivo PDF final
@@ -434,31 +389,15 @@ def processar_documento(num_processo, id_documento, tipo_documento, cpf, senha, 
         dict: Informações do documento processado, incluindo caminho para o PDF gerado
     """
     try:
-        try:
-            # Obter o documento
-            resposta = retorna_documento_processo(num_processo, id_documento, cpf=cpf, senha=senha)
-            
-            if resposta is None:
-                logger.error(f"Resposta nula para documento {id_documento}")
-                arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
-                pdf_path = f"{arquivo_temp}.pdf"
-                message = f"Erro ao obter documento {id_documento}: Resposta nula da API"
-                create_info_pdf(message, pdf_path, id_documento, tipo_documento)
-                return {'id': id_documento, 'caminho_pdf': pdf_path}
-            
-            if 'msg_erro' in resposta:
-                logger.error(f"Erro ao obter documento {id_documento}: {resposta['msg_erro']}")
-                # Criar um PDF informativo sobre o erro
-                arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
-                pdf_path = f"{arquivo_temp}.pdf"
-                message = f"Erro ao obter documento {id_documento}: {resposta['msg_erro']}"
-                create_info_pdf(message, pdf_path, id_documento, tipo_documento)
-                return {'id': id_documento, 'caminho_pdf': pdf_path}
-        except Exception as e:
-            logger.error(f"Exceção ao buscar documento {id_documento}: {str(e)}", exc_info=True)
+        # Obter o documento
+        resposta = retorna_documento_processo(num_processo, id_documento, cpf=cpf, senha=senha)
+        
+        if 'msg_erro' in resposta:
+            logger.error(f"Erro ao obter documento {id_documento}: {resposta['msg_erro']}")
+            # Criar um PDF informativo sobre o erro
             arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
             pdf_path = f"{arquivo_temp}.pdf"
-            message = f"Falha ao buscar documento {id_documento}: {str(e)}"
+            message = f"Erro ao obter documento {id_documento}: {resposta['msg_erro']}"
             create_info_pdf(message, pdf_path, id_documento, tipo_documento)
             return {'id': id_documento, 'caminho_pdf': pdf_path}
             
@@ -664,36 +603,12 @@ def add_document_header(pdf_path, doc_id, doc_type):
         doc_type (str): Tipo do documento
     """
     try:
-        # Verificar se o arquivo PDF é válido
-        try:
-            with open(pdf_path, 'rb') as test_file:
-                test_content = test_file.read(20)  # Ler primeiros bytes
-                if not test_content.startswith(b'%PDF'):
-                    logger.error(f"Arquivo {pdf_path} não é um PDF válido")
-                    # Se não for PDF válido, criar um PDF informativo
-                    create_info_pdf(f"Documento {doc_id} não pôde ser processado - arquivo inválido", 
-                                   pdf_path, doc_id, doc_type)
-                    return True  # Retornar True para evitar erro
-        except Exception as e:
-            logger.error(f"Erro ao verificar PDF {pdf_path}: {str(e)}")
-            # Recriar arquivo se estiver corrompido
-            create_info_pdf(f"Documento {doc_id} não pôde ser processado: {str(e)}", 
-                           pdf_path, doc_id, doc_type)
-            return True  # Retornar True para evitar erro
-        
         # Criar um novo arquivo para armazenar o resultado
         temp_output = f"{pdf_path}.temp.pdf"
         
         # Ler o PDF existente
-        try:
-            reader = PdfReader(pdf_path)
-            writer = PdfWriter()
-        except Exception as e:
-            logger.error(f"Erro ao ler PDF {pdf_path}: {str(e)}")
-            # Recriar arquivo se estiver corrompido
-            create_info_pdf(f"Documento {doc_id} não pôde ser lido: {str(e)}", 
-                           pdf_path, doc_id, doc_type)
-            return True  # Retornar True para evitar erro
+        reader = PdfReader(pdf_path)
+        writer = PdfWriter()
         
         # Para cada página do PDF original
         for i in range(len(reader.pages)):
