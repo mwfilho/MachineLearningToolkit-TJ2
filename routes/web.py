@@ -57,10 +57,48 @@ def debug_consulta():
             else:
                 doc_info['documentos_vinculados'] = []
 
+        # Adicionar links para download com diferentes limites
+        download_links = []
+        total_docs = len(dados.get('documentos', []))
+        
+        # Criar links com diferentes limites para download parcial
+        if total_docs > 0:
+            # Modo rápido (10 documentos)
+            download_links.append({
+                'url': f"/api/v1/processo/{num_processo}/pdf-completo?rapido=true",
+                'texto': f"Download Rápido (máx. 10 documentos)"
+            })
+            
+            # Links com limites proporcionais ao total
+            if total_docs > 5:
+                download_links.append({
+                    'url': f"/api/v1/processo/{num_processo}/pdf-completo?limite=5",
+                    'texto': f"Download com 5 documentos"
+                })
+            
+            if total_docs > 10:
+                download_links.append({
+                    'url': f"/api/v1/processo/{num_processo}/pdf-completo?limite=10",
+                    'texto': f"Download com 10 documentos"
+                })
+                
+            if total_docs > 20:
+                download_links.append({
+                    'url': f"/api/v1/processo/{num_processo}/pdf-completo?limite=20",
+                    'texto': f"Download com 20 documentos"
+                })
+            
+            # Download completo
+            download_links.append({
+                'url': f"/api/v1/processo/{num_processo}/pdf-completo",
+                'texto': f"Download Completo (todos os {total_docs} documentos)"
+            })
+
         return render_template('debug.html', 
                            resposta=dados,
                            documentos_hierarquia=docs_principais,
-                           num_processo=num_processo)  
+                           num_processo=num_processo,
+                           download_links=download_links)  
 
     except Exception as e:
         logger.error(f"Erro na consulta de debug: {str(e)}", exc_info=True)

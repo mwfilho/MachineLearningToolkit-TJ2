@@ -469,7 +469,7 @@ def get_extension_for_mimetype(mimetype):
     return mime_to_extension.get(mimetype, '.bin')
 
 
-def gerar_pdf_completo_otimizado(num_processo, cpf, senha):
+def gerar_pdf_completo_otimizado(num_processo, cpf, senha, limite_docs=None):
     """
     Versão otimizada e mais robusta da função para gerar PDF completo de um processo.
     Implementa melhor tratamento de erros e mais opções para converter tipos de documentos.
@@ -478,6 +478,7 @@ def gerar_pdf_completo_otimizado(num_processo, cpf, senha):
         num_processo (str): Número do processo judicial
         cpf (str): CPF/CNPJ do consultante
         senha (str): Senha do consultante
+        limite_docs (int, optional): Limite de documentos a processar. Se None, processa todos.
         
     Returns:
         str: Caminho para o PDF gerado ou None em caso de erro
@@ -508,13 +509,22 @@ def gerar_pdf_completo_otimizado(num_processo, cpf, senha):
         # Configurar arquivo de saída final
         output_path = os.path.join(temp_dir, f"processo_{num_processo}.pdf")
         documentos = dados['documentos']
+        
+        # Limitar o número de documentos se necessário
+        if limite_docs and limite_docs > 0 and limite_docs < len(documentos):
+            logger.info(f"Limitando processamento a {limite_docs} de {len(documentos)} documentos")
+            documentos = documentos[:limite_docs]
+            output_filename = f"processo_{num_processo}_parcial.pdf"
+        else:
+            output_filename = f"processo_{num_processo}.pdf"
+            
         total_docs = len(documentos)
         
-        logger.info(f"Encontrados {total_docs} documentos no processo {num_processo}")
+        logger.info(f"Processando {total_docs} documentos do processo {num_processo}")
         
-        # Usar um tamanho de lote otimizado
-        batch_size = max(5, min(10, total_docs // 5))
-        max_workers = min(5, batch_size)  # Limite de workers por lote
+        # Usar um tamanho de lote menor para evitar timeouts
+        batch_size = min(5, max(2, total_docs // 10))
+        max_workers = min(3, batch_size)  # Limitar paralelismo para melhor estabilidade
         
         # Iniciar com um PDF contendo o cabeçalho
         cabecalho_buffer = gerar_cabecalho_processo(dados)
@@ -541,22 +551,29 @@ def gerar_pdf_completo_otimizado(num_processo, cpf, senha):
             # Processar documentos do lote em paralelo
             batch_results = []
             
+            # Definir um timeout para cada worker
+            timeout_per_doc = 20  # segundos
+            
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_doc = {
-                    executor.submit(
+                future_to_doc = {}
+                
+                # Submeter tarefas com timeout
+                for doc in batch_docs:
+                    future = executor.submit(
                         processar_documento_robusto, 
                         num_processo, doc['id'], 
                         doc.get('tipoDocumento', ''), 
                         cpf, senha, temp_dir
-                    ): doc for doc in batch_docs
-                }
+                    )
+                    future_to_doc[future] = doc
                 
                 # Coletar resultados conforme são concluídos
                 for future in concurrent.futures.as_completed(future_to_doc):
                     doc = future_to_doc[future]
                     try:
-                        resultado = future.result()
+                        # Aguardar conclusão com timeout
+                        resultado = future.result(timeout=timeout_per_doc)
                         if resultado and resultado.get('caminho_pdf'):
                             batch_results.append(resultado)
                             processados += 1
@@ -564,6 +581,15 @@ def gerar_pdf_completo_otimizado(num_processo, cpf, senha):
                         else:
                             logger.warning(f"Documento {doc['id']} não gerou PDF válido")
                             erros += 1
+                    except concurrent.futures.TimeoutError:
+                        logger.warning(f"Timeout ao processar documento {doc['id']}")
+                        # Criar um PDF informativo sobre o timeout
+                        arquivo_temp = os.path.join(temp_dir, f"doc_{doc['id']}")
+                        pdf_path = f"{arquivo_temp}.pdf"
+                        message = f"Timeout ao processar documento {doc['id']} ({doc.get('tipoDocumento', '')})"
+                        create_info_pdf(message, pdf_path, doc['id'], doc.get('tipoDocumento', ''))
+                        batch_results.append({'id': doc['id'], 'caminho_pdf': pdf_path})
+                        erros += 1
                     except Exception as e:
                         logger.error(f"Erro ao processar documento {doc['id']}: {str(e)}")
                         erros += 1

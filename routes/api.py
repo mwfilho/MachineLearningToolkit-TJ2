@@ -194,6 +194,17 @@ def gerar_pdf_completo(num_processo):
                 'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
         
+        # Verificar se há parâmetro de limite
+        try:
+            limite_docs = int(request.args.get('limite', 0))
+        except (ValueError, TypeError):
+            limite_docs = 0
+            
+        # Verificar modo rápido (poucos documentos)
+        modo_rapido = request.args.get('rapido', 'false').lower() == 'true'
+        if modo_rapido and limite_docs == 0:
+            limite_docs = 10  # Em modo rápido, limitar a 10 documentos por padrão
+        
         # Importar a versão mais robusta das funções
         try:
             from fix_pdf_download import gerar_pdf_completo_otimizado, processar_documento_robusto, gerar_cabecalho_processo
@@ -205,20 +216,26 @@ def gerar_pdf_completo(num_processo):
         
         if versao_otimizada:
             # Usar a versão otimizada que implementa internamente todo o processo
-            output_path = gerar_pdf_completo_otimizado(num_processo, cpf, senha)
+            output_path = gerar_pdf_completo_otimizado(num_processo, cpf, senha, limite_docs=limite_docs)
             
             if not output_path:
                 return jsonify({
                     'erro': 'Falha no processamento',
                     'mensagem': 'Não foi possível processar o processo para gerar o PDF completo'
                 }), 500
+            
+            # Nome do arquivo baseado na limitação
+            if limite_docs > 0:
+                download_filename = f'processo_parcial_{num_processo}_{limite_docs}docs.pdf'
+            else:
+                download_filename = f'processo_completo_{num_processo}.pdf'
                 
             # Servir o arquivo para download
             return send_file(
                 output_path,
                 mimetype='application/pdf',
                 as_attachment=True,
-                download_name=f'processo_completo_{num_processo}.pdf'
+                download_name=download_filename
             )
             
         else:
