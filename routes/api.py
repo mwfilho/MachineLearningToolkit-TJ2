@@ -172,7 +172,7 @@ def get_capa_processo(num_processo):
 def gerar_pdf_completo(num_processo):
     """
     Gera um PDF único contendo todos os documentos do processo.
-    Lida com documentos em diferentes formatos (PDF e HTML).
+    Utiliza o endpoint de download de documento para obter cada documento individualmente.
     
     Args:
         num_processo (str): Número do processo judicial
@@ -223,15 +223,18 @@ def gerar_pdf_completo(num_processo):
         processados = 0
         erros = 0
         
+        # Lista para armazenar caminhos dos PDFs temporários
+        pdf_files = []
+        
         # Determinar o máximo de workers baseado na quantidade de documentos
         max_workers = min(10, len(documentos))  # Limita a 10 threads simultâneas
         
-        # Usar ThreadPoolExecutor para processamento paralelo
+        # Usar ThreadPoolExecutor para baixar documentos em paralelo
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Mapear a função de processamento para cada documento
+            # Mapear a função de download para cada documento
             future_to_doc = {
                 executor.submit(
-                    processar_documento, 
+                    baixar_documento, 
                     num_processo, doc['id'], 
                     doc.get('tipoDocumento', ''), 
                     cpf, senha, temp_dir
@@ -248,6 +251,7 @@ def gerar_pdf_completo(num_processo):
                         try:
                             logger.debug(f"Adicionando documento {doc['id']} ao PDF combinado")
                             pdf_merger.append(resultado['caminho_pdf'])
+                            pdf_files.append(resultado['caminho_pdf'])
                             processados += 1
                         except Exception as e:
                             logger.error(f"Erro ao adicionar documento {doc['id']} ao PDF: {str(e)}")
@@ -260,6 +264,10 @@ def gerar_pdf_completo(num_processo):
                     erros += 1
         
         if processados == 0:
+            # Limpar arquivos temporários
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            
             return jsonify({
                 'erro': 'Falha no processamento',
                 'mensagem': 'Não foi possível processar nenhum documento'
@@ -281,6 +289,14 @@ def gerar_pdf_completo(num_processo):
         logger.info(f"PDF gerado com sucesso. Processados: {processados}/{total_docs} documentos ({taxa_sucesso:.1f}%). "
                     f"Tempo total: {tempo_total:.2f} segundos.")
         
+        # Excluir os arquivos PDF individuais para liberar espaço
+        for pdf_file in pdf_files:
+            try:
+                if os.path.exists(pdf_file):
+                    os.remove(pdf_file)
+            except Exception as e:
+                logger.warning(f"Não foi possível excluir arquivo temporário {pdf_file}: {str(e)}")
+        
         return send_file(
             output_path,
             mimetype='application/pdf',
@@ -290,6 +306,14 @@ def gerar_pdf_completo(num_processo):
             
     except Exception as e:
         logger.error(f"API: Erro ao gerar PDF completo: {str(e)}", exc_info=True)
+        # Tentar limpar arquivos temporários se o diretório temp_dir foi criado
+        try:
+            if 'temp_dir' in locals():
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception as cleanup_error:
+            logger.warning(f"Erro ao limpar diretório temporário: {str(cleanup_error)}")
+            
         return jsonify({
             'erro': str(e),
             'mensagem': 'Erro ao gerar PDF completo do processo'
@@ -373,9 +397,147 @@ def gerar_cabecalho_processo(dados_processo):
     return buffer
 
 
+def baixar_documento(num_processo, id_documento, tipo_documento, cpf, senha, temp_dir):
+    """
+    Baixa um documento do processo e o converte para PDF se necessário.
+    Usa o endpoint de download para obter o documento.
+    
+    Args:
+        num_processo (str): Número do processo
+        id_documento (str): ID do documento
+        tipo_documento (str): Tipo do documento
+        cpf (str): CPF/CNPJ do consultante
+        senha (str): Senha do consultante
+        temp_dir (str): Diretório temporário para armazenar arquivos
+        
+    Returns:
+        dict: Informações do documento processado, incluindo caminho para o PDF gerado
+    """
+    try:
+        # Obter o documento usando o endpoint de download
+        resposta = retorna_documento_processo(num_processo, id_documento, cpf=cpf, senha=senha)
+        
+        if 'msg_erro' in resposta:
+            logger.error(f"Erro ao obter documento {id_documento}: {resposta['msg_erro']}")
+            # Criar um PDF informativo sobre o erro
+            arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
+            pdf_path = f"{arquivo_temp}.pdf"
+            message = f"Erro ao obter documento {id_documento}: {resposta['msg_erro']}"
+            create_info_pdf(message, pdf_path, id_documento, tipo_documento)
+            return {'id': id_documento, 'caminho_pdf': pdf_path}
+            
+        mimetype = resposta.get('mimetype', '')
+        conteudo = resposta.get('conteudo', b'')  # Garantir que conteúdo nunca seja None
+        
+        logger.debug(f"Documento {id_documento} baixado com sucesso. Mimetype: {mimetype}, Tamanho: {len(conteudo) if conteudo else 0} bytes")
+        
+        # O restante do processamento é igual ao método original
+        return processar_conteudo_documento(id_documento, tipo_documento, mimetype, conteudo, temp_dir)
+            
+    except Exception as e:
+        logger.error(f"Erro ao baixar documento {id_documento}: {str(e)}", exc_info=True)
+        return None
+
+
+def processar_conteudo_documento(id_documento, tipo_documento, mimetype, conteudo, temp_dir):
+    """
+    Processa o conteúdo de um documento, convertendo-o para PDF se necessário.
+    
+    Args:
+        id_documento (str): ID do documento
+        tipo_documento (str): Tipo do documento
+        mimetype (str): Tipo MIME do conteúdo
+        conteudo (bytes): Conteúdo binário do documento
+        temp_dir (str): Diretório temporário para armazenar arquivos
+        
+    Returns:
+        dict: Informações do documento processado, incluindo caminho para o PDF gerado
+    """
+    try:
+        # Verificar se temos conteúdo válido
+        if not conteudo:
+            logger.warning(f"Documento {id_documento} sem conteúdo")
+            # Criar um PDF informativo sobre o erro
+            arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
+            pdf_path = f"{arquivo_temp}.pdf"
+            message = f"Documento {id_documento} ({tipo_documento}) não possui conteúdo"
+            create_info_pdf(message, pdf_path, id_documento, tipo_documento)
+            return {'id': id_documento, 'caminho_pdf': pdf_path}
+        
+        # Caminho para o arquivo temporário
+        arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
+        
+        # Variável para armazenar o caminho do PDF final
+        pdf_path = None
+            
+        if mimetype == 'application/pdf':
+            # Já é PDF, salvar diretamente
+            pdf_path = f"{arquivo_temp}.pdf"
+            with open(pdf_path, 'wb') as f:
+                f.write(conteudo)
+                
+        elif mimetype == 'text/html':
+            # Converter HTML para PDF
+            html_path = f"{arquivo_temp}.html"
+            pdf_path = f"{arquivo_temp}.pdf"
+            
+            with open(html_path, 'wb') as f:
+                f.write(conteudo)
+                
+            # Gerar PDF a partir do HTML usando WeasyPrint
+            try:
+                html = weasyprint.HTML(filename=html_path)
+                html.write_pdf(pdf_path)
+                logger.debug(f"Arquivo HTML convertido para PDF: {pdf_path}")
+            except Exception as e:
+                logger.error(f"Erro ao converter HTML para PDF: {str(e)}")
+                # Tenta criar um PDF simples com o texto
+                try:
+                    texto_html = conteudo.decode('utf-8', errors='ignore')
+                    create_text_pdf(texto_html, pdf_path, id_documento, tipo_documento)
+                except Exception as ex:
+                    logger.error(f"Erro secundário ao processar HTML: {str(ex)}")
+                    return None
+                
+        elif mimetype in ['text/plain', 'text/xml']:
+            # Converter texto para PDF
+            try:
+                text = conteudo.decode('utf-8', errors='ignore')
+                pdf_path = f"{arquivo_temp}.pdf"
+                create_text_pdf(text, pdf_path, id_documento, tipo_documento)
+            except Exception as e:
+                logger.error(f"Erro ao criar PDF de texto: {str(e)}")
+                return None
+        else:
+            # Para outros tipos, criar um PDF com informações básicas
+            logger.warning(f"Tipo de arquivo não suportado diretamente: {mimetype}")
+            pdf_path = f"{arquivo_temp}.pdf"
+            message = f"Documento {id_documento} ({tipo_documento}) possui formato não suportado: {mimetype}"
+            create_info_pdf(message, pdf_path, id_documento, tipo_documento)
+        
+        # Verificar se o PDF foi gerado com sucesso
+        if pdf_path and os.path.exists(pdf_path):
+            # Adicionar cabeçalho ao PDF com informações do documento
+            try:
+                add_document_header(pdf_path, id_documento, tipo_documento)
+                logger.debug(f"Documento {id_documento} processado com sucesso")
+                return {'id': id_documento, 'caminho_pdf': pdf_path}
+            except Exception as e:
+                logger.error(f"Erro ao adicionar cabeçalho ao PDF: {str(e)}")
+                return {'id': id_documento, 'caminho_pdf': pdf_path}
+        else:
+            logger.error(f"Falha ao gerar PDF para o documento {id_documento}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Erro ao processar conteúdo do documento {id_documento}: {str(e)}", exc_info=True)
+        return None
+
+
 def processar_documento(num_processo, id_documento, tipo_documento, cpf, senha, temp_dir):
     """
     Processa um documento do processo, convertendo para PDF se necessário.
+    Mantido para compatibilidade com código existente.
     
     Args:
         num_processo (str): Número do processo
