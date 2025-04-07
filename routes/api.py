@@ -171,8 +171,15 @@ def get_capa_processo(num_processo):
 @api.route('/processo/<num_processo>/pdf-completo', methods=['GET'])
 def gerar_pdf_completo(num_processo):
     """
-    Gera um PDF único contendo todos os documentos do processo.
-    Implementação robusta que suporta falhas parciais.
+    Gera um PDF único contendo documentos do processo.
+    Aceita parâmetros para controlar quais documentos incluir.
+    
+    Parâmetros de consulta:
+        inicio: Índice do primeiro documento a incluir (padrão: 0)
+        fim: Índice do último documento a incluir (padrão: máximo permitido)
+        max_docs: Número máximo de documentos a incluir (padrão: 10)
+        ids: Lista de IDs específicos de documentos, separados por vírgula (opcional)
+        capa_detalhada: Se true, inclui informações detalhadas sobre o processo na capa (padrão: true)
     
     Args:
         num_processo (str): Número do processo judicial
@@ -181,6 +188,35 @@ def gerar_pdf_completo(num_processo):
         O arquivo PDF combinado para download ou uma mensagem de erro
     """
     from datetime import datetime
+    
+    # Obter parâmetros da consulta
+    inicio = request.args.get('inicio', '0')
+    fim = request.args.get('fim', '-1')
+    max_docs = request.args.get('max_docs', '10')
+    ids_str = request.args.get('ids', '')
+    capa_detalhada = request.args.get('capa_detalhada', 'true').lower() == 'true'
+    
+    # Converter parâmetros para valores numéricos
+    try:
+        inicio = int(inicio)
+        fim = int(fim)
+        max_docs = int(max_docs)
+    except ValueError:
+        return jsonify({
+            'erro': 'Parâmetros inválidos',
+            'mensagem': 'Os parâmetros inicio, fim e max_docs devem ser números inteiros'
+        }), 400
+    
+    # Limitar max_docs para evitar sobrecarga
+    max_docs = min(max_docs, 50)
+    
+    # Processar lista de IDs específicos, se fornecida
+    ids_especificos = []
+    if ids_str:
+        try:
+            ids_especificos = [id.strip() for id in ids_str.split(',') if id.strip()]
+        except Exception:
+            logger.warning(f"Formato inválido para parâmetro 'ids': {ids_str}")
     
     # Buffer para o PDF final
     buffer = io.BytesIO()
@@ -192,7 +228,13 @@ def gerar_pdf_completo(num_processo):
         'num_processo': num_processo,
         'total_documentos': 0,
         'documentos_processados': 0,
-        'erro_consulta': None
+        'documentos_com_erro': 0,
+        'erro_consulta': None,
+        'inicio': inicio,
+        'fim': fim,
+        'max_docs': max_docs,
+        'ids_especificos': ids_especificos,
+        'detalhes_processo': {}
     }
     
     # Obter credenciais
@@ -206,17 +248,69 @@ def gerar_pdf_completo(num_processo):
             resposta_processo = retorna_processo(num_processo, cpf=cpf, senha=senha)
             dados = extract_mni_data(resposta_processo)
             
+            # Guardar detalhes do processo para a capa
+            if dados.get('sucesso'):
+                if 'processo' in dados:
+                    status_info['detalhes_processo'] = {
+                        'classe_processual': dados['processo'].get('classeProcessual', 'N/A'),
+                        'orgao_julgador': dados['processo'].get('orgaoJulgador', 'N/A'),
+                        'data_ajuizamento': dados['processo'].get('dataAjuizamento', 'N/A'),
+                        'valor_causa': dados['processo'].get('valorCausa', 'N/A'),
+                        'partes': []
+                    }
+                    
+                    # Adicionar informações sobre as partes
+                    if 'polos' in dados['processo']:
+                        for polo in dados['processo']['polos']:
+                            polo_tipo = 'Autor' if polo.get('polo') == 'AT' else 'Réu' if polo.get('polo') == 'PA' else polo.get('polo', 'Outro')
+                            
+                            for parte in polo.get('partes', []):
+                                nome_parte = parte.get('nome', 'N/A')
+                                advogados = [adv.get('nome', 'N/A') for adv in parte.get('advogados', [])]
+                                
+                                status_info['detalhes_processo']['partes'].append({
+                                    'tipo': polo_tipo,
+                                    'nome': nome_parte,
+                                    'advogados': advogados
+                                })
+            
             if dados.get('sucesso') and dados.get('documentos'):
                 documentos = dados['documentos']
                 status_info['total_documentos'] = len(documentos)
                 
-                # Adicionar máximo de 3 documentos (limitar para evitar timeouts)
-                max_docs = min(3, len(documentos))
-                for i in range(max_docs):
-                    doc = documentos[i]
-                    doc_id = doc['id']
+                # Determinar quais documentos processar
+                documentos_para_processar = []
+                
+                if ids_especificos:
+                    # Filtrar por IDs específicos
+                    id_map = {doc['id']: doc for doc in documentos}
+                    documentos_para_processar = [id_map[doc_id] for doc_id in ids_especificos if doc_id in id_map]
+                    # Registrar quais IDs não foram encontrados
+                    ids_nao_encontrados = [doc_id for doc_id in ids_especificos if doc_id not in id_map]
+                    if ids_nao_encontrados:
+                        logger.warning(f"IDs não encontrados: {ids_nao_encontrados}")
+                else:
+                    # Aplicar intervalo (inicio-fim)
+                    if fim < 0:
+                        fim = len(documentos) - 1
                     
-                    # Tentar obter o documento com timeout reduzido
+                    # Garantir limites válidos
+                    inicio = max(0, min(inicio, len(documentos) - 1))
+                    fim = max(inicio, min(fim, len(documentos) - 1))
+                    
+                    # Aplicar limite máximo de documentos
+                    fim = min(fim, inicio + max_docs - 1)
+                    
+                    # Selecionar documentos no intervalo
+                    documentos_para_processar = documentos[inicio:fim + 1]
+                
+                # Processar documentos selecionados
+                for doc in documentos_para_processar:
+                    doc_id = doc['id']
+                    tipo_doc = doc.get('tipoDocumento', 'Documento')
+                    data_doc = doc.get('dataDocumento', '')
+                    
+                    # Tentar obter o documento
                     try:
                         resposta = retorna_documento_processo(num_processo, doc_id, cpf=cpf, senha=senha)
                         
@@ -228,32 +322,134 @@ def gerar_pdf_completo(num_processo):
                             if mimetype == 'application/pdf':
                                 # Já é PDF, usar diretamente
                                 doc_buffer = io.BytesIO(conteudo)
+                                
+                                # Adicionar separador/cabeçalho como PDF
+                                sep_buffer = io.BytesIO()
+                                sep = canvas.Canvas(sep_buffer, pagesize=letter)
+                                sep.setFont("Helvetica-Bold", 14)
+                                sep.drawString(72, 750, f"Documento {doc_id} - {tipo_doc}")
+                                if data_doc:
+                                    sep.setFont("Helvetica", 12)
+                                    sep.drawString(72, 730, f"Data: {data_doc}")
+                                sep.setFont("Helvetica", 12)
+                                sep.drawString(72, 710, "Tipo: PDF")
+                                
+                                # Linha divisória
+                                sep.setStrokeColorRGB(0.8, 0.8, 0.8)
+                                sep.setLineWidth(1)
+                                sep.line(72, 690, 540, 690)
+                                
+                                sep.showPage()
+                                sep.save()
+                                sep_buffer.seek(0)
+                                
+                                # Adicionar separador e documento ao PDF
+                                pdf_merger.append(sep_buffer)
                                 pdf_merger.append(doc_buffer)
                                 status_info['documentos_processados'] += 1
                             else:
-                                # Criar PDF simples para outros tipos
+                                # Criar PDF para outros tipos
                                 doc_buffer = io.BytesIO()
                                 pdf = canvas.Canvas(doc_buffer, pagesize=letter)
+                                
+                                # Cabeçalho do documento
                                 pdf.setFont("Helvetica-Bold", 14)
-                                pdf.drawString(72, 750, f"Documento {doc_id}")
+                                pdf.drawString(72, 750, f"Documento {doc_id} - {tipo_doc}")
+                                if data_doc:
+                                    pdf.setFont("Helvetica", 12)
+                                    pdf.drawString(72, 730, f"Data: {data_doc}")
+                                
+                                # Tipo de conteúdo
                                 pdf.setFont("Helvetica", 12)
-                                pdf.drawString(72, 720, f"Tipo: {mimetype}")
-                                pdf.drawString(72, 700, f"Tamanho: {len(conteudo)} bytes")
+                                pdf.drawString(72, 710, f"Tipo: {mimetype}")
+                                pdf.drawString(72, 690, f"Tamanho: {len(conteudo)} bytes")
+                                
+                                # Linha divisória
+                                pdf.setStrokeColorRGB(0.8, 0.8, 0.8)
+                                pdf.setLineWidth(1)
+                                pdf.line(72, 670, 540, 670)
+                                
+                                # Tentar incluir conteúdo para alguns formatos
+                                if mimetype in ['text/plain', 'text/html', 'text/xml']:
+                                    try:
+                                        texto = conteudo.decode('utf-8', errors='ignore')
+                                        # Limite para evitar textos muito longos
+                                        if len(texto) > 5000:
+                                            texto = texto[:5000] + "...\n[Texto truncado por ser muito longo]"
+                                        
+                                        # Quebrar o texto em linhas
+                                        y = 650
+                                        pdf.setFont("Courier", 10)
+                                        
+                                        linhas = texto.split('\n')
+                                        for i, linha in enumerate(linhas):
+                                            if y < 50:  # Verificar espaço na página
+                                                pdf.showPage()
+                                                y = 750
+                                                pdf.setFont("Courier", 10)
+                                            
+                                            # Truncar linhas muito longas
+                                            if len(linha) > 80:
+                                                linha = linha[:77] + "..."
+                                                
+                                            pdf.drawString(72, y, linha)
+                                            y -= 12
+                                            
+                                            # Limitar número de linhas
+                                            if i > 300:
+                                                pdf.drawString(72, y, "[...]")
+                                                break
+                                    except Exception as e:
+                                        pdf.setFont("Helvetica", 12)
+                                        pdf.setFillColorRGB(0.8, 0.2, 0.2)
+                                        pdf.drawString(72, 650, f"Erro ao processar texto: {str(e)}")
+                                else:
+                                    pdf.setFont("Helvetica", 12)
+                                    pdf.drawString(72, 650, "Conteúdo em formato binário não pode ser exibido diretamente.")
+                                    pdf.drawString(72, 630, "Use o endpoint de download específico para este documento.")
+                                
                                 pdf.showPage()
                                 pdf.save()
                                 doc_buffer.seek(0)
+                                
+                                # Adicionar ao PDF final
                                 pdf_merger.append(doc_buffer)
                                 status_info['documentos_processados'] += 1
+                        else:
+                            # Documento com erro, gerar página informativa
+                            erro_msg = resposta.get('msg_erro', 'Erro desconhecido ao obter documento')
+                            erro_buffer = io.BytesIO()
+                            erro_pdf = canvas.Canvas(erro_buffer, pagesize=letter)
+                            
+                            erro_pdf.setFont("Helvetica-Bold", 14)
+                            erro_pdf.drawString(72, 750, f"Documento {doc_id} - {tipo_doc}")
+                            if data_doc:
+                                erro_pdf.setFont("Helvetica", 12)
+                                erro_pdf.drawString(72, 730, f"Data: {data_doc}")
+                            
+                            erro_pdf.setFont("Helvetica-Bold", 12)
+                            erro_pdf.setFillColorRGB(0.8, 0.2, 0.2)
+                            erro_pdf.drawString(72, 700, "ERRO AO OBTER DOCUMENTO")
+                            
+                            erro_pdf.setFont("Helvetica", 12)
+                            erro_pdf.drawString(72, 680, erro_msg)
+                            
+                            erro_pdf.showPage()
+                            erro_pdf.save()
+                            erro_buffer.seek(0)
+                            
+                            pdf_merger.append(erro_buffer)
+                            status_info['documentos_com_erro'] += 1
                     except Exception as e:
                         logger.error(f"Erro ao processar documento {doc_id}: {str(e)}")
-                        # Continuar para o próximo documento
+                        status_info['documentos_com_erro'] += 1
         else:
             status_info['erro_consulta'] = "Credenciais MNI não fornecidas"
     except Exception as e:
         logger.error(f"Erro ao consultar processo: {str(e)}")
         status_info['erro_consulta'] = str(e)
     
-    # Criar página de capa com informações do status
+    # Criar página de capa com informações detalhadas do processo
     capa_buffer = io.BytesIO()
     capa = canvas.Canvas(capa_buffer, pagesize=letter)
     
@@ -261,7 +457,7 @@ def gerar_pdf_completo(num_processo):
     capa.setFont("Helvetica-Bold", 16)
     capa.drawString(72, 750, f"PROCESSO {num_processo}")
     
-    # Informações de status
+    # Informações básicas
     capa.setFont("Helvetica", 12)
     y = 720
     capa.drawString(72, y, f"PDF gerado em: {status_info['data_geracao']}")
@@ -274,16 +470,144 @@ def gerar_pdf_completo(num_processo):
         capa.setFont("Helvetica", 12)
         capa.drawString(72, y, status_info['erro_consulta'])
     else:
+        # Informações sobre os documentos
         capa.drawString(72, y, f"Total de documentos no processo: {status_info['total_documentos']}")
         y -= 20
-        capa.drawString(72, y, f"Documentos incluídos neste PDF: {status_info['documentos_processados']}")
         
-        if status_info['documentos_processados'] < status_info['total_documentos']:
+        if ids_especificos:
+            capa.drawString(72, y, f"Documentos selecionados por ID: {', '.join(ids_especificos)}")
+        else:
+            capa.drawString(72, y, f"Intervalo de documentos: {status_info['inicio']} a {status_info['fim']}")
+        y -= 20
+        
+        capa.drawString(72, y, f"Documentos incluídos neste PDF: {status_info['documentos_processados']}")
+        y -= 20
+        
+        if status_info['documentos_com_erro'] > 0:
+            capa.setFillColorRGB(0.8, 0.2, 0.2)
+            capa.drawString(72, y, f"Documentos com erro: {status_info['documentos_com_erro']}")
+            capa.setFillColorRGB(0, 0, 0)
             y -= 20
-            capa.setFillColorRGB(0.8, 0.2, 0.2)  # Vermelho para alerta
-            capa.drawString(72, y, f"Atenção: Por motivos de desempenho, apenas os primeiros {min(3, status_info['total_documentos'])}")
-            y -= 15
-            capa.drawString(72, y, "documentos foram incluídos neste PDF.")
+        
+        # Adicionar informações detalhadas do processo, se solicitado
+        if capa_detalhada and status_info['detalhes_processo']:
+            y -= 10
+            capa.setFont("Helvetica-Bold", 14)
+            capa.drawString(72, y, "INFORMAÇÕES DO PROCESSO")
+            y -= 20
+            
+            capa.setFont("Helvetica", 12)
+            detalhes = status_info['detalhes_processo']
+            
+            # Classe processual
+            if detalhes.get('classe_processual'):
+                capa.drawString(72, y, f"Classe: {detalhes['classe_processual']}")
+                y -= 20
+            
+            # Órgão julgador
+            if detalhes.get('orgao_julgador'):
+                capa.drawString(72, y, f"Órgão Julgador: {detalhes['orgao_julgador']}")
+                y -= 20
+            
+            # Data de ajuizamento
+            if detalhes.get('data_ajuizamento'):
+                data_str = detalhes['data_ajuizamento']
+                # Formatar data se estiver no formato YYYYMMDD
+                if isinstance(data_str, str) and len(data_str) == 8:
+                    try:
+                        data_str = f"{data_str[6:8]}/{data_str[4:6]}/{data_str[0:4]}"
+                    except:
+                        pass
+                capa.drawString(72, y, f"Data de Ajuizamento: {data_str}")
+                y -= 20
+            
+            # Valor da causa
+            if detalhes.get('valor_causa'):
+                valor = detalhes['valor_causa']
+                if isinstance(valor, (int, float)):
+                    valor = f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+                capa.drawString(72, y, f"Valor da Causa: {valor}")
+                y -= 30
+            
+            # Partes do processo
+            if detalhes.get('partes'):
+                capa.setFont("Helvetica-Bold", 14)
+                capa.drawString(72, y, "PARTES DO PROCESSO")
+                y -= 20
+                
+                # Agrupar partes por tipo (autor/réu)
+                partes_por_tipo = {}
+                for parte in detalhes['partes']:
+                    tipo = parte.get('tipo', 'Outro')
+                    if tipo not in partes_por_tipo:
+                        partes_por_tipo[tipo] = []
+                    partes_por_tipo[tipo].append(parte)
+                
+                # Exibir partes agrupadas
+                capa.setFont("Helvetica", 12)
+                for tipo, lista_partes in partes_por_tipo.items():
+                    if y < 100:  # Verificar se precisa de nova página
+                        capa.showPage()
+                        y = 750
+                        capa.setFont("Helvetica", 12)
+                    
+                    capa.setFont("Helvetica-Bold", 12)
+                    capa.drawString(72, y, f"{tipo}:")
+                    y -= 20
+                    
+                    capa.setFont("Helvetica", 12)
+                    for parte in lista_partes:
+                        capa.drawString(90, y, parte.get('nome', 'N/A'))
+                        y -= 15
+                        
+                        # Advogados
+                        if parte.get('advogados'):
+                            capa.setFont("Helvetica-Oblique", 10)
+                            capa.drawString(108, y, f"Advogados: {', '.join(parte['advogados'])}")
+                            capa.setFont("Helvetica", 12)
+                            y -= 20
+                        else:
+                            y -= 5
+                    
+                    y -= 10  # Espaço extra entre grupos
+        
+        # Mostrar opções para geração de PDF por partes
+        if status_info['total_documentos'] > 10:
+            if y < 150:  # Se não tiver espaço suficiente, criar nova página
+                capa.showPage()
+                y = 750
+                capa.setFont("Helvetica-Bold", 14)
+            else:
+                y -= 20
+            
+            capa.setFont("Helvetica-Bold", 14)
+            capa.drawString(72, y, "GERAR PDF POR PARTES")
+            y -= 20
+            
+            capa.setFont("Helvetica", 12)
+            capa.drawString(72, y, "Para gerar PDFs parciais, use os seguintes parâmetros de consulta:")
+            y -= 20
+            
+            # Mostrar exemplos de intervalos
+            capa.setFont("Courier", 10)
+            total_docs = status_info['total_documentos']
+            
+            # Calcular intervalos recomendados (dividir em grupos de 10)
+            intervalos = []
+            for i in range(0, total_docs, 10):
+                fim = min(i + 9, total_docs - 1)
+                intervalos.append(f"inicio={i}&fim={fim}")
+            
+            # Mostrar intervalos recomendados
+            for i, intervalo in enumerate(intervalos[:5]):  # Mostrar até 5 intervalos
+                capa.drawString(90, y, f"{i+1}. {intervalo}")
+                y -= 15
+            
+            if len(intervalos) > 5:
+                capa.drawString(90, y, "...")
+                y -= 15
+                capa.drawString(90, y, f"{len(intervalos)}. inicio={total_docs-10}&fim={total_docs-1}")
+                y -= 15
     
     capa.showPage()
     capa.save()
