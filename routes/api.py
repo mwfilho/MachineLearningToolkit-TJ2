@@ -172,7 +172,7 @@ def get_capa_processo(num_processo):
 def gerar_pdf_completo(num_processo):
     """
     Gera um PDF único contendo todos os documentos do processo.
-    Utiliza o endpoint de download de documento para obter cada documento individualmente.
+    Obtém documentos de forma sequencial para evitar problemas de concorrência.
     
     Args:
         num_processo (str): Número do processo judicial
@@ -180,6 +180,7 @@ def gerar_pdf_completo(num_processo):
     Returns:
         O arquivo PDF combinado para download ou uma mensagem de erro
     """
+    temp_dir = None
     try:
         start_time = time.time()
         logger.debug(f"API: Iniciando geração do PDF completo para o processo {num_processo}")
@@ -226,42 +227,58 @@ def gerar_pdf_completo(num_processo):
         # Lista para armazenar caminhos dos PDFs temporários
         pdf_files = []
         
-        # Determinar o máximo de workers baseado na quantidade de documentos
-        max_workers = min(10, len(documentos))  # Limita a 10 threads simultâneas
-        
-        # Usar ThreadPoolExecutor para baixar documentos em paralelo
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Mapear a função de download para cada documento
-            future_to_doc = {
-                executor.submit(
-                    baixar_documento, 
-                    num_processo, doc['id'], 
-                    doc.get('tipoDocumento', ''), 
-                    cpf, senha, temp_dir
-                ): doc 
-                for doc in documentos
-            }
-            
-            # Processar resultados conforme forem concluídos
-            for future in concurrent.futures.as_completed(future_to_doc):
-                doc = future_to_doc[future]
-                try:
-                    resultado = future.result()
-                    if resultado and resultado.get('caminho_pdf'):
-                        try:
-                            logger.debug(f"Adicionando documento {doc['id']} ao PDF combinado")
-                            pdf_merger.append(resultado['caminho_pdf'])
-                            pdf_files.append(resultado['caminho_pdf'])
-                            processados += 1
-                        except Exception as e:
-                            logger.error(f"Erro ao adicionar documento {doc['id']} ao PDF: {str(e)}")
-                            erros += 1
-                    else:
-                        logger.warning(f"Documento {doc['id']} não gerou PDF válido")
-                        erros += 1
-                except Exception as e:
-                    logger.error(f"Erro ao processar documento {doc['id']}: {str(e)}")
+        # Processar documentos sequencialmente
+        for doc in documentos:
+            try:
+                doc_id = doc['id']
+                tipo_doc = doc.get('tipoDocumento', 'Documento')
+                
+                logger.debug(f"Processando documento {doc_id} ({tipo_doc})")
+                
+                # Obter o documento
+                resposta = retorna_documento_processo(num_processo, doc_id, cpf=cpf, senha=senha)
+                
+                if 'msg_erro' in resposta:
+                    logger.error(f"Erro ao obter documento {doc_id}: {resposta['msg_erro']}")
+                    erro_path = criar_pdf_erro(temp_dir, doc_id, tipo_doc, resposta['msg_erro'])
+                    if erro_path:
+                        pdf_merger.append(erro_path)
+                        pdf_files.append(erro_path)
+                        processados += 1
+                    continue
+                
+                # Processar o conteúdo do documento
+                mimetype = resposta.get('mimetype', '')
+                conteudo = resposta.get('conteudo', b'')
+                
+                logger.debug(f"Documento {doc_id} obtido: tipo={mimetype}, tamanho={len(conteudo) if conteudo else 0} bytes")
+                
+                # Verificar se temos conteúdo válido
+                if not conteudo:
+                    logger.warning(f"Documento {doc_id} sem conteúdo")
+                    erro_path = criar_pdf_erro(temp_dir, doc_id, tipo_doc, "Documento sem conteúdo")
+                    if erro_path:
+                        pdf_merger.append(erro_path)
+                        pdf_files.append(erro_path)
+                        processados += 1
+                    continue
+                
+                # Converter documento para PDF
+                pdf_path = converter_para_pdf(temp_dir, doc_id, tipo_doc, mimetype, conteudo)
+                
+                if pdf_path and os.path.exists(pdf_path):
+                    # Adicionar ao PDF combinado
+                    logger.debug(f"Adicionando documento {doc_id} ao PDF combinado")
+                    pdf_merger.append(pdf_path)
+                    pdf_files.append(pdf_path)
+                    processados += 1
+                else:
+                    logger.error(f"Falha ao processar documento {doc_id}")
                     erros += 1
+                    
+            except Exception as e:
+                logger.error(f"Erro ao processar documento {doc['id']}: {str(e)}", exc_info=True)
+                erros += 1
         
         if processados == 0:
             # Limpar arquivos temporários
@@ -308,7 +325,7 @@ def gerar_pdf_completo(num_processo):
         logger.error(f"API: Erro ao gerar PDF completo: {str(e)}", exc_info=True)
         # Tentar limpar arquivos temporários se o diretório temp_dir foi criado
         try:
-            if 'temp_dir' in locals():
+            if temp_dir and os.path.exists(temp_dir):
                 import shutil
                 shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as cleanup_error:
@@ -395,6 +412,117 @@ def gerar_cabecalho_processo(dados_processo):
     
     buffer.seek(0)
     return buffer
+
+
+def converter_para_pdf(temp_dir, doc_id, tipo_doc, mimetype, conteudo):
+    """
+    Converte o conteúdo de um documento para PDF.
+    
+    Args:
+        temp_dir (str): Diretório temporário para armazenar arquivos
+        doc_id (str): ID do documento
+        tipo_doc (str): Tipo do documento
+        mimetype (str): Tipo MIME do conteúdo
+        conteudo (bytes): Conteúdo binário do documento
+        
+    Returns:
+        str: Caminho para o arquivo PDF gerado, ou None em caso de erro
+    """
+    try:
+        # Caminho para o arquivo temporário
+        arquivo_temp = os.path.join(temp_dir, f"doc_{doc_id}")
+        
+        # Variável para armazenar o caminho do PDF final
+        pdf_path = None
+            
+        if mimetype == 'application/pdf':
+            # Já é PDF, salvar diretamente
+            pdf_path = f"{arquivo_temp}.pdf"
+            with open(pdf_path, 'wb') as f:
+                f.write(conteudo)
+                
+        elif mimetype == 'text/html':
+            # Converter HTML para PDF
+            html_path = f"{arquivo_temp}.html"
+            pdf_path = f"{arquivo_temp}.pdf"
+            
+            with open(html_path, 'wb') as f:
+                f.write(conteudo)
+                
+            # Gerar PDF a partir do HTML usando WeasyPrint
+            try:
+                html = weasyprint.HTML(filename=html_path)
+                html.write_pdf(pdf_path)
+                logger.debug(f"Arquivo HTML convertido para PDF: {pdf_path}")
+            except Exception as e:
+                logger.error(f"Erro ao converter HTML para PDF: {str(e)}")
+                # Tenta criar um PDF simples com o texto
+                try:
+                    texto_html = conteudo.decode('utf-8', errors='ignore')
+                    create_text_pdf(texto_html, pdf_path, doc_id, tipo_doc)
+                except Exception as ex:
+                    logger.error(f"Erro secundário ao processar HTML: {str(ex)}")
+                    return None
+                
+        elif mimetype in ['text/plain', 'text/xml']:
+            # Converter texto para PDF
+            try:
+                text = conteudo.decode('utf-8', errors='ignore')
+                pdf_path = f"{arquivo_temp}.pdf"
+                create_text_pdf(text, pdf_path, doc_id, tipo_doc)
+            except Exception as e:
+                logger.error(f"Erro ao criar PDF de texto: {str(e)}")
+                return None
+        else:
+            # Para outros tipos, criar um PDF com informações básicas
+            logger.warning(f"Tipo de arquivo não suportado diretamente: {mimetype}")
+            pdf_path = f"{arquivo_temp}.pdf"
+            message = f"Documento {doc_id} ({tipo_doc}) possui formato não suportado: {mimetype}"
+            create_info_pdf(message, pdf_path, doc_id, tipo_doc)
+        
+        # Verificar se o PDF foi gerado com sucesso
+        if pdf_path and os.path.exists(pdf_path):
+            # Adicionar cabeçalho ao PDF com informações do documento
+            try:
+                add_document_header(pdf_path, doc_id, tipo_doc)
+                logger.debug(f"Documento {doc_id} processado com sucesso")
+                return pdf_path
+            except Exception as e:
+                logger.error(f"Erro ao adicionar cabeçalho ao PDF: {str(e)}")
+                return pdf_path
+        else:
+            logger.error(f"Falha ao gerar PDF para o documento {doc_id}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Erro ao converter documento {doc_id} para PDF: {str(e)}", exc_info=True)
+        return None
+
+
+def criar_pdf_erro(temp_dir, doc_id, tipo_doc, mensagem_erro):
+    """
+    Cria um PDF com informações sobre um erro relacionado a um documento.
+    
+    Args:
+        temp_dir (str): Diretório temporário para armazenar arquivos
+        doc_id (str): ID do documento
+        tipo_doc (str): Tipo do documento
+        mensagem_erro (str): Mensagem de erro
+        
+    Returns:
+        str: Caminho para o arquivo PDF gerado, ou None em caso de erro
+    """
+    try:
+        arquivo_temp = os.path.join(temp_dir, f"doc_{doc_id}")
+        pdf_path = f"{arquivo_temp}.pdf"
+        create_info_pdf(mensagem_erro, pdf_path, doc_id, tipo_doc)
+        
+        if os.path.exists(pdf_path):
+            return pdf_path
+        return None
+    except Exception as e:
+        logger.error(f"Erro ao criar PDF de erro para o documento {doc_id}: {str(e)}")
+        return None
 
 
 def baixar_documento(num_processo, id_documento, tipo_documento, cpf, senha, temp_dir):
