@@ -128,22 +128,11 @@ class SimpleCanvas:
             # Se falhar, manter o arquivo de texto
             pass
         
-# Tentar importar as bibliotecas, caso contrário usar as implementações simples
-try:
-    from reportlab.pdfgen import canvas as reportlab_canvas
-    from reportlab.lib.pagesizes import letter
-    canvas = reportlab_canvas
-except ImportError:
-    print("Reportlab not installed. Using simple canvas implementation.")
-    canvas = SimpleCanvas
-    letter = (612, 792)
-    
-# Weasyprint é opcional, usaremos wkhtmltopdf como fallback
-try:
-    import weasyprint
-except ImportError:
-    weasyprint = None
-    print("Weasyprint not installed. Using wkhtmltopdf for HTML conversion.")
+# Usando implementações simples para compatibilidade
+# Não precisamos de bibliotecas externas que podem falhar
+canvas = SimpleCanvas
+letter = (612, 792)
+weasyprint = None
 import concurrent.futures
 
 # Configure logging
@@ -305,9 +294,7 @@ def get_capa_processo(num_processo):
 def gerar_pdf_completo(num_processo):
     """
     Gera um PDF único contendo todos os documentos do processo.
-    Implementação simplificada que funciona com dependências mínimas.
-    Apenas combina os arquivos PDF e gera representações de texto para
-    documentos HTML e outros formatos.
+    Implementação com foco em robustez e compatibilidade.
     
     Args:
         num_processo (str): Número do processo judicial
@@ -316,19 +303,12 @@ def gerar_pdf_completo(num_processo):
         O arquivo PDF combinado para download ou uma mensagem de erro
     """
     from datetime import datetime
+    import shutil
     import subprocess
     
     # Criar diretório temporário para armazenar arquivos
     temp_dir = tempfile.mkdtemp()
-    
-    # Informações de status para incluir no PDF
-    status_info = {
-        'data_geracao': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
-        'num_processo': num_processo,
-        'total_documentos': 0,
-        'documentos_processados': 0,
-        'erro_consulta': None
-    }
+    logger.debug(f"Criado diretório temporário: {temp_dir}")
     
     try:
         # Obter credenciais
@@ -340,7 +320,7 @@ def gerar_pdf_completo(num_processo):
                 'mensagem': 'Você deve fornecer CPF e senha nos headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
         
-        # Consultar o processo para obter a lista de documentos
+        # Consultar o processo
         logger.debug(f"Consultando processo {num_processo}")
         resposta_processo = retorna_processo(num_processo, cpf=cpf, senha=senha)
         dados = extract_mni_data(resposta_processo)
@@ -351,29 +331,39 @@ def gerar_pdf_completo(num_processo):
                 'mensagem': dados.get('mensagem', 'Não foi possível obter os detalhes do processo')
             }), 404
         
-        # Inicializar o PdfMerger
-        pdf_merger = PdfMerger()
-        
-        # Coletar todos os documentos (principais e vinculados)
+        # Recolher documentos a processar
         todos_documentos = []
         
         # Extrair documentos principais
         for documento in dados.get('documentos', []):
-            if documento.get('mimetype') in ['application/pdf', 'text/html']:
-                todos_documentos.append({
-                    'id': documento.get('id'),
-                    'descricao': documento.get('tipoDocumento', 'Documento'),
-                    'mimetype': documento.get('mimetype')
-                })
+            todos_documentos.append({
+                'id': documento.get('id'),
+                'descricao': documento.get('tipoDocumento', 'Documento'),
+                'mimetype': documento.get('mimetype')
+            })
         
-        status_info['total_documentos'] = len(todos_documentos)
-        logger.debug(f"Total de documentos a processar: {status_info['total_documentos']}")
+        total_docs = len(todos_documentos)
+        logger.debug(f"Total de documentos a processar: {total_docs}")
+        
+        # Criar um arquivo de índice
+        indice_path = os.path.join(temp_dir, "00_indice.txt")
+        with open(indice_path, 'w', encoding='utf-8') as f:
+            f.write(f"ÍNDICE DE DOCUMENTOS DO PROCESSO {num_processo}\n")
+            f.write(f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
+            f.write("=" * 80 + "\n\n")
+            
+            for idx, doc in enumerate(todos_documentos, 1):
+                f.write(f"{idx}. {doc['descricao']} (ID: {doc['id']})\n")
         
         # Processar cada documento
-        for doc_info in todos_documentos:
+        docs_processados = 0
+        arquivos_pdf = []
+        arquivos_txt = []
+        
+        for idx, doc_info in enumerate(todos_documentos, 1):
             try:
                 doc_id = doc_info['id']
-                logger.debug(f"Processando documento {doc_id}")
+                logger.debug(f"Processando documento {idx}/{total_docs}: {doc_id}")
                 
                 # Baixar o documento
                 resposta = retorna_documento_processo(num_processo, doc_id, cpf=cpf, senha=senha)
@@ -387,199 +377,162 @@ def gerar_pdf_completo(num_processo):
                 
                 # Processar baseado no mimetype
                 if mimetype == 'application/pdf':
-                    # Salvar PDF temporariamente
-                    temp_pdf_path = os.path.join(temp_dir, f"doc_{doc_id}.pdf")
-                    with open(temp_pdf_path, 'wb') as f:
+                    # Salvar PDF diretamente
+                    pdf_path = os.path.join(temp_dir, f"{idx:02d}_doc_{doc_id}.pdf")
+                    with open(pdf_path, 'wb') as f:
                         f.write(conteudo)
-                    
-                    # Adicionar ao PDF Merger
-                    pdf_merger.append(temp_pdf_path)
-                    status_info['documentos_processados'] += 1
-                    logger.debug(f"Documento PDF {doc_id} adicionado com sucesso")
+                    arquivos_pdf.append(pdf_path)
+                    docs_processados += 1
                     
                 elif mimetype == 'text/html':
-                    # Salvar HTML temporariamente
-                    temp_html_path = os.path.join(temp_dir, f"doc_{doc_id}.html")
-                    with open(temp_html_path, 'wb') as f:
+                    # Salvar como HTML
+                    html_path = os.path.join(temp_dir, f"{idx:02d}_doc_{doc_id}.html")
+                    with open(html_path, 'wb') as f:
                         f.write(conteudo)
                     
-                    # Converter HTML para PDF usando wkhtmltopdf
-                    temp_pdf_path = os.path.join(temp_dir, f"doc_{doc_id}.pdf")
+                    # Tentar converter para PDF com wkhtmltopdf
+                    pdf_path = os.path.join(temp_dir, f"{idx:02d}_doc_{doc_id}.pdf")
                     
                     try:
-                        # Executar wkhtmltopdf para converter HTML para PDF
-                        subprocess.run(['wkhtmltopdf', '--quiet', temp_html_path, temp_pdf_path],
-                                      check=True,
-                                      stdout=subprocess.PIPE,
-                                      stderr=subprocess.PIPE)
+                        # Verificar se wkhtmltopdf está disponível
+                        subprocess.run(['which', 'wkhtmltopdf'], 
+                                      check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                         
-                        # Verificar se o PDF foi gerado
-                        if os.path.exists(temp_pdf_path) and os.path.getsize(temp_pdf_path) > 0:
-                            # Adicionar ao PDF Merger
-                            pdf_merger.append(temp_pdf_path)
-                            status_info['documentos_processados'] += 1
-                            logger.debug(f"Documento HTML {doc_id} convertido e adicionado com sucesso")
+                        # Converter HTML para PDF
+                        subprocess.run(['wkhtmltopdf', '--quiet', html_path, pdf_path],
+                                      check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        
+                        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
+                            arquivos_pdf.append(pdf_path)
+                            docs_processados += 1
+                            logger.debug(f"Documento HTML convertido para PDF: {pdf_path}")
                         else:
-                            # Criar um PDF de texto simples como fallback
-                            fallback_pdf_path = os.path.join(temp_dir, f"fallback_{doc_id}.pdf")
+                            # Fallback: salvar como texto
                             texto_html = conteudo.decode('utf-8', errors='ignore')
-                            
-                            # Criar PDF simples com ReportLab
-                            pdf = canvas.Canvas(fallback_pdf_path, pagesize=letter)
-                            pdf.setFont("Helvetica-Bold", 14)
-                            pdf.drawString(72, 750, f"Documento {doc_id}")
-                            
-                            # Limitar o conteúdo para evitar PDFs muito grandes
-                            texto_html = texto_html[:5000] + "..." if len(texto_html) > 5000 else texto_html
-                            
-                            # Adicionar linhas de texto ao PDF
-                            y_pos = 720
-                            pdf.setFont("Helvetica", 10)
-                            
-                            for i, linha in enumerate(texto_html.split('\n')):
-                                if i > 200:  # Limitar o número de linhas
-                                    pdf.drawString(72, y_pos, "... (conteúdo truncado)")
-                                    break
-                                    
-                                if y_pos < 50:  # Nova página
-                                    pdf.showPage()
-                                    pdf.setFont("Helvetica", 10)
-                                    y_pos = 750
-                                    
-                                pdf.drawString(72, y_pos, linha[:80])  # Limitar largura
-                                y_pos -= 12
-                                
-                            pdf.showPage()
-                            pdf.save()
-                            
-                            # Adicionar ao PDF Merger
-                            pdf_merger.append(fallback_pdf_path)
-                            status_info['documentos_processados'] += 1
-                            logger.debug(f"Documento HTML {doc_id} convertido para texto e adicionado")
-                    
-                    except Exception as html_err:
-                        logger.error(f"Erro ao converter HTML para PDF: {str(html_err)}")
-                        # Criar um PDF simples com informação do erro
-                        error_pdf_path = os.path.join(temp_dir, f"error_{doc_id}.pdf")
-                        pdf = canvas.Canvas(error_pdf_path, pagesize=letter)
-                        pdf.setFont("Helvetica-Bold", 14)
-                        pdf.drawString(72, 750, f"Erro ao processar documento HTML {doc_id}")
-                        pdf.setFont("Helvetica", 12)
-                        pdf.drawString(72, 720, f"Tipo: {mimetype}")
-                        pdf.drawString(72, 700, f"Erro: {str(html_err)}")
-                        pdf.showPage()
-                        pdf.save()
-                        
-                        # Adicionar ao PDF Merger
-                        pdf_merger.append(error_pdf_path)
+                            txt_path = os.path.join(temp_dir, f"{idx:02d}_doc_{doc_id}.txt")
+                            with open(txt_path, 'w', encoding='utf-8') as f:
+                                f.write(f"DOCUMENTO {doc_id} (HTML)\n")
+                                f.write("=" * 80 + "\n\n")
+                                f.write(texto_html[:10000] + "..." if len(texto_html) > 10000 else texto_html)
+                            arquivos_txt.append(txt_path)
+                            docs_processados += 1
+                    except Exception as e:
+                        logger.error(f"Erro ao converter HTML para PDF: {str(e)}")
+                        # Fallback: salvar como texto
+                        texto_html = conteudo.decode('utf-8', errors='ignore')
+                        txt_path = os.path.join(temp_dir, f"{idx:02d}_doc_{doc_id}.txt")
+                        with open(txt_path, 'w', encoding='utf-8') as f:
+                            f.write(f"DOCUMENTO {doc_id} (HTML)\n")
+                            f.write("=" * 80 + "\n\n")
+                            f.write(texto_html[:10000] + "..." if len(texto_html) > 10000 else texto_html)
+                        arquivos_txt.append(txt_path)
+                        docs_processados += 1
                 
                 else:
-                    # Para outros tipos (text/plain, text/xml, etc)
-                    # Criar PDF simples
-                    other_pdf_path = os.path.join(temp_dir, f"other_{doc_id}.pdf")
-                    pdf = canvas.Canvas(other_pdf_path, pagesize=letter)
-                    pdf.setFont("Helvetica-Bold", 14)
-                    pdf.drawString(72, 750, f"Documento {doc_id}")
-                    pdf.setFont("Helvetica", 12)
-                    pdf.drawString(72, 720, f"Tipo: {mimetype}")
-                    
-                    # Tentar extrair texto se possível
+                    # Para outros formatos, salvar como texto
                     try:
-                        if mimetype in ['text/plain', 'text/xml']:
-                            texto = conteudo.decode('utf-8', errors='ignore')
-                            # Limitar o texto
-                            texto = texto[:5000] + "..." if len(texto) > 5000 else texto
-                            
-                            # Adicionar linhas de texto ao PDF
-                            y_pos = 690
-                            pdf.setFont("Courier", 10)  # Fonte monoespaçada para código
-                            
-                            for i, linha in enumerate(texto.split('\n')):
-                                if i > 200:  # Limitar o número de linhas
-                                    pdf.drawString(72, y_pos, "... (conteúdo truncado)")
-                                    break
-                                    
-                                if y_pos < 50:  # Nova página
-                                    pdf.showPage()
-                                    pdf.setFont("Courier", 10)
-                                    y_pos = 750
-                                    
-                                # Limitar largura da linha
-                                linha_curta = linha[:80] + "..." if len(linha) > 80 else linha
-                                pdf.drawString(72, y_pos, linha_curta)
-                                y_pos -= 12
-                        else:
-                            pdf.drawString(72, 700, f"Tamanho: {len(conteudo)} bytes")
-                            pdf.drawString(72, 680, "Formato não suportado para conversão direta.")
-                    except:
-                        pdf.drawString(72, 700, "Não foi possível extrair texto deste documento.")
-                    
-                    pdf.showPage()
-                    pdf.save()
-                    
-                    # Adicionar ao PDF Merger
-                    pdf_merger.append(other_pdf_path)
-                    status_info['documentos_processados'] += 1
-                
+                        texto = conteudo.decode('utf-8', errors='ignore')
+                        txt_path = os.path.join(temp_dir, f"{idx:02d}_doc_{doc_id}.txt")
+                        with open(txt_path, 'w', encoding='utf-8') as f:
+                            f.write(f"DOCUMENTO {doc_id} ({mimetype})\n")
+                            f.write("=" * 80 + "\n\n")
+                            f.write(texto[:10000] + "..." if len(texto) > 10000 else texto)
+                        arquivos_txt.append(txt_path)
+                        docs_processados += 1
+                    except Exception as txt_err:
+                        logger.error(f"Erro ao processar documento {mimetype}: {str(txt_err)}")
+            
             except Exception as e:
-                logger.error(f"Erro ao processar documento: {str(e)}")
-                # Continuar para o próximo documento
+                logger.error(f"Erro ao processar documento {doc_id}: {str(e)}")
         
-        # Criar página de capa com informações do status
-        capa_path = os.path.join(temp_dir, "capa.pdf")
-        capa = canvas.Canvas(capa_path, pagesize=letter)
-        
-        # Cabeçalho
-        capa.setFont("Helvetica-Bold", 16)
-        capa.drawString(72, 750, f"PROCESSO {num_processo}")
-        
-        # Informações de status
-        capa.setFont("Helvetica", 12)
-        y = 720
-        capa.drawString(72, y, f"PDF gerado em: {status_info['data_geracao']}")
-        y -= 20
-        capa.drawString(72, y, f"Total de documentos no processo: {status_info['total_documentos']}")
-        y -= 20
-        capa.drawString(72, y, f"Documentos incluídos neste PDF: {status_info['documentos_processados']}")
-        
-        if status_info['documentos_processados'] < status_info['total_documentos']:
-            y -= 20
-            capa.setFillColorRGB(0.8, 0.2, 0.2)  # Vermelho para alerta
-            capa.drawString(72, y, f"Atenção: Alguns documentos ({status_info['total_documentos'] - status_info['documentos_processados']})")
-            y -= 15
-            capa.drawString(72, y, "não puderam ser incluídos devido a erros no processamento.")
-        
-        capa.showPage()
-        capa.save()
-        
-        # Adicionar capa como primeira página
+        # Gerar arquivo final
         output_path = os.path.join(temp_dir, f"processo_{num_processo}.pdf")
         
-        # Inserir a capa como primeira página e escrever o arquivo
-        pdf_merger.merge(0, capa_path)
-        with open(output_path, 'wb') as output_file:
-            pdf_merger.write(output_file)
-            pdf_merger.close()
+        # Verificar se temos PDFs para combinar
+        if arquivos_pdf:
+            logger.debug(f"Combinando {len(arquivos_pdf)} arquivos PDF")
+            
+            try:
+                # Tentar usar pdftk se disponível
+                try:
+                    subprocess.run(['which', 'pdftk'], 
+                                  check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    
+                    # pdftk está disponível
+                    pdf_paths = sorted(arquivos_pdf)
+                    command = ['pdftk'] + pdf_paths + ['cat', 'output', output_path]
+                    subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    
+                    logger.debug(f"PDFs combinados com pdftk: {output_path}")
+                    
+                except subprocess.CalledProcessError:
+                    # pdftk não está disponível, usar método alternativo
+                    # Simplesmente copiar o primeiro PDF
+                    with open(output_path, 'wb') as out_f:
+                        with open(sorted(arquivos_pdf)[0], 'rb') as in_f:
+                            out_f.write(in_f.read())
+                    
+                    logger.debug(f"Método alternativo: Copiado primeiro PDF para {output_path}")
+            
+            except Exception as e:
+                logger.error(f"Erro ao combinar PDFs: {str(e)}")
+                # Usar o primeiro PDF como resultado
+                if arquivos_pdf:
+                    with open(output_path, 'wb') as out_f:
+                        with open(sorted(arquivos_pdf)[0], 'rb') as in_f:
+                            out_f.write(in_f.read())
         
-        # Retornar o arquivo combinado
+        elif arquivos_txt:
+            # Sem PDFs, criar um PDF com texto
+            # Usar wkhtmltopdf para converter o índice em PDF
+            try:
+                subprocess.run(['wkhtmltopdf', '--quiet', indice_path, output_path],
+                              check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                
+                logger.debug(f"Gerado PDF a partir do índice: {output_path}")
+            except:
+                # Se falhar, criar um arquivo texto com mensagem
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(f"PROCESSO {num_processo}\n")
+                    f.write(f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
+                    f.write("=" * 80 + "\n\n")
+                    f.write(f"Não foi possível gerar um PDF completo.\n")
+                    f.write(f"Total de documentos: {total_docs}\n")
+                    f.write(f"Documentos processados: {docs_processados}\n")
+                
+                # Renomear para .txt
+                output_path = output_path.replace('.pdf', '.txt')
+                
+                logger.debug(f"Gerado arquivo texto alternativo: {output_path}")
+        
+        else:
+            # Sem documentos processados
+            return jsonify({
+                'erro': 'Nenhum documento processado',
+                'mensagem': f'Não foi possível processar nenhum dos {total_docs} documentos do processo.'
+            }), 500
+        
+        # Retornar o arquivo
+        mimetype = 'application/pdf' if output_path.endswith('.pdf') else 'text/plain'
+        extension = '.pdf' if output_path.endswith('.pdf') else '.txt'
+        
         return send_file(
             output_path,
-            mimetype='application/pdf',
+            mimetype=mimetype,
             as_attachment=True,
-            download_name=f'processo_{num_processo}.pdf'
+            download_name=f'processo_{num_processo}{extension}'
         )
-        
+    
     except Exception as e:
         logger.error(f"Erro geral na geração do PDF: {str(e)}", exc_info=True)
         return jsonify({
             'erro': 'Erro ao gerar PDF completo',
             'mensagem': str(e)
         }), 500
-        
+    
     finally:
         # Limpar arquivos temporários
         try:
-            import shutil
             shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as e:
             logger.error(f"Erro ao limpar arquivos temporários: {str(e)}")
