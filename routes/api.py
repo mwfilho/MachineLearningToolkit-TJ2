@@ -193,168 +193,197 @@ def gerar_pdf_completo(num_processo):
                 'erro': 'Credenciais MNI não fornecidas',
                 'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
+        
+        # Importar a versão mais robusta das funções
+        try:
+            from fix_pdf_download import gerar_pdf_completo_otimizado, processar_documento_robusto, gerar_cabecalho_processo
+            versao_otimizada = True
+            logger.info("Usando versão otimizada para geração de PDF completo")
+        except ImportError:
+            versao_otimizada = False
+            logger.warning("Módulo de otimização não encontrado, usando implementação padrão")
+        
+        if versao_otimizada:
+            # Usar a versão otimizada que implementa internamente todo o processo
+            output_path = gerar_pdf_completo_otimizado(num_processo, cpf, senha)
             
-        # Consultar o processo para obter lista de documentos
-        logger.debug(f"Consultando dados do processo {num_processo}")
-        resposta_processo = retorna_processo(num_processo, cpf=cpf, senha=senha)
-        dados = extract_mni_data(resposta_processo)
-        
-        if not dados.get('documentos') or len(dados.get('documentos', [])) == 0:
-            # Logar quantos documentos foram encontrados para debug
-            docs_originais = dados.get('processo', {}).get('documentos', [])
-            logger.debug(f"Documentos no formato original: {len(docs_originais)}")
-            logger.debug(f"Documentos no formato API: {len(dados.get('documentos', []))}")
-            
-            return jsonify({
-                'erro': 'Processo sem documentos',
-                'mensagem': 'O processo não possui documentos para gerar PDF ou não foi possível acessá-los com as credenciais fornecidas'
-            }), 404
-            
-        # Criar diretório temporário para armazenar arquivos
-        temp_dir = tempfile.mkdtemp()
-        logger.debug(f"Diretório temporário criado: {temp_dir}")
-        
-        # Configurar arquivo de saída final
-        output_path = os.path.join(temp_dir, f"processo_{num_processo}.pdf")
-        documentos = dados['documentos']
-        total_docs = len(documentos)
-        
-        logger.debug(f"Encontrados {total_docs} documentos no processo {num_processo}")
-        
-        # Usar um tamanho de lote proporcional ao número total de documentos
-        # mas limitado entre 5 e 15 para balancear desempenho e uso de memória
-        batch_size = max(5, min(15, total_docs // 5))
-        max_workers = min(8, batch_size)  # Limite de workers por lote
-        
-        # Iniciar com um PDF contendo o cabeçalho
-        cabecalho_buffer = gerar_cabecalho_processo(dados)
-        with open(output_path, 'wb') as f:
-            cabecalho_buffer.seek(0)
-            f.write(cabecalho_buffer.getvalue())
-        
-        # Processamento em lotes para gerenciar melhor a memória
-        processados = 0
-        erros = 0
-        doc_batches = [documentos[i:i+batch_size] for i in range(0, total_docs, batch_size)]
-        
-        # Reportar o início do processamento em lotes
-        logger.info(f"Iniciando processamento em {len(doc_batches)} lotes, com até {batch_size} documentos por lote")
-        
-        # Processar cada lote
-        for batch_num, batch_docs in enumerate(doc_batches, 1):
-            batch_start_time = time.time()
-            logger.debug(f"Processando lote {batch_num}/{len(doc_batches)} ({len(batch_docs)} documentos)")
-            
-            # Arquivo temporário para o lote atual
-            batch_pdf_path = os.path.join(temp_dir, f"batch_{batch_num}.pdf")
-            
-            # Processar documentos do lote em paralelo
-            batch_results = []
-            
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_doc = {
-                    executor.submit(
-                        processar_documento, 
-                        num_processo, doc['id'], 
-                        doc.get('tipoDocumento', ''), 
-                        cpf, senha, temp_dir
-                    ): doc for doc in batch_docs
-                }
+            if not output_path:
+                return jsonify({
+                    'erro': 'Falha no processamento',
+                    'mensagem': 'Não foi possível processar o processo para gerar o PDF completo'
+                }), 500
                 
-                # Coletar resultados conforme são concluídos
-                for future in concurrent.futures.as_completed(future_to_doc):
-                    doc = future_to_doc[future]
-                    try:
-                        resultado = future.result()
-                        if resultado and resultado.get('caminho_pdf'):
-                            batch_results.append(resultado)
-                            processados += 1
-                        else:
-                            logger.warning(f"Documento {doc['id']} não gerou PDF válido")
+            # Servir o arquivo para download
+            return send_file(
+                output_path,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f'processo_completo_{num_processo}.pdf'
+            )
+            
+        else:
+            # Implementação padrão (caso o módulo otimizado não esteja disponível)
+            # Consultar o processo para obter lista de documentos
+            logger.debug(f"Consultando dados do processo {num_processo}")
+            resposta_processo = retorna_processo(num_processo, cpf=cpf, senha=senha)
+            dados = extract_mni_data(resposta_processo)
+            
+            if not dados.get('documentos') or len(dados.get('documentos', [])) == 0:
+                # Logar quantos documentos foram encontrados para debug
+                docs_originais = dados.get('processo', {}).get('documentos', [])
+                logger.debug(f"Documentos no formato original: {len(docs_originais)}")
+                logger.debug(f"Documentos no formato API: {len(dados.get('documentos', []))}")
+                
+                return jsonify({
+                    'erro': 'Processo sem documentos',
+                    'mensagem': 'O processo não possui documentos para gerar PDF ou não foi possível acessá-los com as credenciais fornecidas'
+                }), 404
+                
+            # Criar diretório temporário para armazenar arquivos
+            temp_dir = tempfile.mkdtemp()
+            logger.debug(f"Diretório temporário criado: {temp_dir}")
+            
+            # Configurar arquivo de saída final
+            output_path = os.path.join(temp_dir, f"processo_{num_processo}.pdf")
+            documentos = dados['documentos']
+            total_docs = len(documentos)
+            
+            logger.debug(f"Encontrados {total_docs} documentos no processo {num_processo}")
+            
+            # Usar um tamanho de lote proporcional ao número total de documentos
+            # mas limitado entre 5 e 15 para balancear desempenho e uso de memória
+            batch_size = max(5, min(15, total_docs // 5))
+            max_workers = min(8, batch_size)  # Limite de workers por lote
+            
+            # Iniciar com um PDF contendo o cabeçalho
+            cabecalho_buffer = gerar_cabecalho_processo(dados)
+            with open(output_path, 'wb') as f:
+                cabecalho_buffer.seek(0)
+                f.write(cabecalho_buffer.getvalue())
+            
+            # Processamento em lotes para gerenciar melhor a memória
+            processados = 0
+            erros = 0
+            doc_batches = [documentos[i:i+batch_size] for i in range(0, total_docs, batch_size)]
+            
+            # Reportar o início do processamento em lotes
+            logger.info(f"Iniciando processamento em {len(doc_batches)} lotes, com até {batch_size} documentos por lote")
+            
+            # Processar cada lote
+            for batch_num, batch_docs in enumerate(doc_batches, 1):
+                batch_start_time = time.time()
+                logger.debug(f"Processando lote {batch_num}/{len(doc_batches)} ({len(batch_docs)} documentos)")
+                
+                # Arquivo temporário para o lote atual
+                batch_pdf_path = os.path.join(temp_dir, f"batch_{batch_num}.pdf")
+                
+                # Processar documentos do lote em paralelo
+                batch_results = []
+                
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    future_to_doc = {
+                        executor.submit(
+                            processar_documento, 
+                            num_processo, doc['id'], 
+                            doc.get('tipoDocumento', ''), 
+                            cpf, senha, temp_dir
+                        ): doc for doc in batch_docs
+                    }
+                    
+                    # Coletar resultados conforme são concluídos
+                    for future in concurrent.futures.as_completed(future_to_doc):
+                        doc = future_to_doc[future]
+                        try:
+                            resultado = future.result()
+                            if resultado and resultado.get('caminho_pdf'):
+                                batch_results.append(resultado)
+                                processados += 1
+                            else:
+                                logger.warning(f"Documento {doc['id']} não gerou PDF válido")
+                                erros += 1
+                        except Exception as e:
+                            logger.error(f"Erro ao processar documento {doc['id']}: {str(e)}")
                             erros += 1
-                    except Exception as e:
-                        logger.error(f"Erro ao processar documento {doc['id']}: {str(e)}")
-                        erros += 1
-            
-            # Se nenhum documento foi processado neste lote, continuar para o próximo
-            if not batch_results:
-                logger.warning(f"Nenhum documento processado no lote {batch_num}")
-                continue
                 
-            # Mesclar os documentos do lote atual
-            with PdfMerger() as batch_merger:
-                # Ordenar os resultados para manter a ordem original dos documentos
-                batch_results.sort(key=lambda r: batch_docs.index(next(d for d in batch_docs if d['id'] == r['id'])))
+                # Se nenhum documento foi processado neste lote, continuar para o próximo
+                if not batch_results:
+                    logger.warning(f"Nenhum documento processado no lote {batch_num}")
+                    continue
+                    
+                # Mesclar os documentos do lote atual
+                with PdfMerger() as batch_merger:
+                    # Ordenar os resultados para manter a ordem original dos documentos
+                    batch_results.sort(key=lambda r: batch_docs.index(next(d for d in batch_docs if d['id'] == r['id'])))
+                    
+                    # Adicionar cada documento ao merger
+                    for resultado in batch_results:
+                        try:
+                            batch_merger.append(resultado['caminho_pdf'])
+                        except Exception as e:
+                            logger.error(f"Erro ao adicionar documento {resultado['id']} ao lote: {str(e)}")
+                    
+                    # Salvar o lote em um arquivo temporário
+                    with open(batch_pdf_path, 'wb') as f:
+                        batch_merger.write(f)
                 
-                # Adicionar cada documento ao merger
+                # Adicionar o lote ao PDF principal
+                with PdfMerger() as merger:
+                    merger.append(output_path)  # PDF atual
+                    merger.append(batch_pdf_path)  # Novo lote
+                    
+                    # Arquivo temporário para o resultado intermediário
+                    temp_merged = os.path.join(temp_dir, f"temp_merged_{batch_num}.pdf")
+                    with open(temp_merged, 'wb') as f:
+                        merger.write(f)
+                    
+                    # Substituir o arquivo principal pelo mesclado
+                    os.replace(temp_merged, output_path)
+                
+                # Remover o arquivo do lote para liberar espaço
+                if os.path.exists(batch_pdf_path):
+                    os.remove(batch_pdf_path)
+                
+                # Limpar arquivos PDF individuais dos documentos após mesclar o lote
                 for resultado in batch_results:
                     try:
-                        batch_merger.append(resultado['caminho_pdf'])
+                        if os.path.exists(resultado['caminho_pdf']):
+                            os.remove(resultado['caminho_pdf'])
                     except Exception as e:
-                        logger.error(f"Erro ao adicionar documento {resultado['id']} ao lote: {str(e)}")
+                        logger.warning(f"Não foi possível remover arquivo temporário: {str(e)}")
                 
-                # Salvar o lote em um arquivo temporário
-                with open(batch_pdf_path, 'wb') as f:
-                    batch_merger.write(f)
+                batch_time = time.time() - batch_start_time
+                progress = (batch_num / len(doc_batches)) * 100
+                logger.debug(f"Lote {batch_num} concluído em {batch_time:.2f}s - Progresso: {progress:.1f}%")
             
-            # Adicionar o lote ao PDF principal
-            with PdfMerger() as merger:
-                merger.append(output_path)  # PDF atual
-                merger.append(batch_pdf_path)  # Novo lote
+            # Verificar se pelo menos um documento foi processado
+            if processados == 0:
+                return jsonify({
+                    'erro': 'Falha no processamento',
+                    'mensagem': 'Não foi possível processar nenhum documento'
+                }), 500
                 
-                # Arquivo temporário para o resultado intermediário
-                temp_merged = os.path.join(temp_dir, f"temp_merged_{batch_num}.pdf")
-                with open(temp_merged, 'wb') as f:
-                    merger.write(f)
-                
-                # Substituir o arquivo principal pelo mesclado
-                os.replace(temp_merged, output_path)
+            # Calcular estatísticas
+            taxa_sucesso = (processados / total_docs) * 100
+            tempo_total = time.time() - start_time
             
-            # Remover o arquivo do lote para liberar espaço
-            if os.path.exists(batch_pdf_path):
-                os.remove(batch_pdf_path)
+            # Verificar se o arquivo final foi gerado e tem tamanho válido
+            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                logger.error("Arquivo PDF final não foi gerado corretamente")
+                return jsonify({
+                    'erro': 'Falha na geração do PDF',
+                    'mensagem': 'O arquivo PDF final não pôde ser gerado corretamente'
+                }), 500
             
-            # Limpar arquivos PDF individuais dos documentos após mesclar o lote
-            for resultado in batch_results:
-                try:
-                    if os.path.exists(resultado['caminho_pdf']):
-                        os.remove(resultado['caminho_pdf'])
-                except Exception as e:
-                    logger.warning(f"Não foi possível remover arquivo temporário: {str(e)}")
+            logger.info(f"PDF gerado com sucesso. Processados: {processados}/{total_docs} documentos ({taxa_sucesso:.1f}%). "
+                        f"Tempo total: {tempo_total:.2f} segundos.")
             
-            batch_time = time.time() - batch_start_time
-            progress = (batch_num / len(doc_batches)) * 100
-            logger.debug(f"Lote {batch_num} concluído em {batch_time:.2f}s - Progresso: {progress:.1f}%")
-        
-        # Verificar se pelo menos um documento foi processado
-        if processados == 0:
-            return jsonify({
-                'erro': 'Falha no processamento',
-                'mensagem': 'Não foi possível processar nenhum documento'
-            }), 500
-            
-        # Calcular estatísticas
-        taxa_sucesso = (processados / total_docs) * 100
-        tempo_total = time.time() - start_time
-        
-        # Verificar se o arquivo final foi gerado e tem tamanho válido
-        if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
-            logger.error("Arquivo PDF final não foi gerado corretamente")
-            return jsonify({
-                'erro': 'Falha na geração do PDF',
-                'mensagem': 'O arquivo PDF final não pôde ser gerado corretamente'
-            }), 500
-        
-        logger.info(f"PDF gerado com sucesso. Processados: {processados}/{total_docs} documentos ({taxa_sucesso:.1f}%). "
-                    f"Tempo total: {tempo_total:.2f} segundos.")
-        
-        # Servir o arquivo para download
-        return send_file(
-            output_path,
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=f'processo_completo_{num_processo}.pdf'
-        )
+            # Servir o arquivo para download
+            return send_file(
+                output_path,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f'processo_completo_{num_processo}.pdf'
+            )
             
     except Exception as e:
         logger.error(f"API: Erro ao gerar PDF completo: {str(e)}", exc_info=True)

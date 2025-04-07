@@ -1,4 +1,0 @@
-zeep
-easydict
-pandas
-requests
