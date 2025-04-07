@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, send_file, flash
+from flask import Blueprint, render_template, request, send_file, flash, redirect, url_for
 import tempfile
 import os
 import logging
@@ -70,18 +70,46 @@ def debug_consulta():
 @web.route('/debug/pdf-completo', methods=['POST'])
 def debug_pdf_completo():
     num_processo = request.form.get('num_processo')
-    cpf = request.form.get('cpf')
-    senha = request.form.get('senha')
+    cpf = request.form.get('cpf') or os.environ.get('MNI_ID_CONSULTANTE')
+    senha = request.form.get('senha') or os.environ.get('MNI_SENHA_CONSULTANTE')
     
     if not num_processo:
         flash('Número do processo é obrigatório', 'error')
         return render_template('debug.html')
     
     try:
-        logger.debug(f"Redirecionando para geração de PDF completo: Processo={num_processo}")
+        logger.debug(f"Gerando PDF completo para o processo: {num_processo}")
         
+        # Verificar se temos credenciais para usar
+        if not cpf or not senha:
+            flash('Credenciais MNI não fornecidas. Informe CPF/CNPJ e senha ou configure as variáveis de ambiente.', 'error')
+            return render_template('debug.html')
+            
+        # Obter processo 
+        resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
+        dados = extract_mni_data(resposta)
+        logger.debug(f"Verificando documentos para o processo {num_processo}")
+        
+        # Verificar sucesso da consulta
+        if not dados.get('sucesso'):
+            flash(f'Erro na consulta: {dados.get("mensagem", "Erro desconhecido")}', 'error')
+            return render_template('debug.html')
+            
+        # Verificar se há documentos (agora usando o novo formato)
+        if not dados.get('documentos') or len(dados.get('documentos', [])) == 0:
+            # Mostrar quantos documentos foram encontrados nos logs
+            docs_originais = dados.get('processo', {}).get('documentos', [])
+            logger.debug(f"Documentos no formato original: {len(docs_originais)}")
+            
+            flash('O processo não tem documentos disponíveis ou você não tem permissão para acessá-los.', 'error')
+            return render_template('debug.html')
+            
+        # Para permitir download direto, definimos headers customizados para API
+        os.environ['MNI_ID_CONSULTANTE'] = cpf
+        os.environ['MNI_SENHA_CONSULTANTE'] = senha
+            
         # Redirecionar para o endpoint da API com os parâmetros necessários
-        # Credenciais serão obtidas pelos headers ou variáveis de ambiente padrão
+        logger.debug(f"Redirecionando para API com {len(dados.get('documentos', []))} documentos encontrados")
         return redirect(url_for('api.gerar_pdf_completo', num_processo=num_processo))
         
     except Exception as e:

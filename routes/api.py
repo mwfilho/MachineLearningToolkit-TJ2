@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, send_file, request
 import os
+import gc
 import logging
 from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
 from utils import extract_mni_data, extract_capa_processo
@@ -196,14 +197,20 @@ def gerar_pdf_completo(num_processo):
         resposta_processo = retorna_processo(num_processo, cpf=cpf, senha=senha)
         dados = extract_mni_data(resposta_processo)
         
-        if not dados.get('documentos'):
+        if not dados.get('documentos') or len(dados.get('documentos', [])) == 0:
+            # Logar quantos documentos foram encontrados em cada estrutura para debug
+            docs_originais = dados.get('processo', {}).get('documentos', [])
+            logger.debug(f"Documentos no formato original: {len(docs_originais)}")
+            logger.debug(f"Documentos no formato API: {len(dados.get('documentos', []))}")
+            
             return jsonify({
                 'erro': 'Processo sem documentos',
-                'mensagem': 'O processo não possui documentos para gerar PDF'
+                'mensagem': 'O processo não possui documentos para gerar PDF ou não foi possível acessá-los com as credenciais fornecidas'
             }), 404
             
         documentos = dados['documentos']
         logger.debug(f"Encontrados {len(documentos)} documentos no processo {num_processo}")
+        logger.debug(f"Primeiro documento: {documentos[0] if documentos else 'Nenhum'}")
         
         # Criar diretório temporário para armazenar arquivos
         temp_dir = tempfile.mkdtemp()
@@ -220,43 +227,87 @@ def gerar_pdf_completo(num_processo):
         # Determinar o máximo de workers baseado na quantidade de documentos
         max_workers = min(10, len(documentos))  # Limita a 10 threads simultâneas
         
-        # Usar ThreadPoolExecutor para processamento paralelo
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Mapear a função de processamento para cada documento
-            future_to_doc = {
-                executor.submit(
-                    processar_documento, 
-                    num_processo, doc['id'], 
-                    doc.get('tipoDocumento', ''), 
-                    cpf, senha, temp_dir
-                ): doc 
-                for doc in documentos
-            }
+        # Processar documentos em lotes para economizar memória
+        tamanho_lote = 5  # Processar apenas 5 documentos por vez
+        total_docs = len(documentos)
+        pdf_paths = []
+        
+        for inicio_lote in range(0, total_docs, tamanho_lote):
+            fim_lote = min(inicio_lote + tamanho_lote, total_docs)
+            lote_atual = documentos[inicio_lote:fim_lote]
+            logger.info(f"Processando lote de documentos {inicio_lote+1}-{fim_lote} de {total_docs}")
             
-            # Processar resultados conforme forem concluídos
-            for future in concurrent.futures.as_completed(future_to_doc):
-                doc = future_to_doc[future]
-                try:
-                    resultado = future.result()
-                    if resultado and resultado.get('caminho_pdf'):
-                        try:
-                            logger.debug(f"Adicionando documento {doc['id']} ao PDF combinado")
-                            pdf_merger.append(resultado['caminho_pdf'])
-                            processados += 1
-                        except Exception as e:
-                            logger.error(f"Erro ao adicionar documento {doc['id']} ao PDF: {str(e)}")
+            # Limitar o número máximo de workers ao tamanho do lote
+            lote_max_workers = min(max_workers, len(lote_atual)) 
+            
+            # Usar ThreadPoolExecutor para processamento paralelo do lote atual
+            with concurrent.futures.ThreadPoolExecutor(max_workers=lote_max_workers) as executor:
+                # Mapear a função de processamento para cada documento do lote
+                future_to_doc = {
+                    executor.submit(
+                        processar_documento, 
+                        num_processo, doc['id'], 
+                        doc.get('tipoDocumento', ''), 
+                        cpf, senha, temp_dir
+                    ): (doc, documentos.index(doc))  # Incluir índice original 
+                    for doc in lote_atual
+                }
+                
+                # Processar resultados conforme forem concluídos
+                for future in concurrent.futures.as_completed(future_to_doc):
+                    doc, indice_original = future_to_doc[future]
+                    try:
+                        resultado = future.result()
+                        if resultado and resultado.get('caminho_pdf'):
+                            try:
+                                # Armazenar caminho e ID para processar na ordem correta depois
+                                logger.debug(f"Documento {doc['id']} processado com sucesso")
+                                pdf_paths.append({
+                                    'id': doc['id'],
+                                    'caminho': resultado['caminho_pdf'],
+                                    'index': indice_original  # Manter a ordem original
+                                })
+                                processados += 1
+                            except Exception as e:
+                                logger.error(f"Erro ao registrar documento {doc['id']}: {str(e)}", exc_info=True)
+                                erros += 1
+                        else:
+                            logger.warning(f"Documento {doc['id']} não gerou PDF válido")
                             erros += 1
-                    else:
-                        logger.warning(f"Documento {doc['id']} não gerou PDF válido")
+                    except Exception as e:
+                        logger.error(f"Erro ao processar documento {doc['id']}: {str(e)}", exc_info=True)
                         erros += 1
-                except Exception as e:
-                    logger.error(f"Erro ao processar documento {doc['id']}: {str(e)}")
-                    erros += 1
+            
+            # Liberar um pouco de memória antes de processar o próximo lote
+            gc.collect()
+        
+        # Ordenar PDFs conforme a ordem original dos documentos
+        pdf_paths.sort(key=lambda x: x['index'])
+        
+        # Adicionar PDFs ao merger na ordem correta (também em lotes para economizar memória)
+        for i, pdf_info in enumerate(pdf_paths):
+            try:
+                logger.debug(f"Adicionando documento {i+1}/{len(pdf_paths)} ao PDF combinado")
+                pdf_merger.append(pdf_info['caminho'])
+                
+                # A cada 10 documentos, liberar memória
+                if (i + 1) % 10 == 0:
+                    gc.collect()
+            except Exception as e:
+                logger.error(f"Erro ao adicionar documento {pdf_info['id']} ao PDF: {str(e)}", exc_info=True)
+                erros += 1
+                processados -= 1  # Ajustar contador
         
         if processados == 0:
+            erros_message = f"Total de erros: {erros}"
+            if erros > 0:
+                erros_message += ". Verifique os logs para mais detalhes."
+                
             return jsonify({
                 'erro': 'Falha no processamento',
-                'mensagem': 'Não foi possível processar nenhum documento'
+                'mensagem': f'Não foi possível processar nenhum documento do processo {num_processo}. {erros_message}',
+                'total_documentos': len(documentos),
+                'erros': erros
             }), 500
             
         # Gerar o arquivo PDF final
@@ -317,31 +368,29 @@ def gerar_cabecalho_processo(dados_processo):
     # Dados básicos
     if 'processo' in dados_processo:
         proc = dados_processo['processo']
-        pdf.drawString(72, y, f"Classe: {proc.get('classe', 'N/A')}")
+        
+        # Classe processual
+        classe_desc = ''
+        if proc.get('classeProcessual'):
+            classe_desc = f"Classe: {proc.get('classeProcessual', 'N/A')}"
+        pdf.drawString(72, y, classe_desc)
         y -= 20
         
-        # Assuntos
-        if proc.get('assuntos'):
-            pdf.drawString(72, y, "Assuntos:")
-            y -= 20
-            for assunto in proc.get('assuntos', []):
-                pdf.drawString(90, y, f"- {assunto}")
-                y -= 15
-                
         # Órgão julgador
         if proc.get('orgaoJulgador'):
-            y -= 5
             pdf.drawString(72, y, f"Órgão Julgador: {proc.get('orgaoJulgador', 'N/A')}")
             y -= 20
             
-        # Valor da causa
-        if proc.get('valorCausa'):
-            pdf.drawString(72, y, f"Valor da Causa: R$ {proc.get('valorCausa', 0):.2f}")
-            y -= 20
-            
-        # Data de distribuição
-        if proc.get('dataDistribuicao'):
-            pdf.drawString(72, y, f"Data de Distribuição: {proc.get('dataDistribuicao', 'N/A')}")
+        # Data de ajuizamento
+        if proc.get('dataAjuizamento'):
+            data_str = proc.get('dataAjuizamento')
+            # Formatar data se estiver no formato YYYYMMDD
+            if len(data_str) == 8:
+                try:
+                    data_str = f"{data_str[6:8]}/{data_str[4:6]}/{data_str[0:4]}"
+                except:
+                    pass
+            pdf.drawString(72, y, f"Data de Ajuizamento: {data_str}")
             y -= 30
     
     # Adicionar lista de documentos
@@ -385,27 +434,53 @@ def processar_documento(num_processo, id_documento, tipo_documento, cpf, senha, 
         dict: Informações do documento processado, incluindo caminho para o PDF gerado
     """
     try:
-        # Obter o documento
-        resposta = retorna_documento_processo(num_processo, id_documento, cpf=cpf, senha=senha)
-        
-        if 'msg_erro' in resposta:
-            logger.error(f"Erro ao obter documento {id_documento}: {resposta['msg_erro']}")
-            return None
+        try:
+            # Obter o documento
+            resposta = retorna_documento_processo(num_processo, id_documento, cpf=cpf, senha=senha)
             
-        if not resposta.get('conteudo'):
-            logger.warning(f"Documento {id_documento} sem conteúdo")
-            return None
+            if resposta is None:
+                logger.error(f"Resposta nula para documento {id_documento}")
+                arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
+                pdf_path = f"{arquivo_temp}.pdf"
+                message = f"Erro ao obter documento {id_documento}: Resposta nula da API"
+                create_info_pdf(message, pdf_path, id_documento, tipo_documento)
+                return {'id': id_documento, 'caminho_pdf': pdf_path}
+            
+            if 'msg_erro' in resposta:
+                logger.error(f"Erro ao obter documento {id_documento}: {resposta['msg_erro']}")
+                # Criar um PDF informativo sobre o erro
+                arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
+                pdf_path = f"{arquivo_temp}.pdf"
+                message = f"Erro ao obter documento {id_documento}: {resposta['msg_erro']}"
+                create_info_pdf(message, pdf_path, id_documento, tipo_documento)
+                return {'id': id_documento, 'caminho_pdf': pdf_path}
+        except Exception as e:
+            logger.error(f"Exceção ao buscar documento {id_documento}: {str(e)}", exc_info=True)
+            arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
+            pdf_path = f"{arquivo_temp}.pdf"
+            message = f"Falha ao buscar documento {id_documento}: {str(e)}"
+            create_info_pdf(message, pdf_path, id_documento, tipo_documento)
+            return {'id': id_documento, 'caminho_pdf': pdf_path}
             
         mimetype = resposta.get('mimetype', '')
-        conteudo = resposta.get('conteudo')
+        conteudo = resposta.get('conteudo', b'')  # Garantir que conteúdo nunca seja None
+        
+        # Verificar se temos conteúdo válido
+        if not conteudo:
+            logger.warning(f"Documento {id_documento} sem conteúdo")
+            # Criar um PDF informativo sobre o erro
+            arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
+            pdf_path = f"{arquivo_temp}.pdf"
+            message = f"Documento {id_documento} ({tipo_documento}) não possui conteúdo"
+            create_info_pdf(message, pdf_path, id_documento, tipo_documento)
+            return {'id': id_documento, 'caminho_pdf': pdf_path}
         
         # Caminho para o arquivo temporário
         arquivo_temp = os.path.join(temp_dir, f"doc_{id_documento}")
         
         # Variável para armazenar o caminho do PDF final
         pdf_path = None
-        
-        # Processar baseado no tipo MIME
+            
         if mimetype == 'application/pdf':
             # Já é PDF, salvar diretamente
             pdf_path = f"{arquivo_temp}.pdf"
@@ -428,7 +503,12 @@ def processar_documento(num_processo, id_documento, tipo_documento, cpf, senha, 
             except Exception as e:
                 logger.error(f"Erro ao converter HTML para PDF: {str(e)}")
                 # Tenta criar um PDF simples com o texto
-                create_text_pdf(conteudo.decode('utf-8', errors='ignore'), pdf_path, id_documento, tipo_documento)
+                try:
+                    texto_html = conteudo.decode('utf-8', errors='ignore')
+                    create_text_pdf(texto_html, pdf_path, id_documento, tipo_documento)
+                except Exception as ex:
+                    logger.error(f"Erro secundário ao processar HTML: {str(ex)}")
+                    return None
                 
         elif mimetype in ['text/plain', 'text/xml']:
             # Converter texto para PDF
@@ -584,12 +664,36 @@ def add_document_header(pdf_path, doc_id, doc_type):
         doc_type (str): Tipo do documento
     """
     try:
+        # Verificar se o arquivo PDF é válido
+        try:
+            with open(pdf_path, 'rb') as test_file:
+                test_content = test_file.read(20)  # Ler primeiros bytes
+                if not test_content.startswith(b'%PDF'):
+                    logger.error(f"Arquivo {pdf_path} não é um PDF válido")
+                    # Se não for PDF válido, criar um PDF informativo
+                    create_info_pdf(f"Documento {doc_id} não pôde ser processado - arquivo inválido", 
+                                   pdf_path, doc_id, doc_type)
+                    return True  # Retornar True para evitar erro
+        except Exception as e:
+            logger.error(f"Erro ao verificar PDF {pdf_path}: {str(e)}")
+            # Recriar arquivo se estiver corrompido
+            create_info_pdf(f"Documento {doc_id} não pôde ser processado: {str(e)}", 
+                           pdf_path, doc_id, doc_type)
+            return True  # Retornar True para evitar erro
+        
         # Criar um novo arquivo para armazenar o resultado
         temp_output = f"{pdf_path}.temp.pdf"
         
         # Ler o PDF existente
-        reader = PdfReader(pdf_path)
-        writer = PdfWriter()
+        try:
+            reader = PdfReader(pdf_path)
+            writer = PdfWriter()
+        except Exception as e:
+            logger.error(f"Erro ao ler PDF {pdf_path}: {str(e)}")
+            # Recriar arquivo se estiver corrompido
+            create_info_pdf(f"Documento {doc_id} não pôde ser lido: {str(e)}", 
+                           pdf_path, doc_id, doc_type)
+            return True  # Retornar True para evitar erro
         
         # Para cada página do PDF original
         for i in range(len(reader.pages)):
