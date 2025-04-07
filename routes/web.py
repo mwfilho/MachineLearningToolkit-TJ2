@@ -130,22 +130,27 @@ def debug_pdf_completo():
         
         # Importar diretamente a função otimizada sem passar pelo banco de dados
         try:
-            # Usar a versão mais simples sem threads/processos para ser compatível com o Replit
-            from fix_pdf_download_simples import gerar_pdf_completo_simples as gerar_pdf_completo_otimizado
+            # Usar a versão ultra-simplificada com timeouts agressivos para o Replit
+            from fix_pdf_download_ultra_simples import gerar_pdf_ultra_simples as gerar_pdf_completo_otimizado
         except ImportError as e:
-            logger.error(f"Erro ao importar módulo simplificado: {str(e)}")
+            logger.error(f"Erro ao importar módulo ultra-simplificado: {str(e)}")
             try:
-                # Tentar a versão com timeout
-                from fix_pdf_download_timeout import gerar_pdf_completo_otimizado
+                # Tentar a versão mais simples sem threads/processos
+                from fix_pdf_download_simples import gerar_pdf_completo_simples as gerar_pdf_completo_otimizado
             except ImportError as e2:
-                logger.error(f"Erro ao importar módulo otimizado para timeout: {str(e2)}")
+                logger.error(f"Erro ao importar módulo simplificado: {str(e2)}")
                 try:
-                    # Fallback para a versão original
-                    from fix_pdf_download import gerar_pdf_completo_otimizado
+                    # Tentar a versão com timeout
+                    from fix_pdf_download_timeout import gerar_pdf_completo_otimizado
                 except ImportError as e3:
-                    logger.error(f"Erro ao importar módulos necessários: {str(e3)}")
-                    flash(f'Não foi possível carregar os módulos necessários: {str(e3)}', 'error')
-                    return render_template('debug.html')
+                    logger.error(f"Erro ao importar módulo otimizado para timeout: {str(e3)}")
+                    try:
+                        # Fallback para a versão original
+                        from fix_pdf_download import gerar_pdf_completo_otimizado
+                    except ImportError as e4:
+                        logger.error(f"Erro ao importar módulos necessários: {str(e4)}")
+                        flash(f'Não foi possível carregar os módulos necessários: {str(e4)}', 'error')
+                        return render_template('debug.html')
             
         # Gerar links para diferentes opções de download
         download_links = []
