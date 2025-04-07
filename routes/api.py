@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, send_file, request
 import os
+import gc
 import logging
 from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
 from utils import extract_mni_data, extract_capa_processo
@@ -226,59 +227,76 @@ def gerar_pdf_completo(num_processo):
         # Determinar o máximo de workers baseado na quantidade de documentos
         max_workers = min(10, len(documentos))  # Limita a 10 threads simultâneas
         
-        # Usar ThreadPoolExecutor para processamento paralelo
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Mapear a função de processamento para cada documento
-            future_to_doc = {
-                executor.submit(
-                    processar_documento, 
-                    num_processo, doc['id'], 
-                    doc.get('tipoDocumento', ''), 
-                    cpf, senha, temp_dir
-                ): doc 
-                for doc in documentos
-            }
+        # Processar documentos em lotes para economizar memória
+        tamanho_lote = 5  # Processar apenas 5 documentos por vez
+        total_docs = len(documentos)
+        pdf_paths = []
+        
+        for inicio_lote in range(0, total_docs, tamanho_lote):
+            fim_lote = min(inicio_lote + tamanho_lote, total_docs)
+            lote_atual = documentos[inicio_lote:fim_lote]
+            logger.info(f"Processando lote de documentos {inicio_lote+1}-{fim_lote} de {total_docs}")
             
-            # Lista para armazenar os caminhos dos PDFs válidos na ordem correta
-            pdf_paths = []
+            # Limitar o número máximo de workers ao tamanho do lote
+            lote_max_workers = min(max_workers, len(lote_atual)) 
             
-            # Processar resultados conforme forem concluídos
-            for future in concurrent.futures.as_completed(future_to_doc):
-                doc = future_to_doc[future]
-                try:
-                    resultado = future.result()
-                    if resultado and resultado.get('caminho_pdf'):
-                        try:
-                            # Armazenar caminho e ID para processar na ordem correta depois
-                            logger.debug(f"Documento {doc['id']} processado com sucesso")
-                            pdf_paths.append({
-                                'id': doc['id'],
-                                'caminho': resultado['caminho_pdf'],
-                                'index': documentos.index(doc)  # Manter a ordem original
-                            })
-                            processados += 1
-                        except Exception as e:
-                            logger.error(f"Erro ao registrar documento {doc['id']}: {str(e)}", exc_info=True)
+            # Usar ThreadPoolExecutor para processamento paralelo do lote atual
+            with concurrent.futures.ThreadPoolExecutor(max_workers=lote_max_workers) as executor:
+                # Mapear a função de processamento para cada documento do lote
+                future_to_doc = {
+                    executor.submit(
+                        processar_documento, 
+                        num_processo, doc['id'], 
+                        doc.get('tipoDocumento', ''), 
+                        cpf, senha, temp_dir
+                    ): (doc, documentos.index(doc))  # Incluir índice original 
+                    for doc in lote_atual
+                }
+                
+                # Processar resultados conforme forem concluídos
+                for future in concurrent.futures.as_completed(future_to_doc):
+                    doc, indice_original = future_to_doc[future]
+                    try:
+                        resultado = future.result()
+                        if resultado and resultado.get('caminho_pdf'):
+                            try:
+                                # Armazenar caminho e ID para processar na ordem correta depois
+                                logger.debug(f"Documento {doc['id']} processado com sucesso")
+                                pdf_paths.append({
+                                    'id': doc['id'],
+                                    'caminho': resultado['caminho_pdf'],
+                                    'index': indice_original  # Manter a ordem original
+                                })
+                                processados += 1
+                            except Exception as e:
+                                logger.error(f"Erro ao registrar documento {doc['id']}: {str(e)}", exc_info=True)
+                                erros += 1
+                        else:
+                            logger.warning(f"Documento {doc['id']} não gerou PDF válido")
                             erros += 1
-                    else:
-                        logger.warning(f"Documento {doc['id']} não gerou PDF válido")
+                    except Exception as e:
+                        logger.error(f"Erro ao processar documento {doc['id']}: {str(e)}", exc_info=True)
                         erros += 1
-                except Exception as e:
-                    logger.error(f"Erro ao processar documento {doc['id']}: {str(e)}", exc_info=True)
-                    erros += 1
             
-            # Ordenar PDFs conforme a ordem original dos documentos
-            pdf_paths.sort(key=lambda x: x['index'])
-            
-            # Adicionar PDFs ao merger na ordem correta
-            for pdf_info in pdf_paths:
-                try:
-                    logger.debug(f"Adicionando documento {pdf_info['id']} ao PDF combinado")
-                    pdf_merger.append(pdf_info['caminho'])
-                except Exception as e:
-                    logger.error(f"Erro ao adicionar documento {pdf_info['id']} ao PDF: {str(e)}", exc_info=True)
-                    erros += 1
-                    processados -= 1  # Ajustar contador
+            # Liberar um pouco de memória antes de processar o próximo lote
+            gc.collect()
+        
+        # Ordenar PDFs conforme a ordem original dos documentos
+        pdf_paths.sort(key=lambda x: x['index'])
+        
+        # Adicionar PDFs ao merger na ordem correta (também em lotes para economizar memória)
+        for i, pdf_info in enumerate(pdf_paths):
+            try:
+                logger.debug(f"Adicionando documento {i+1}/{len(pdf_paths)} ao PDF combinado")
+                pdf_merger.append(pdf_info['caminho'])
+                
+                # A cada 10 documentos, liberar memória
+                if (i + 1) % 10 == 0:
+                    gc.collect()
+            except Exception as e:
+                logger.error(f"Erro ao adicionar documento {pdf_info['id']} ao PDF: {str(e)}", exc_info=True)
+                erros += 1
+                processados -= 1  # Ajustar contador
         
         if processados == 0:
             erros_message = f"Total de erros: {erros}"
