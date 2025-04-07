@@ -180,15 +180,19 @@ def gerar_pdf_completo(num_processo):
     # Importar aqui para evitar problemas com o banco de dados
     try:
         # Garantir que estamos importando apenas o que precisamos, sem acionar a inicialização do banco de dados
-        from fix_pdf_download import gerar_pdf_completo_otimizado
-        from funcoes_mni import retorna_processo
-        from utils import extract_mni_data
+        # Usar a versão com melhor tratamento de timeouts
+        from fix_pdf_download_timeout import gerar_pdf_completo_otimizado
     except ImportError as e:
-        logger.error(f"Erro ao importar módulos necessários: {str(e)}")
-        return jsonify({
-            'erro': 'Erro de configuração',
-            'mensagem': f'Não foi possível carregar os módulos necessários: {str(e)}'
-        }), 500
+        logger.error(f"Erro ao importar módulos otimizados para timeout: {str(e)}")
+        try:
+            # Fallback para a versão anterior
+            from fix_pdf_download import gerar_pdf_completo_otimizado
+        except ImportError as e2:
+            logger.error(f"Erro ao importar módulos necessários: {str(e2)}")
+            return jsonify({
+                'erro': 'Erro de configuração',
+                'mensagem': f'Não foi possível carregar os módulos necessários: {str(e2)}'
+            }), 500
         
     start_time = time.time()
     temp_dir = None
@@ -214,7 +218,10 @@ def gerar_pdf_completo(num_processo):
         if modo_rapido and limite_docs == 0:
             limite_docs = 10  # Em modo rápido, limitar a 10 documentos por padrão
         
-        # Usar a versão otimizada que implementa internamente todo o processo
+        # Logging para depuração
+        logger.debug(f"Iniciando download do processo {num_processo} com limite de {limite_docs} documentos")
+        
+        # Usar a versão otimizada que implementa internamente todo o processo com melhor tratamento de timeouts
         output_path = gerar_pdf_completo_otimizado(num_processo, cpf, senha, limite_docs=limite_docs)
         
         if not output_path:
@@ -224,7 +231,23 @@ def gerar_pdf_completo(num_processo):
             }), 500
         
         # Nome do arquivo baseado na limitação
-        if limite_docs > 0:
+        if not os.path.exists(output_path):
+            logger.error(f"Arquivo de saída não existe: {output_path}")
+            return jsonify({
+                'erro': 'Arquivo não encontrado',
+                'mensagem': 'O arquivo PDF gerado não pôde ser localizado'
+            }), 500
+            
+        # Log do tamanho do arquivo para debug
+        file_size = os.path.getsize(output_path)
+        logger.debug(f"Arquivo PDF gerado com sucesso: {output_path} ({file_size} bytes)")
+            
+        # Nome do arquivo para download
+        if 'timeout' in output_path:
+            download_filename = f'timeout_{num_processo}.pdf'
+        elif 'erro' in output_path:
+            download_filename = f'erro_{num_processo}.pdf'
+        elif limite_docs > 0:
             download_filename = f'processo_parcial_{num_processo}_{limite_docs}docs.pdf'
         else:
             download_filename = f'processo_completo_{num_processo}.pdf'

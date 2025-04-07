@@ -130,12 +130,17 @@ def debug_pdf_completo():
         
         # Importar diretamente a função otimizada sem passar pelo banco de dados
         try:
-            # Garantir que estamos importando apenas o que precisamos, sem acionar a inicialização do banco de dados
-            from fix_pdf_download import gerar_pdf_completo_otimizado
+            # Usar a versão com melhor tratamento de timeouts
+            from fix_pdf_download_timeout import gerar_pdf_completo_otimizado
         except ImportError as e:
-            logger.error(f"Erro ao importar módulos necessários: {str(e)}")
-            flash(f'Não foi possível carregar os módulos necessários: {str(e)}', 'error')
-            return render_template('debug.html')
+            logger.error(f"Erro ao importar módulo otimizado para timeout: {str(e)}")
+            try:
+                # Fallback para a versão original
+                from fix_pdf_download import gerar_pdf_completo_otimizado
+            except ImportError as e2:
+                logger.error(f"Erro ao importar módulos necessários: {str(e2)}")
+                flash(f'Não foi possível carregar os módulos necessários: {str(e2)}', 'error')
+                return render_template('debug.html')
             
         # Gerar links para diferentes opções de download
         download_links = []
