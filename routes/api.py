@@ -179,20 +179,24 @@ def gerar_pdf_completo(num_processo):
     """
     # Importar aqui para evitar problemas com o banco de dados
     try:
-        # Garantir que estamos importando apenas o que precisamos, sem acionar a inicialização do banco de dados
-        # Usar a versão com melhor tratamento de timeouts
-        from fix_pdf_download_timeout import gerar_pdf_completo_otimizado
+        # Usar a versão mais simples sem threads/processos para ser compatível com o Replit
+        from fix_pdf_download_simples import gerar_pdf_completo_simples as gerar_pdf_completo_otimizado
     except ImportError as e:
-        logger.error(f"Erro ao importar módulos otimizados para timeout: {str(e)}")
+        logger.error(f"Erro ao importar módulo simplificado: {str(e)}")
         try:
-            # Fallback para a versão anterior
-            from fix_pdf_download import gerar_pdf_completo_otimizado
-        except ImportError as e2:
-            logger.error(f"Erro ao importar módulos necessários: {str(e2)}")
-            return jsonify({
-                'erro': 'Erro de configuração',
-                'mensagem': f'Não foi possível carregar os módulos necessários: {str(e2)}'
-            }), 500
+            # Tentar a versão com timeout
+            from fix_pdf_download_timeout import gerar_pdf_completo_otimizado
+        except ImportError as e:
+            logger.error(f"Erro ao importar módulo timeout: {str(e)}")
+            try:
+                # Fallback para a versão original
+                from fix_pdf_download import gerar_pdf_completo_otimizado
+            except ImportError as e3:
+                logger.error(f"Erro ao importar módulos necessários: {str(e3)}")
+                return jsonify({
+                    'erro': 'Erro de configuração',
+                    'mensagem': f'Não foi possível carregar os módulos necessários: {str(e3)}'
+                }), 500
         
     start_time = time.time()
     temp_dir = None
