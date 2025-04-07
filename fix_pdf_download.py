@@ -777,7 +777,7 @@ def gerar_cabecalho_processo(dados_processo):
                 pdf.drawString(90, y, f"... e mais {len(documentos) - 15} documentos")
     
     # Adicionar rodapé
-    pdf.setFont("Helvetica-Italic", 8)
+    pdf.setFont("Helvetica", 8)  # Usando Helvetica normal em vez de Helvetica-Italic
     pdf.drawString(72, 40, "Este PDF contém todos os documentos do processo judicial, gerado automaticamente.")
     pdf.drawString(72, 30, f"Data de geração: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
     
