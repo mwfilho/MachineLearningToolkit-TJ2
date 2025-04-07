@@ -172,7 +172,7 @@ def get_capa_processo(num_processo):
 def gerar_pdf_completo(num_processo):
     """
     Gera um PDF único contendo todos os documentos do processo.
-    Versão mínima para fins de depuração.
+    Implementação robusta que suporta falhas parciais.
     
     Args:
         num_processo (str): Número do processo judicial
@@ -182,25 +182,127 @@ def gerar_pdf_completo(num_processo):
     """
     from datetime import datetime
     
-    # Criando PDF simples apenas com informações básicas para testar
+    # Buffer para o PDF final
     buffer = io.BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=letter)
-    pdf.setFont("Helvetica-Bold", 16)
-    pdf.drawString(72, 750, f"TESTE - PROCESSO {num_processo}")
-    pdf.setFont("Helvetica", 12)
-    pdf.drawString(72, 720, f"PDF gerado em {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-    pdf.drawString(72, 700, "Este é um PDF de teste para verificar se o endpoint está funcionando")
-    pdf.drawString(72, 680, "Nenhum documento foi buscado nesta versão simplificada")
-    pdf.showPage()
-    pdf.save()
+    pdf_merger = PdfMerger()
+    
+    # Informações de status para incluir no PDF
+    status_info = {
+        'data_geracao': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+        'num_processo': num_processo,
+        'total_documentos': 0,
+        'documentos_processados': 0,
+        'erro_consulta': None
+    }
+    
+    # Obter credenciais
+    cpf, senha = get_mni_credentials()
+    
+    # Tentar obter a lista de documentos do processo
+    try:
+        if cpf and senha:
+            # Tentar consultar o processo
+            logger.debug(f"Consultando processo {num_processo}")
+            resposta_processo = retorna_processo(num_processo, cpf=cpf, senha=senha)
+            dados = extract_mni_data(resposta_processo)
+            
+            if dados.get('sucesso') and dados.get('documentos'):
+                documentos = dados['documentos']
+                status_info['total_documentos'] = len(documentos)
+                
+                # Adicionar máximo de 3 documentos (limitar para evitar timeouts)
+                max_docs = min(3, len(documentos))
+                for i in range(max_docs):
+                    doc = documentos[i]
+                    doc_id = doc['id']
+                    
+                    # Tentar obter o documento com timeout reduzido
+                    try:
+                        resposta = retorna_documento_processo(num_processo, doc_id, cpf=cpf, senha=senha)
+                        
+                        if 'msg_erro' not in resposta and resposta.get('conteudo'):
+                            mimetype = resposta.get('mimetype', '')
+                            conteudo = resposta.get('conteudo', b'')
+                            
+                            # Processar com base no mimetype
+                            if mimetype == 'application/pdf':
+                                # Já é PDF, usar diretamente
+                                doc_buffer = io.BytesIO(conteudo)
+                                pdf_merger.append(doc_buffer)
+                                status_info['documentos_processados'] += 1
+                            else:
+                                # Criar PDF simples para outros tipos
+                                doc_buffer = io.BytesIO()
+                                pdf = canvas.Canvas(doc_buffer, pagesize=letter)
+                                pdf.setFont("Helvetica-Bold", 14)
+                                pdf.drawString(72, 750, f"Documento {doc_id}")
+                                pdf.setFont("Helvetica", 12)
+                                pdf.drawString(72, 720, f"Tipo: {mimetype}")
+                                pdf.drawString(72, 700, f"Tamanho: {len(conteudo)} bytes")
+                                pdf.showPage()
+                                pdf.save()
+                                doc_buffer.seek(0)
+                                pdf_merger.append(doc_buffer)
+                                status_info['documentos_processados'] += 1
+                    except Exception as e:
+                        logger.error(f"Erro ao processar documento {doc_id}: {str(e)}")
+                        # Continuar para o próximo documento
+        else:
+            status_info['erro_consulta'] = "Credenciais MNI não fornecidas"
+    except Exception as e:
+        logger.error(f"Erro ao consultar processo: {str(e)}")
+        status_info['erro_consulta'] = str(e)
+    
+    # Criar página de capa com informações do status
+    capa_buffer = io.BytesIO()
+    capa = canvas.Canvas(capa_buffer, pagesize=letter)
+    
+    # Cabeçalho
+    capa.setFont("Helvetica-Bold", 16)
+    capa.drawString(72, 750, f"PROCESSO {num_processo}")
+    
+    # Informações de status
+    capa.setFont("Helvetica", 12)
+    y = 720
+    capa.drawString(72, y, f"PDF gerado em: {status_info['data_geracao']}")
+    y -= 20
+    
+    if status_info['erro_consulta']:
+        capa.setFont("Helvetica-Bold", 12)
+        capa.drawString(72, y, "Erro na consulta:")
+        y -= 20
+        capa.setFont("Helvetica", 12)
+        capa.drawString(72, y, status_info['erro_consulta'])
+    else:
+        capa.drawString(72, y, f"Total de documentos no processo: {status_info['total_documentos']}")
+        y -= 20
+        capa.drawString(72, y, f"Documentos incluídos neste PDF: {status_info['documentos_processados']}")
+        
+        if status_info['documentos_processados'] < status_info['total_documentos']:
+            y -= 20
+            capa.setFillColorRGB(0.8, 0.2, 0.2)  # Vermelho para alerta
+            capa.drawString(72, y, f"Atenção: Por motivos de desempenho, apenas os primeiros {min(3, status_info['total_documentos'])}")
+            y -= 15
+            capa.drawString(72, y, "documentos foram incluídos neste PDF.")
+    
+    capa.showPage()
+    capa.save()
+    capa_buffer.seek(0)
+    
+    # Adicionar capa como primeira página
+    pdf_merger.append(capa_buffer)
+    
+    # Finalizar e salvar o PDF
+    pdf_merger.write(buffer)
+    pdf_merger.close()
     buffer.seek(0)
     
-    # Retornar o PDF diretamente da memória
+    # Retornar o PDF completo
     return send_file(
         buffer,
         mimetype='application/pdf',
         as_attachment=True,
-        download_name=f'teste_pdf_{num_processo}.pdf'
+        download_name=f'processo_{num_processo}.pdf'
     )
 
 
