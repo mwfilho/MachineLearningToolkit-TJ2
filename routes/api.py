@@ -289,3 +289,200 @@ def gerar_pdf_completo(num_processo):
                 logger.debug(f"Diretório temporário removido: {temp_dir}")
             except Exception as e:
                 logger.warning(f"Não foi possível remover diretório temporário: {str(e)}")
+
+@api.route('/processo/<num_processo>/pdf-completo-novo', methods=['GET'])
+def gerar_pdf_completo_novo(num_processo):
+    """
+    Gera um PDF único contendo todos os documentos do processo.
+    Esta é uma nova implementação que baixa cada documento individualmente,
+    identifica se é HTML ou PDF, faz a conversão e mescla todos em um único arquivo.
+    
+    Args:
+        num_processo (str): Número do processo judicial
+        
+    Returns:
+        O arquivo PDF combinado para download ou uma mensagem de erro
+    """
+    # Importar a versão mais apropriada do gerador de PDF
+    try:
+        # Tentar a versão ultra simples, otimizada para Replit
+        from pdf_completo_ultra_simples import gerar_pdf_completo_ultra_simples as gerar_pdf_fn
+        logger.debug("Usando implementação ultra simplificada para PDF completo")
+    except ImportError:
+        # Fallback para implementação regular
+        from pdf_completo import gerar_pdf_completo as gerar_pdf_fn
+        logger.debug("Usando implementação regular para PDF completo")
+    
+    start_time = time.time()
+    temp_dir = None
+    
+    try:
+        logger.debug(f"API: Iniciando geração do PDF completo (método novo) para o processo {num_processo}")
+        
+        # Obter credenciais
+        cpf, senha = get_mni_credentials()
+        if not cpf or not senha:
+            return jsonify({
+                'erro': 'Credenciais MNI não fornecidas',
+                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+            }), 401
+        
+        # Verificar se há parâmetro de limite
+        try:
+            limite_docs = int(request.args.get('limite', 0))
+        except (ValueError, TypeError):
+            limite_docs = 0
+        
+        # Logging para depuração
+        logger.debug(f"Iniciando novo método de geração de PDF para o processo {num_processo} com limite de {limite_docs} documentos")
+        
+        # Usar o gerador de PDF selecionado
+        output_path = gerar_pdf_fn(num_processo, cpf, senha, limite_docs=limite_docs)
+        
+        if not output_path:
+            return jsonify({
+                'erro': 'Falha no processamento',
+                'mensagem': 'Não foi possível processar o processo para gerar o PDF completo'
+            }), 500
+        
+        # Verificar se o arquivo existe
+        if not os.path.exists(output_path):
+            logger.error(f"Arquivo de saída não existe: {output_path}")
+            return jsonify({
+                'erro': 'Arquivo não encontrado',
+                'mensagem': 'O arquivo PDF gerado não pôde ser localizado'
+            }), 500
+            
+        # Log do tamanho do arquivo para debug
+        file_size = os.path.getsize(output_path)
+        logger.debug(f"Arquivo PDF gerado com sucesso: {output_path} ({file_size} bytes)")
+            
+        # Nome do arquivo para download
+        if 'erro' in output_path:
+            download_filename = f'erro_{num_processo}.pdf'
+        elif limite_docs > 0:
+            download_filename = f'processo_parcial_{num_processo}_{limite_docs}docs.pdf'
+        else:
+            download_filename = f'processo_completo_{num_processo}.pdf'
+            
+        # Servir o arquivo para download
+        return send_file(
+            output_path,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=download_filename
+        )
+            
+    except Exception as e:
+        logger.error(f"API: Erro ao gerar PDF completo (método novo): {str(e)}", exc_info=True)
+        return jsonify({
+            'erro': str(e),
+            'mensagem': 'Erro ao gerar PDF completo do processo (método novo)'
+        }), 500
+    finally:
+        # Registrar tempo de execução
+        if 'start_time' in locals():
+            tempo_total = time.time() - start_time
+            logger.debug(f"Tempo total de execução (método novo, incluindo erros): {tempo_total:.2f}s")
+        
+        # Tentar limpar os arquivos temporários, se possível
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                logger.debug(f"Diretório temporário removido: {temp_dir}")
+            except Exception as e:
+                logger.warning(f"Não foi possível remover diretório temporário: {str(e)}")
+                
+                
+@api.route('/processo/<num_processo>/pdf-completo-ultra', methods=['GET'])
+def gerar_pdf_completo_ultra(num_processo):
+    """
+    Gera um PDF único contendo documentos do processo.
+    Esta é uma implementação ultra simples, com timeouts agressivos e limitações
+    de memória específicas para o ambiente Replit.
+    
+    Args:
+        num_processo (str): Número do processo judicial
+        
+    Returns:
+        O arquivo PDF combinado para download ou uma mensagem de erro
+    """
+    # Importar a versão ultra simplificada do gerador de PDF
+    from pdf_completo_ultra_simples import gerar_pdf_completo_ultra_simples
+    
+    start_time = time.time()
+    temp_dir = None
+    
+    try:
+        logger.debug(f"API: Iniciando geração do PDF completo (versão ultra) para o processo {num_processo}")
+        
+        # Obter credenciais
+        cpf, senha = get_mni_credentials()
+        if not cpf or not senha:
+            return jsonify({
+                'erro': 'Credenciais MNI não fornecidas',
+                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+            }), 401
+        
+        # Verificar se há parâmetro de limite
+        try:
+            limite_docs = int(request.args.get('limite', 0))
+        except (ValueError, TypeError):
+            limite_docs = 0  # Será aplicado o limite padrão na função
+        
+        # Usar a versão ultra simplificada
+        output_path = gerar_pdf_completo_ultra_simples(num_processo, cpf, senha, limite_docs=limite_docs)
+        
+        if not output_path:
+            return jsonify({
+                'erro': 'Falha no processamento',
+                'mensagem': 'Não foi possível processar o processo para gerar o PDF'
+            }), 500
+        
+        # Verificar se o arquivo existe
+        if not os.path.exists(output_path):
+            logger.error(f"Arquivo de saída não existe: {output_path}")
+            return jsonify({
+                'erro': 'Arquivo não encontrado',
+                'mensagem': 'O arquivo PDF gerado não pôde ser localizado'
+            }), 500
+            
+        # Log do tamanho do arquivo para debug
+        file_size = os.path.getsize(output_path)
+        logger.debug(f"Arquivo PDF gerado com sucesso: {output_path} ({file_size} bytes)")
+            
+        # Nome do arquivo para download
+        if 'erro' in output_path:
+            download_filename = f'erro_{num_processo}.pdf'
+        else:
+            download_filename = f'processo_completo_{num_processo}.pdf'
+            
+        # Servir o arquivo para download
+        return send_file(
+            output_path,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=download_filename
+        )
+            
+    except Exception as e:
+        logger.error(f"API: Erro ao gerar PDF completo (versão ultra): {str(e)}", exc_info=True)
+        return jsonify({
+            'erro': str(e),
+            'mensagem': 'Erro ao gerar PDF completo do processo (versão ultra)'
+        }), 500
+    finally:
+        # Registrar tempo de execução
+        if 'start_time' in locals():
+            tempo_total = time.time() - start_time
+            logger.debug(f"Tempo total de execução (versão ultra, incluindo erros): {tempo_total:.2f}s")
+        
+        # Tentar limpar os arquivos temporários, se possível
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                logger.debug(f"Diretório temporário removido: {temp_dir}")
+            except Exception as e:
+                logger.warning(f"Não foi possível remover diretório temporário: {str(e)}")
