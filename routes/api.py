@@ -192,9 +192,14 @@ def gerar_pdf_completo(num_processo):
     # Obter parâmetros da consulta
     inicio = request.args.get('inicio', '0')
     fim = request.args.get('fim', '-1')
-    max_docs = request.args.get('max_docs', '10')
+    max_docs = request.args.get('max_docs', '50')  # Aumentado para 50 por padrão
+    completo = request.args.get('completo', 'false').lower() == 'true'  # Novo parâmetro para PDF completo
     ids_str = request.args.get('ids', '')
     capa_detalhada = request.args.get('capa_detalhada', 'true').lower() == 'true'
+    
+    # Se foi solicitado PDF completo, configurar para pegar todos os documentos
+    if completo:
+        max_docs = 1000  # Valor alto para pegar todos os documentos
     
     # Converter parâmetros para valores numéricos
     try:
@@ -207,8 +212,9 @@ def gerar_pdf_completo(num_processo):
             'mensagem': 'Os parâmetros inicio, fim e max_docs devem ser números inteiros'
         }), 400
     
-    # Limitar max_docs para evitar sobrecarga
-    max_docs = min(max_docs, 50)
+    # Limitar max_docs para evitar sobrecarga, exceto no modo completo
+    if not completo:
+        max_docs = min(max_docs, 50)
     
     # Processar lista de IDs específicos, se fornecida
     ids_especificos = []
