@@ -181,9 +181,23 @@ def gerar_pdf_completo(num_processo):
     Returns:
         O arquivo PDF combinado para download ou uma mensagem de erro
     """
+    # Definir um limite de tempo para o processamento (5 minutos)
+    TEMPO_LIMITE = 5 * 60  # 5 minutos em segundos
+    
+    # Criar diretório temporário para os arquivos
+    temp_dir = None
+    
     try:
         start_time = time.time()
         logger.debug(f"API: Iniciando geração do PDF completo para o processo {num_processo}")
+        
+        # Definir uma função para verificar o tempo decorrido
+        def tempo_excedido():
+            tempo_decorrido = time.time() - start_time
+            if tempo_decorrido > TEMPO_LIMITE:
+                logger.warning(f"Tempo limite excedido ({TEMPO_LIMITE} segundos)")
+                return True
+            return False
         
         # Obter credenciais
         cpf, senha = get_mni_credentials()
@@ -297,6 +311,14 @@ def gerar_pdf_completo(num_processo):
             
             # Liberar um pouco de memória antes de processar o próximo lote
             gc.collect()
+            
+            # Verificar se o tempo limite foi excedido
+            if tempo_excedido():
+                logger.warning(f"Interrompendo processamento por tempo excedido. Documentos processados até agora: {processados}")
+                if not retorno_truncado:
+                    retorno_truncado = True
+                    truncado_info = f"ATENÇÃO: O PDF está truncado! O processamento foi interrompido por exceder o tempo limite de {TEMPO_LIMITE//60} minutos. Apenas {processados} documentos foram processados."
+                break
         
         # Ordenar PDFs conforme a ordem original dos documentos
         pdf_paths.sort(key=lambda x: x['index'])
@@ -310,6 +332,14 @@ def gerar_pdf_completo(num_processo):
                 # A cada 5 documentos, liberar memória
                 if (i + 1) % 5 == 0:
                     gc.collect()
+                    
+                # Verificar se o tempo limite foi excedido
+                if tempo_excedido():
+                    logger.warning(f"Tempo limite excedido durante a junção dos PDFs. Parando no documento {i+1}/{len(pdf_paths)}")
+                    # Marcar como truncado se ainda não estiver
+                    retorno_truncado = True
+                    truncado_info = f"ATENÇÃO: O PDF está truncado! O processamento foi interrompido por exceder o tempo limite de {TEMPO_LIMITE//60} minutos durante a junção dos arquivos. Apenas {i+1} de {len(pdf_paths)} documentos foram incluídos no PDF final."
+                    break
             except Exception as e:
                 logger.error(f"Erro ao adicionar documento {pdf_info['id']} ao PDF: {str(e)}", exc_info=True)
                 erros += 1
@@ -364,6 +394,30 @@ def gerar_pdf_completo(num_processo):
             'erro': str(e),
             'mensagem': 'Erro ao gerar PDF completo do processo'
         }), 500
+    finally:
+        # Limpar o diretório temporário se foi criado
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                # Limpar arquivos no diretório
+                for arquivo in os.listdir(temp_dir):
+                    caminho_arquivo = os.path.join(temp_dir, arquivo)
+                    try:
+                        if os.path.isfile(caminho_arquivo):
+                            os.unlink(caminho_arquivo)
+                        # Se tiver subdiretórios, remover também
+                        elif os.path.isdir(caminho_arquivo):
+                            import shutil
+                            shutil.rmtree(caminho_arquivo)
+                    except Exception as e:
+                        logger.warning(f"Erro ao remover arquivo temporário {caminho_arquivo}: {str(e)}")
+                
+                # Remover o diretório
+                import shutil
+                shutil.rmtree(temp_dir)
+                logger.debug(f"Diretório temporário {temp_dir} removido com sucesso")
+            except Exception as e:
+                logger.warning(f"Erro ao limpar diretório temporário {temp_dir}: {str(e)}")
+                # Não lançar exceção para não interferir na resposta ao cliente
 
 
 def gerar_cabecalho_processo(dados_processo, truncado_info=""):
