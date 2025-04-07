@@ -209,15 +209,32 @@ def gerar_pdf_completo(num_processo):
             }), 404
             
         documentos = dados['documentos']
-        logger.debug(f"Encontrados {len(documentos)} documentos no processo {num_processo}")
+        total_documentos = len(documentos)
+        logger.debug(f"Encontrados {total_documentos} documentos no processo {num_processo}")
         logger.debug(f"Primeiro documento: {documentos[0] if documentos else 'Nenhum'}")
+        
+        # Verificar se o processo tem muitos documentos, limitar para evitar problemas de memória
+        max_docs_por_requisicao = 20
+        if total_documentos > max_docs_por_requisicao:
+            logger.warning(f"Processo com muitos documentos ({total_documentos}). Limitando a {max_docs_por_requisicao} para evitar problemas de memória.")
+            documentos = documentos[:max_docs_por_requisicao]
+            
+            # Avisar ao cliente que o PDF está truncado
+            retorno_truncado = True
+        else:
+            retorno_truncado = False
         
         # Criar diretório temporário para armazenar arquivos
         temp_dir = tempfile.mkdtemp()
         pdf_merger = PdfMerger()
         
+        # Verificar se o PDF está truncado
+        truncado_info = ""
+        if 'retorno_truncado' in locals() and retorno_truncado:
+            truncado_info = f"ATENÇÃO: O PDF está truncado! O processo contém {total_documentos} documentos, mas apenas os primeiros {max_docs_por_requisicao} foram incluídos para evitar problemas de memória."
+        
         # Adicionar cabeçalho com informações do processo
-        cabecalho_buffer = gerar_cabecalho_processo(dados)
+        cabecalho_buffer = gerar_cabecalho_processo(dados, truncado_info)
         pdf_merger.append(cabecalho_buffer)
         
         # Contador de documentos processados
@@ -228,7 +245,7 @@ def gerar_pdf_completo(num_processo):
         max_workers = min(10, len(documentos))  # Limita a 10 threads simultâneas
         
         # Processar documentos em lotes para economizar memória
-        tamanho_lote = 5  # Processar apenas 5 documentos por vez
+        tamanho_lote = 3  # Processar apenas 3 documentos por vez para minimizar uso de memória
         total_docs = len(documentos)
         pdf_paths = []
         
@@ -290,8 +307,8 @@ def gerar_pdf_completo(num_processo):
                 logger.debug(f"Adicionando documento {i+1}/{len(pdf_paths)} ao PDF combinado")
                 pdf_merger.append(pdf_info['caminho'])
                 
-                # A cada 10 documentos, liberar memória
-                if (i + 1) % 10 == 0:
+                # A cada 5 documentos, liberar memória
+                if (i + 1) % 5 == 0:
                     gc.collect()
             except Exception as e:
                 logger.error(f"Erro ao adicionar documento {pdf_info['id']} ao PDF: {str(e)}", exc_info=True)
@@ -326,11 +343,19 @@ def gerar_pdf_completo(num_processo):
         logger.info(f"PDF gerado com sucesso. Processados: {processados}/{total_docs} documentos ({taxa_sucesso:.1f}%). "
                     f"Tempo total: {tempo_total:.2f} segundos.")
         
+        # Criar cabeçalho personalizado para indicar se o PDF está truncado
+        headers = {}
+        if 'retorno_truncado' in locals() and retorno_truncado:
+            headers['X-PDF-Truncado'] = 'true'
+            headers['X-Total-Documentos'] = str(total_documentos)
+            headers['X-Documentos-Incluidos'] = str(max_docs_por_requisicao)
+        
         return send_file(
             output_path,
             mimetype='application/pdf',
             as_attachment=True,
-            download_name=f'processo_completo_{num_processo}.pdf'
+            download_name=f'processo_completo_{num_processo}.pdf',
+            headers=headers
         )
             
     except Exception as e:
@@ -341,12 +366,13 @@ def gerar_pdf_completo(num_processo):
         }), 500
 
 
-def gerar_cabecalho_processo(dados_processo):
+def gerar_cabecalho_processo(dados_processo, truncado_info=""):
     """
     Gera um PDF contendo informações básicas do processo como cabeçalho.
     
     Args:
         dados_processo (dict): Dados do processo
+        truncado_info (str, optional): Mensagem a ser exibida quando o PDF está truncado
         
     Returns:
         io.BytesIO: Buffer com o PDF gerado
@@ -393,7 +419,45 @@ def gerar_cabecalho_processo(dados_processo):
             pdf.drawString(72, y, f"Data de Ajuizamento: {data_str}")
             y -= 30
     
+    # Adicionar informação de truncamento se houver
+    if truncado_info:
+        # Adicionar uma caixa de alerta vermelha
+        pdf.setFillColorRGB(1, 0.9, 0.9)  # Vermelho claro
+        pdf.rect(72, y-30, 450, 50, fill=True)
+        
+        # Texto de alerta
+        pdf.setFillColorRGB(0.8, 0, 0)  # Vermelho escuro
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(82, y-10, "ATENÇÃO: PDF TRUNCADO")
+        
+        # Mensagem detalhada
+        pdf.setFillColorRGB(0, 0, 0)  # Preto
+        pdf.setFont("Helvetica", 10)
+        
+        # Quebrar o texto se for muito longo
+        linhas = []
+        palavras = truncado_info.split()
+        linha_atual = ""
+        
+        for palavra in palavras:
+            teste_linha = linha_atual + " " + palavra if linha_atual else palavra
+            if pdf.stringWidth(teste_linha, "Helvetica", 10) < 430:
+                linha_atual = teste_linha
+            else:
+                linhas.append(linha_atual)
+                linha_atual = palavra
+        
+        if linha_atual:
+            linhas.append(linha_atual)
+        
+        # Escrever as linhas
+        for i, linha in enumerate(linhas):
+            pdf.drawString(82, y-20-(i*12), linha)
+        
+        y -= 60  # Espaçamento extra depois da caixa de alerta
+    
     # Adicionar lista de documentos
+    pdf.setFillColorRGB(0, 0, 0)  # Voltar para preto
     pdf.setFont("Helvetica-Bold", 12)
     pdf.drawString(72, y, "DOCUMENTOS DO PROCESSO")
     y -= 20
