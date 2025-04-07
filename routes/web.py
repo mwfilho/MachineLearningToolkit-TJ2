@@ -57,48 +57,10 @@ def debug_consulta():
             else:
                 doc_info['documentos_vinculados'] = []
 
-        # Adicionar links para download com diferentes limites
-        download_links = []
-        total_docs = len(dados.get('documentos', []))
-        
-        # Criar links com diferentes limites para download parcial
-        if total_docs > 0:
-            # Modo rápido (10 documentos)
-            download_links.append({
-                'url': f"/api/v1/processo/{num_processo}/pdf-completo?rapido=true",
-                'texto': f"Download Rápido (máx. 10 documentos)"
-            })
-            
-            # Links com limites proporcionais ao total
-            if total_docs > 5:
-                download_links.append({
-                    'url': f"/api/v1/processo/{num_processo}/pdf-completo?limite=5",
-                    'texto': f"Download com 5 documentos"
-                })
-            
-            if total_docs > 10:
-                download_links.append({
-                    'url': f"/api/v1/processo/{num_processo}/pdf-completo?limite=10",
-                    'texto': f"Download com 10 documentos"
-                })
-                
-            if total_docs > 20:
-                download_links.append({
-                    'url': f"/api/v1/processo/{num_processo}/pdf-completo?limite=20",
-                    'texto': f"Download com 20 documentos"
-                })
-            
-            # Download completo
-            download_links.append({
-                'url': f"/api/v1/processo/{num_processo}/pdf-completo",
-                'texto': f"Download Completo (todos os {total_docs} documentos)"
-            })
-
         return render_template('debug.html', 
                            resposta=dados,
                            documentos_hierarquia=docs_principais,
-                           num_processo=num_processo,
-                           download_links=download_links)  
+                           num_processo=num_processo)  
 
     except Exception as e:
         logger.error(f"Erro na consulta de debug: {str(e)}", exc_info=True)
@@ -107,11 +69,6 @@ def debug_consulta():
 
 @web.route('/debug/pdf-completo', methods=['POST'])
 def debug_pdf_completo():
-    from flask import Response
-    import tempfile
-    import time
-    import io
-    
     num_processo = request.form.get('num_processo')
     cpf = request.form.get('cpf') or os.environ.get('MNI_ID_CONSULTANTE')
     senha = request.form.get('senha') or os.environ.get('MNI_SENHA_CONSULTANTE')
@@ -127,102 +84,33 @@ def debug_pdf_completo():
         if not cpf or not senha:
             flash('Credenciais MNI não fornecidas. Informe CPF/CNPJ e senha ou configure as variáveis de ambiente.', 'error')
             return render_template('debug.html')
-        
-        # Importar diretamente a função otimizada sem passar pelo banco de dados
-        try:
-            # Usar a versão ultra-simplificada com timeouts agressivos para o Replit
-            from fix_pdf_download_ultra_simples import gerar_pdf_ultra_simples as gerar_pdf_completo_otimizado
-        except ImportError as e:
-            logger.error(f"Erro ao importar módulo ultra-simplificado: {str(e)}")
-            try:
-                # Tentar a versão mais simples sem threads/processos
-                from fix_pdf_download_simples import gerar_pdf_completo_simples as gerar_pdf_completo_otimizado
-            except ImportError as e2:
-                logger.error(f"Erro ao importar módulo simplificado: {str(e2)}")
-                try:
-                    # Tentar a versão com timeout
-                    from fix_pdf_download_timeout import gerar_pdf_completo_otimizado
-                except ImportError as e3:
-                    logger.error(f"Erro ao importar módulo otimizado para timeout: {str(e3)}")
-                    try:
-                        # Fallback para a versão original
-                        from fix_pdf_download import gerar_pdf_completo_otimizado
-                    except ImportError as e4:
-                        logger.error(f"Erro ao importar módulos necessários: {str(e4)}")
-                        flash(f'Não foi possível carregar os módulos necessários: {str(e4)}', 'error')
-                        return render_template('debug.html')
             
-        # Gerar links para diferentes opções de download
-        download_links = []
-        for limite in [5, 10, 20]:
-            download_links.append({
-                'url': f"/api/v1/processo/{num_processo}/pdf-completo?limite={limite}",
-                'texto': f"Baixar primeiros {limite} documentos"
-            })
+        # Obter processo 
+        resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
+        dados = extract_mni_data(resposta)
+        logger.debug(f"Verificando documentos para o processo {num_processo}")
+        
+        # Verificar sucesso da consulta
+        if not dados.get('sucesso'):
+            flash(f'Erro na consulta: {dados.get("mensagem", "Erro desconhecido")}', 'error')
+            return render_template('debug.html')
             
-        # Adicionar opção para download completo
-        download_links.append({
-            'url': f"/api/v1/processo/{num_processo}/pdf-completo",
-            'texto': "Baixar processo completo"
-        })
-        
-        # Obter apenas os primeiros 5 documentos para demonstração
-        limite_docs = 5
-        logger.debug(f"Gerando preview com {limite_docs} documentos")
-        
-        # Usar a versão otimizada diretamente
-        output_path = gerar_pdf_completo_otimizado(num_processo, cpf, senha, limite_docs=limite_docs)
-        
-        if not output_path or not os.path.exists(output_path):
-            flash('Não foi possível gerar o PDF de demonstração. Tente as opções de download individuais.', 'error')
+        # Verificar se há documentos (agora usando o novo formato)
+        if not dados.get('documentos') or len(dados.get('documentos', [])) == 0:
+            # Mostrar quantos documentos foram encontrados nos logs
+            docs_originais = dados.get('processo', {}).get('documentos', [])
+            logger.debug(f"Documentos no formato original: {len(docs_originais)}")
             
-            # Mesmo com erro, tenta apresentar a lista de documentos
-            try:
-                resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
-                dados = extract_mni_data(resposta)
-                
-                # Processar hierarquia de documentos
-                docs_principais = {}
-                
-                if dados['sucesso'] and dados['processo'].get('documentos'):
-                    for doc in dados['processo']['documentos']:
-                        doc_id = doc['idDocumento']
-                        docs_principais[doc_id] = doc
-                        
-                        # Se tem documentos vinculados, adiciona à estrutura
-                        if 'documentos_vinculados' not in doc:
-                            doc['documentos_vinculados'] = []
-                
-                return render_template('debug.html', 
-                                    resposta=dados,
-                                    documentos_hierarquia=docs_principais,
-                                    num_processo=num_processo,
-                                    download_links=download_links)
-            except Exception as inner_e:
-                logger.error(f"Erro ao obter lista de documentos: {str(inner_e)}")
-                return render_template('debug.html')
-        
-        # Abrir o arquivo gerado e enviá-lo como resposta
-        with open(output_path, 'rb') as f:
-            pdf_data = f.read()
-        
-        # Definir nome do arquivo
-        filename = f"processo_preview_{num_processo}_{limite_docs}docs.pdf"
-        
-        # Remover arquivo temporário
-        try:
-            os.remove(output_path)
-        except:
-            pass
-        
-        # Enviar o PDF gerado
-        return Response(
-            io.BytesIO(pdf_data),
-            mimetype='application/pdf',
-            headers={
-                'Content-Disposition': f'attachment; filename={filename}'
-            }
-        )
+            flash('O processo não tem documentos disponíveis ou você não tem permissão para acessá-los.', 'error')
+            return render_template('debug.html')
+            
+        # Para permitir download direto, definimos headers customizados para API
+        os.environ['MNI_ID_CONSULTANTE'] = cpf
+        os.environ['MNI_SENHA_CONSULTANTE'] = senha
+            
+        # Redirecionar para o endpoint da API com os parâmetros necessários
+        logger.debug(f"Redirecionando para API com {len(dados.get('documentos', []))} documentos encontrados")
+        return redirect(url_for('api.gerar_pdf_completo', num_processo=num_processo))
         
     except Exception as e:
         logger.error(f"Erro ao gerar PDF completo: {str(e)}", exc_info=True)

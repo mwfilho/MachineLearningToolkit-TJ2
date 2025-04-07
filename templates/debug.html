@@ -152,6 +152,72 @@
             </div>
         </div>
         
+        <!-- Seção de API Endpoints -->
+        <div class="card mt-4">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Documentação API</h5>
+            </div>
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3">Endpoints API</h6>
+                <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>
+                            <code>/api/v1/processo/{num_processo}</code>
+                            <small class="text-muted d-block">Lista todos os documentos do processo</small>
+                        </span>
+                        <span class="badge bg-primary rounded-pill">GET</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>
+                            <code>/api/v1/processo/{num_processo}/documento/{num_documento}</code>
+                            <small class="text-muted d-block">Retorna um documento específico</small>
+                        </span>
+                        <span class="badge bg-primary rounded-pill">GET</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>
+                            <code>/api/v1/processo/{num_processo}/peticao-inicial</code>
+                            <small class="text-muted d-block">Retorna a petição inicial</small>
+                        </span>
+                        <span class="badge bg-primary rounded-pill">GET</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>
+                            <code>/api/v1/processo/{num_processo}/capa</code>
+                            <small class="text-muted d-block">Retorna dados básicos do processo</small>
+                        </span>
+                        <span class="badge bg-primary rounded-pill">GET</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>
+                            <code>/api/v1/processo/{num_processo}/pdf-completo</code>
+                            <small class="text-muted d-block">Gera PDF completo do processo (implementação original)</small>
+                        </span>
+                        <span class="badge bg-primary rounded-pill">GET</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center bg-success bg-opacity-10">
+                        <span>
+                            <code>/api/v1/processo/{num_processo}/pdf-completo-novo</code>
+                            <small class="text-muted d-block">Gera PDF completo (nova implementação otimizada)</small>
+                        </span>
+                        <span class="badge bg-primary rounded-pill">GET</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center bg-success bg-opacity-10">
+                        <span>
+                            <code>/api/v1/processo/{num_processo}/pdf-completo-ultra</code>
+                            <small class="text-muted d-block">Gera PDF completo (versão ultra simples para Replit)</small>
+                        </span>
+                        <span class="badge bg-primary rounded-pill">GET</span>
+                    </li>
+                </ul>
+                
+                <div class="alert alert-info mt-3">
+                    <strong>Dica:</strong> Para limitar o número de documentos nos endpoints PDF, utilize <code>?limite=N</code> como parâmetro de consulta. Por exemplo:
+                    <code>/api/v1/processo/3000066-83.2025.8.06.0203/pdf-completo-ultra?limite=2</code>
+                </div>
+            </div>
+        </div>
+        
         {% if resposta %}
         <div class="card mt-4">
             <div class="card-header bg-dark text-white">
@@ -296,199 +362,98 @@
                                 <h5 class="mb-0">Assuntos</h5>
                             </div>
                             <div class="card-body">
-                                <table class="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Código</th>
-                                            <th>Descrição</th>
-                                            <th>Principal</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% if resposta.processo.assuntos %}
-                                        {% for assunto in resposta.processo.assuntos %}
-                                        <tr>
-                                            <td>{{ assunto.codigo }}</td>
-                                            <td>{{ assunto.descricao }}</td>
-                                            <td>{{ 'Sim' if assunto.principal else 'Não' }}</td>
-                                        </tr>
-                                        {% endfor %}
-                                        {% endif %}
-                                    </tbody>
-                                </table>
+                                {% if resposta.processo and resposta.processo.assuntos %}
+                                <ul class="list-group">
+                                {% for assunto in resposta.processo.assuntos %}
+                                    <li class="list-group-item">{{ assunto }}</li>
+                                {% endfor %}
+                                </ul>
+                                {% else %}
+                                <div class="alert alert-info">Nenhum assunto encontrado.</div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="card mb-3">
-                    <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0">Partes do Processo</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="accordion" id="accordionPolos">
-                            {% if resposta.processo.polos %}
-                            {% for polo in resposta.processo.polos %}
-                            <div class="accordion-item">
-                                <h2 class="accordion-header" id="heading{{ loop.index }}">
-                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" aria-expanded="true" aria-controls="collapse{{ loop.index }}">
-                                        {{ polo.polo }} - {{ 'Autor' if polo.polo == 'AT' else 'Réu' if polo.polo == 'PA' else polo.polo }}
-                                    </button>
-                                </h2>
-                                <div id="collapse{{ loop.index }}" class="accordion-collapse collapse show" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#accordionPolos">
-                                    <div class="accordion-body">
-                                        <ul class="list-group">
-                                            {% for parte in polo.partes %}
-                                            <li class="list-group-item">
-                                                <strong>{{ parte.nome }}</strong>
-                                                {% if parte.documento %}
-                                                <br>Documento: {{ parte.documento }}
-                                                {% endif %}
-                                                
-                                                {% if parte.advogados %}
-                                                <div class="mt-2">
-                                                    <h6>Advogados:</h6>
-                                                    <ul>
-                                                        {% for adv in parte.advogados %}
-                                                        <li>
-                                                            {{ adv.nome }}
-                                                            {% if adv.numeroOAB %}
-                                                            (OAB: {{ adv.numeroOAB }})
-                                                            {% endif %}
-                                                        </li>
-                                                        {% endfor %}
-                                                    </ul>
-                                                </div>
-                                                {% endif %}
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                    </div>
-                                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card mb-3">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">Polos</h5>
                             </div>
-                            {% endfor %}
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">Movimentações</h5>
-                    </div>
-                    <div class="card-body">
-                        {% if resposta.processo.movimentacoes %}
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Data</th>
-                                        <th>Código</th>
-                                        <th>Movimento</th>
-                                        <th>Complemento</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for mov in resposta.processo.movimentacoes %}
-                                    <tr>
-                                        <td>{{ mov.dataHora }}</td>
-                                        <td>{{ mov.codigoMovimento }}</td>
-                                        <td>{{ mov.descricao }}</td>
-                                        <td>
-                                            {% if mov.complemento %}
-                                            <ul class="list-unstyled">
-                                                {% for comp in mov.complemento %}
-                                                <li>{{ comp }}</li>
+                            <div class="card-body">
+                                {% if resposta.processo and resposta.processo.polos %}
+                                <div class="row">
+                                {% for polo in resposta.processo.polos %}
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0">{{ polo.polo }}</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <ul class="list-group">
+                                                {% for parte in polo.partes %}
+                                                    <li class="list-group-item">
+                                                        <strong>{{ parte.nome }}</strong>
+                                                        {% if parte.tipo %}
+                                                        <small class="text-muted d-block">{{ parte.tipo }}</small>
+                                                        {% endif %}
+                                                    </li>
                                                 {% endfor %}
-                                            </ul>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                                </div>
+                                {% else %}
+                                <div class="alert alert-info">Nenhum polo encontrado.</div>
+                                {% endif %}
+                            </div>
                         </div>
-                        {% else %}
-                        <p>Nenhuma movimentação encontrada.</p>
-                        {% endif %}
                     </div>
                 </div>
                 
-                {% elif documentos_hierarquia %}
-                <!-- Hierarquia de documentos do processo -->
-                <h4>Documentos do Processo</h4>
-                
-                {% if download_links %}
-                <div class="card mb-4">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">Download do Processo Completo</h5>
+                <!-- Documentos -->
+                {% if resposta.documentos %}
+                <div class="card mb-3">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">Documentos ({{ resposta.documentos|length }})</h5>
                     </div>
                     <div class="card-body">
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle-fill"></i> Para evitar timeouts, você pode escolher baixar apenas uma parte dos documentos ou fazer o download completo.
-                        </div>
-                        <div class="d-flex flex-wrap gap-2">
-                            {% for link in download_links %}
-                            <a href="{{ link.url }}" class="btn btn-outline-primary" target="_blank">
-                                <i class="bi bi-file-earmark-pdf"></i> {{ link.texto }}
-                            </a>
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Tipo</th>
+                                    <th>Data/Hora</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for doc in resposta.documentos %}
+                                <tr>
+                                    <td>{{ doc.id }}</td>
+                                    <td>{{ doc.tipoDocumento }}</td>
+                                    <td>{{ doc.dataHora }}</td>
+                                    <td>
+                                        <a href="{{ url_for('web.download_documento', num_processo=resposta.processo.numero, num_documento=doc.id) }}" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-download"></i> Baixar
+                                        </a>
+                                    </td>
+                                </tr>
                             {% endfor %}
-                        </div>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
                 {% endif %}
                 
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>ID</th>
-                                <th>Tipo</th>
-                                <th>Data</th>
-                                <th>Documentos Relacionados</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for doc_id, doc in documentos_hierarquia.items() %}
-                            <tr>
-                                <td>{{ loop.index }}</td>
-                                <td>{{ doc.idDocumento }}</td>
-                                <td>{{ doc.tipoDocumento }}</td>
-                                <td>{{ doc.dataHora }}</td>
-                                <td>{{ doc.documentos_vinculados|length }}</td>
-                                <td>
-                                    <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=doc.idDocumento) }}" 
-                                       class="btn btn-sm btn-primary">
-                                        <i class="bi bi-download"></i> Baixar
-                                    </a>
-                                </td>
-                            </tr>
-                            {% if doc.documentos_vinculados %}
-                            {% for vinc in doc.documentos_vinculados %}
-                            <tr class="table-info">
-                                <td></td>
-                                <td><i class="bi bi-arrow-return-right"></i> {{ vinc.idDocumento }}</td>
-                                <td>{{ vinc.tipoDocumento }}</td>
-                                <td>{{ vinc.dataHora }}</td>
-                                <td>-</td>
-                                <td>
-                                    <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=vinc.idDocumento) }}" 
-                                       class="btn btn-sm btn-primary">
-                                        <i class="bi bi-download"></i> Baixar
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                            {% endif %}
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
                 {% else %}
-                <!-- Resposta genérica -->
-                <pre class="bg-light p-3 border rounded"><code>{{ resposta|tojson(indent=2) }}</code></pre>
+                <!-- Resposta padrão com dump do objeto -->
+                <h4>Dados de Resposta</h4>
+                <pre class="border p-3 bg-light"><code>{{ resposta|pprint }}</code></pre>
                 {% endif %}
             </div>
         </div>

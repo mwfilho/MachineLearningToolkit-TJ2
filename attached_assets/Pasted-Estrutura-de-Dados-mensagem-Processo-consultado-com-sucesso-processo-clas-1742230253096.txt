@@ -1,0 +1,156 @@
+Estrutura de Dados:
+{
+  "mensagem": "Processo consultado com sucesso",
+  "processo": {
+    "classeProcessual": "",
+    "dataAjuizamento": "",
+    "documentos": [
+      {
+        "conteudo": null,
+        "dataHora": "20241125104414",
+        "descricao": "Mandado",
+        "documentos_vinculados": [],
+        "hash": "4cbf2fbbb857d2bcd3b23552f654b58e",
+        "idDocumento": "126959681",
+        "mimetype": "text/html",
+        "movimento": 100024372,
+        "nivelSigilo": 0,
+        "parent": null,
+        "tipoDocumento": "1001425"
+      },
+      {
+        "conteudo": null,
+        "dataHora": "20241119081257",
+        "descricao": "Intima\u00e7\u00e3o",
+        "documentos_vinculados": [],
+        "hash": "90ce296408e286341c52c9c1dc1174e5",
+        "idDocumento": "125976424",
+        "mimetype": "text/html",
+        "movimento": 99379505,
+        "nivelSigilo": 0,
+        "parent": null,
+        "tipoDocumento": "4050017"
+      },
+      {
+        "conteudo": null,
+        "dataHora": "20241118095434",
+        "descricao": "Despacho",
+        "documentos_vinculados": [],
+        "hash": "23b2fd116364bc1d428aa857eca8bc38",
+        "idDocumento": "125879363",
+        "mimetype": "text/html",
+        "movimento": 99298463,
+        "nivelSigilo": 0,
+        "parent": null,
+        "tipoDocumento": "4050019"
+      },
+      {
+        "conteudo": null,
+        "dataHora": "20240819113720",
+        "descricao": "Certid\u00e3o",
+        "documentos_vinculados": [],
+        "hash": "bd612ff669d3f4dea92b07d5b2677219",
+        "idDocumento": "98979180",
+        "mimetype": "text/html",
+        "movimento": 79779825,
+        "nivelSigilo": 0,
+        "parent": null,
+        "tipoDocumento": "4050014"
+      },
+      {
+        "conteudo": null,
+        "dataHora": "20240624082322",
+        "descricao": "Intima\u00e7\u00e3o",
+        "documentos_vinculados": [],
+        "hash": "a7f2954f692c7c5bf4b61907e684ddbf",
+        "idDocumento": "88535676",
+        "mimetype": "text/html",
+        "movimento": null,
+        "nivelSigilo": 0,
+        "parent": null,
+        "tipoDocumento": "4050017"
+      },
+      {
+        "conteudo": null,
+        "dataHora": "20240610162748",
+        "descricao": "Decis\u00e3o",
+        "documentos_vinculados": [],
+        "hash": "137644895a759819dd15a5d7f7daa5de",
+        "idDocumento": "87927133",
+        "mimetype": "text/html",
+        "movimento": 70881927,
+        "nivelSigilo": 0,
+        "parent": null,
+        "tipoDocumento": "4050020"
+      },
+      {
+        "conteudo": null,
+        "dataHora": "20240610110713",
+        "descricao": "INFORMA\u00c7\u00c3O",
+        "documentos_vinculados": [],
+        "hash": "8d8b4723fb286e1446866ce8f4083439",
+        "idDocumento": "87919222",
+        "mimetype": "text/html",
+        "movimento": 70864692,
+        "nivelSigilo": 0,
+        "parent": null,
+        "tipoDocumento": "1000100"
+      },
+      {
+        "conteudo": null,
+        "dataHora": "20230821172334",
+        "descricao": "Cita\u00e7\u00e3o",
+        "documentos_vinculados": [],
+        "hash": "37846052323709a4747b470a277b1f2b",
+        "idDocumento": "67145879",
+        "mimetype": "text/html",
+        "movimento": null,
+        "nivelSigilo": 0,
+        "parent": null,
+        "tipoDocumento": "4050021"
+      },
+      {
+        "conteudo": null,
+        "dataHora": "20230821171854",
+        "descricao": "Intima\u00e7\u00e3o",
+        "documentos_vinculados": [],
+        "hash": "d656be23fd6abf48399c520376371c6b",
+        "idDocumento": "67144608",
+        "mimetype": "text/html",
+        "movimento": 51555884,
+        "nivelSigilo": 0,
+        "parent": null,
+        "tipoDocumento": "4050017"
+      },
+      {
+        "conteudo": null,
+        "dataHora": "20230821165756",
+        "descricao": "Documento de Comprova\u00e7\u00e3o",
+        "documentos_vinculados": [],
+        "hash": "fc3cbf5f1f687dc9450c99244381b777",
+        "idDocumento": "67142347",
+        "mimetype": "text/html",
+        "movimento": 51554147,
+        "nivelSigilo": 0,
+        "parent": null,
+        "tipoDocumento": "4050011"
+      },
+      {
+        "conteudo": null,
+        "dataHora": "20230821164803",
+        "descricao": "Peti\u00e7\u00e3o Inicial",
+        "documentos_vinculados": [],
+        "hash": "012cc0b617e64033ff99b083c2ba8547",
+        "idDocumento": "67141268",
+        "mimetype": "text/html",
+        "movimento": null,
+        "nivelSigilo": 0,
+        "parent": null,
+        "tipoDocumento": "58"
+      }
+    ],
+    "numero": "",
+    "orgaoJulgador": ""
+  },
+  "sucesso": true
+}
