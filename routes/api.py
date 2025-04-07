@@ -210,10 +210,8 @@ def gerar_pdf_completo(num_processo):
                 documentos = dados['documentos']
                 status_info['total_documentos'] = len(documentos)
                 
-                # Adicionar máximo de 3 documentos (limitar para evitar timeouts)
-                max_docs = min(3, len(documentos))
-                for i in range(max_docs):
-                    doc = documentos[i]
+                # Processar todos os documentos do processo
+                for doc in documentos:
                     doc_id = doc['id']
                     
                     # Tentar obter o documento com timeout reduzido
@@ -230,8 +228,143 @@ def gerar_pdf_completo(num_processo):
                                 doc_buffer = io.BytesIO(conteudo)
                                 pdf_merger.append(doc_buffer)
                                 status_info['documentos_processados'] += 1
+                            elif mimetype == 'text/html':
+                                # Converter HTML para PDF
+                                try:
+                                    # Salvar HTML em arquivo temporário
+                                    temp_file = tempfile.NamedTemporaryFile(suffix='.html', delete=False)
+                                    temp_html_path = temp_file.name
+                                    temp_file.write(conteudo)
+                                    temp_file.close()
+                                    
+                                    # Usar weasyprint para converter HTML para PDF
+                                    temp_pdf_path = temp_html_path.replace('.html', '.pdf')
+                                    html = weasyprint.HTML(filename=temp_html_path)
+                                    html.write_pdf(temp_pdf_path)
+                                    
+                                    # Adicionar ao PDF
+                                    with open(temp_pdf_path, 'rb') as f:
+                                        pdf_content = f.read()
+                                    
+                                    doc_buffer = io.BytesIO(pdf_content)
+                                    pdf_merger.append(doc_buffer)
+                                    status_info['documentos_processados'] += 1
+                                    
+                                    # Limpar arquivos temporários
+                                    try:
+                                        os.unlink(temp_html_path)
+                                        os.unlink(temp_pdf_path)
+                                    except:
+                                        pass
+                                except Exception as html_err:
+                                    logger.error(f"Erro ao converter HTML para PDF: {str(html_err)}")
+                                    # Criar PDF simples com o texto HTML
+                                    try:
+                                        texto_html = conteudo.decode('utf-8', errors='ignore')
+                                        doc_buffer = io.BytesIO()
+                                        pdf = canvas.Canvas(doc_buffer, pagesize=letter)
+                                        pdf.setFont("Helvetica-Bold", 14)
+                                        pdf.drawString(72, 750, f"Documento {doc_id} - HTML")
+                                        
+                                        # Extrair texto do HTML e formatá-lo
+                                        from html.parser import HTMLParser
+                                        
+                                        class MLStripper(HTMLParser):
+                                            def __init__(self):
+                                                super().__init__()
+                                                self.reset()
+                                                self.strict = False
+                                                self.convert_charrefs = True
+                                                self.text = []
+                                            
+                                            def handle_data(self, d):
+                                                self.text.append(d)
+                                            
+                                            def get_data(self):
+                                                return ' '.join(self.text)
+                                        
+                                        stripper = MLStripper()
+                                        stripper.feed(texto_html)
+                                        texto_limpo = stripper.get_data()
+                                        
+                                        # Limitar o texto para não sobrecarregar o PDF
+                                        texto_limpo = texto_limpo[:5000] + '...' if len(texto_limpo) > 5000 else texto_limpo
+                                        
+                                        # Função para quebrar texto em linhas
+                                        def wrap_text(text, width, pdf_obj):
+                                            lines = []
+                                            for paragraph in text.split('\n'):
+                                                words = paragraph.split()
+                                                if not words:
+                                                    lines.append('')
+                                                    continue
+                                                    
+                                                line = ''
+                                                for word in words:
+                                                    if pdf_obj.stringWidth(line + ' ' + word) < width:
+                                                        line = line + ' ' + word if line else word
+                                                    else:
+                                                        lines.append(line)
+                                                        line = word
+                                                lines.append(line)
+                                            return lines
+                                        
+                                        # Adicionar texto ao PDF
+                                        y_pos = 720
+                                        for linha in wrap_text(texto_limpo, 500, pdf):
+                                            if y_pos < 50:  # Criar nova página se necessário
+                                                pdf.showPage()
+                                                pdf.setFont("Helvetica", 10)
+                                                y_pos = 750
+                                            pdf.drawString(72, y_pos, linha)
+                                            y_pos -= 12
+                                        
+                                        pdf.showPage()
+                                        pdf.save()
+                                        doc_buffer.seek(0)
+                                        pdf_merger.append(doc_buffer)
+                                        status_info['documentos_processados'] += 1
+                                    except Exception as ex:
+                                        logger.error(f"Erro ao processar texto HTML: {str(ex)}")
+                            elif mimetype in ['text/plain', 'text/xml']:
+                                # Converter texto para PDF
+                                try:
+                                    texto = conteudo.decode('utf-8', errors='ignore')
+                                    doc_buffer = io.BytesIO()
+                                    pdf = canvas.Canvas(doc_buffer, pagesize=letter)
+                                    pdf.setFont("Helvetica-Bold", 14)
+                                    pdf.drawString(72, 750, f"Documento {doc_id} - {mimetype}")
+                                    
+                                    # Quebrar texto em linhas
+                                    y_pos = 720
+                                    pdf.setFont("Courier", 10)  # Usar fonte monoespaçada para texto
+                                    
+                                    # Limitar texto para não sobrecarregar o PDF
+                                    texto = texto[:10000] + '...' if len(texto) > 10000 else texto
+                                    
+                                    for linha in texto.split('\n'):
+                                        # Quebrar linhas longas
+                                        while linha and y_pos > 50:
+                                            parte = linha[:80]  # Limitar a 80 caracteres por linha
+                                            linha = linha[80:] if len(linha) > 80 else ''
+                                            pdf.drawString(72, y_pos, parte)
+                                            y_pos -= 12
+                                            
+                                            # Criar nova página se necessário
+                                            if y_pos < 50 and linha:
+                                                pdf.showPage()
+                                                pdf.setFont("Courier", 10)
+                                                y_pos = 750
+                                    
+                                    pdf.showPage()
+                                    pdf.save()
+                                    doc_buffer.seek(0)
+                                    pdf_merger.append(doc_buffer)
+                                    status_info['documentos_processados'] += 1
+                                except Exception as e:
+                                    logger.error(f"Erro ao criar PDF de texto: {str(e)}")
                             else:
-                                # Criar PDF simples para outros tipos
+                                # Outros formatos - criar um PDF simples com informações
                                 doc_buffer = io.BytesIO()
                                 pdf = canvas.Canvas(doc_buffer, pagesize=letter)
                                 pdf.setFont("Helvetica-Bold", 14)
@@ -239,6 +372,7 @@ def gerar_pdf_completo(num_processo):
                                 pdf.setFont("Helvetica", 12)
                                 pdf.drawString(72, 720, f"Tipo: {mimetype}")
                                 pdf.drawString(72, 700, f"Tamanho: {len(conteudo)} bytes")
+                                pdf.drawString(72, 680, "Formato não suportado para conversão direta.")
                                 pdf.showPage()
                                 pdf.save()
                                 doc_buffer.seek(0)
@@ -281,9 +415,9 @@ def gerar_pdf_completo(num_processo):
         if status_info['documentos_processados'] < status_info['total_documentos']:
             y -= 20
             capa.setFillColorRGB(0.8, 0.2, 0.2)  # Vermelho para alerta
-            capa.drawString(72, y, f"Atenção: Por motivos de desempenho, apenas os primeiros {min(3, status_info['total_documentos'])}")
+            capa.drawString(72, y, f"Atenção: Alguns documentos ({status_info['total_documentos'] - status_info['documentos_processados']})")
             y -= 15
-            capa.drawString(72, y, "documentos foram incluídos neste PDF.")
+            capa.drawString(72, y, "não puderam ser incluídos devido a erros no processamento.")
     
     capa.showPage()
     capa.save()
