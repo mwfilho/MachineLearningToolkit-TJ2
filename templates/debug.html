@@ -88,6 +88,21 @@
                                 <label for="senha" class="form-label">Senha (opcional)</label>
                                 <input type="password" class="form-control" id="senha" name="senha">
                             </div>
+                            <div class="mb-3">
+                                <label for="versao" class="form-label">Versão</label>
+                                <select class="form-select" id="versao" name="versao">
+                                    <option value="padrao">Padrão (original)</option>
+                                    <option value="novo">Nova (otimizada)</option>
+                                    <option value="ultra">Ultra (rápida para Replit)</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="limite" class="form-label">Limite de documentos (opcional)</label>
+                                <input type="number" class="form-control" id="limite" name="limite" 
+                                       placeholder="Ex: 5" min="1" 
+                                       data-bs-toggle="tooltip" 
+                                       title="Limite a quantidade de documentos a processar (útil para testes)">
+                            </div>
                             <div class="alert alert-warning small">
                                 <i class="bi bi-exclamation-triangle-fill"></i> Esta operação pode demorar alguns minutos dependendo da quantidade de documentos no processo.
                             </div>
@@ -97,12 +112,6 @@
                 </form>
             </div>
         </div>
-        
-        <div class="row">
-            <div class="col-md-6">
-                <form method="POST" action="{{ url_for('web.debug_documento') }}" class="mb-4">
-                    <div class="card">
-                        <div class="card-header bg-success text-white">
                             <h5 class="mb-0">Consulta Documento</h5>
                         </div>
                         <div class="card-body">
