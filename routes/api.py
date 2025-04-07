@@ -172,7 +172,7 @@ def get_capa_processo(num_processo):
 def gerar_pdf_completo(num_processo):
     """
     Gera um PDF único contendo todos os documentos do processo.
-    Implementação simplificada para garantir o funcionamento básico.
+    Versão mínima para fins de depuração.
     
     Args:
         num_processo (str): Número do processo judicial
@@ -180,154 +180,28 @@ def gerar_pdf_completo(num_processo):
     Returns:
         O arquivo PDF combinado para download ou uma mensagem de erro
     """
-    temp_dir = None
-    try:
-        # Obter credenciais
-        cpf, senha = get_mni_credentials()
-        if not cpf or not senha:
-            return jsonify({
-                'erro': 'Credenciais MNI não fornecidas'
-            }), 401
-        
-        # Consultar o processo para obter lista de documentos
-        resposta_processo = retorna_processo(num_processo, cpf=cpf, senha=senha)
-        dados = extract_mni_data(resposta_processo)
-        
-        if not dados.get('documentos') or len(dados.get('documentos', [])) == 0:
-            return jsonify({
-                'erro': 'Processo sem documentos'
-            }), 404
-        
-        documentos = dados['documentos']
-        logger.debug(f"Encontrados {len(documentos)} documentos no processo {num_processo}")
-        
-        # Criar diretório temporário
-        temp_dir = tempfile.mkdtemp()
-        
-        # Iniciar o PDF merger
-        pdf_merger = PdfMerger()
-        
-        # Adicionar informações do processo como primeira página
-        info_buffer = io.BytesIO()
-        pdf = canvas.Canvas(info_buffer, pagesize=letter)
-        pdf.setFont("Helvetica-Bold", 14)
-        pdf.drawString(72, 750, f"PROCESSO {num_processo}")
-        pdf.setFont("Helvetica", 12)
-        pdf.drawString(72, 720, f"Total de documentos: {len(documentos)}")
-        pdf.showPage()
-        pdf.save()
-        info_buffer.seek(0)
-        pdf_merger.append(info_buffer)
-        
-        # Processar cada documento
-        for doc in documentos:
-            doc_id = doc['id']
-            
-            # Obter o documento
-            resposta = retorna_documento_processo(num_processo, doc_id, cpf=cpf, senha=senha)
-            
-            # Verificar se há erro ou conteúdo vazio
-            if 'msg_erro' in resposta or not resposta.get('conteudo'):
-                continue
-            
-            # Processar documento baseado no mimetype
-            mimetype = resposta.get('mimetype', '')
-            conteudo = resposta.get('conteudo', b'')
-            
-            # Caminho do arquivo temporário
-            arquivo_temp = os.path.join(temp_dir, f"doc_{doc_id}")
-            
-            # Tratar documento baseado no mimetype
-            pdf_path = None
-            
-            if mimetype == 'application/pdf':
-                # Já é PDF, salvar diretamente
-                pdf_path = f"{arquivo_temp}.pdf"
-                with open(pdf_path, 'wb') as f:
-                    f.write(conteudo)
-                    
-            elif mimetype == 'text/html':
-                # Converter HTML para PDF simples
-                pdf_path = f"{arquivo_temp}.pdf"
-                texto = conteudo.decode('utf-8', errors='ignore')
-                
-                # Criar PDF simples
-                buffer = io.BytesIO()
-                pdf = canvas.Canvas(buffer, pagesize=letter)
-                pdf.setFont("Helvetica-Bold", 12)
-                pdf.drawString(72, 750, f"Documento HTML {doc_id}")
-                pdf.setFont("Courier", 10)
-                
-                # Texto limitado para evitar problemas
-                texto_curto = texto[:1000] + "..." if len(texto) > 1000 else texto
-                linhas = texto_curto.split('\n')
-                y = 720
-                for linha in linhas[:30]:  # Limitar o número de linhas
-                    if y < 50:
-                        break
-                    pdf.drawString(72, y, linha[:80])  # Limitar largura da linha
-                    y -= 12
-                
-                pdf.showPage()
-                pdf.save()
-                
-                with open(pdf_path, 'wb') as f:
-                    f.write(buffer.getvalue())
-                    
-            else:
-                # Para outros tipos, criar um PDF informativo simples
-                pdf_path = f"{arquivo_temp}.pdf"
-                buffer = io.BytesIO()
-                pdf = canvas.Canvas(buffer, pagesize=letter)
-                pdf.setFont("Helvetica-Bold", 12)
-                pdf.drawString(72, 750, f"Documento {doc_id}")
-                pdf.setFont("Helvetica", 10)
-                pdf.drawString(72, 730, f"Tipo: {mimetype}")
-                pdf.drawString(72, 710, f"Tamanho: {len(conteudo)} bytes")
-                pdf.showPage()
-                pdf.save()
-                
-                with open(pdf_path, 'wb') as f:
-                    f.write(buffer.getvalue())
-            
-            # Adicionar ao PDF final se foi criado com sucesso
-            if pdf_path and os.path.exists(pdf_path):
-                try:
-                    pdf_merger.append(pdf_path)
-                except Exception as e:
-                    logger.error(f"Erro ao adicionar documento {doc_id} ao PDF: {str(e)}")
-        
-        # Gerar PDF final
-        output_path = os.path.join(temp_dir, f"processo_{num_processo}.pdf")
-        with open(output_path, 'wb') as f:
-            pdf_merger.write(f)
-        
-        # Fechar o merger
-        pdf_merger.close()
-        
-        # Retornar o arquivo para download
-        return send_file(
-            output_path,
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=f'processo_completo_{num_processo}.pdf'
-        )
+    from datetime import datetime
     
-    except Exception as e:
-        logger.error(f"Erro ao gerar PDF completo: {str(e)}", exc_info=True)
-        
-        # Limpar diretório temporário
-        if temp_dir and os.path.exists(temp_dir):
-            try:
-                import shutil
-                shutil.rmtree(temp_dir, ignore_errors=True)
-            except:
-                pass
-        
-        return jsonify({
-            'erro': 'Erro ao gerar PDF',
-            'mensagem': str(e)
-        }), 500
+    # Criando PDF simples apenas com informações básicas para testar
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(72, 750, f"TESTE - PROCESSO {num_processo}")
+    pdf.setFont("Helvetica", 12)
+    pdf.drawString(72, 720, f"PDF gerado em {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    pdf.drawString(72, 700, "Este é um PDF de teste para verificar se o endpoint está funcionando")
+    pdf.drawString(72, 680, "Nenhum documento foi buscado nesta versão simplificada")
+    pdf.showPage()
+    pdf.save()
+    buffer.seek(0)
+    
+    # Retornar o PDF diretamente da memória
+    return send_file(
+        buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'teste_pdf_{num_processo}.pdf'
+    )
 
 
 def gerar_cabecalho_processo(dados_processo):
