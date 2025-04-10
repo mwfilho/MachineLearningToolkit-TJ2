@@ -91,6 +91,35 @@
             </div>
             
             <div class="col-md-3">
+                <form method="POST" action="{{ url_for('web.debug_document_ids') }}" class="mb-4">
+                    <div class="card">
+                        <div class="card-header bg-dark text-white">
+                            <h5 class="mb-0">Lista de IDs de Documentos</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="num_processo" class="form-label">Número do Processo</label>
+                                <input type="text" class="form-control" id="num_processo" name="num_processo" 
+                                    placeholder="0000000-00.0000.0.00.0000" required
+                                    data-bs-toggle="tooltip" 
+                                    title="Digite o número do processo para obter a lista completa de IDs de documentos em ordem">
+                            </div>
+                            <div class="mb-3">
+                                <label for="cpf" class="form-label">CPF/CNPJ Consultante (opcional)</label>
+                                <input type="text" class="form-control" id="cpf" name="cpf" 
+                                    placeholder="Apenas números">
+                            </div>
+                            <div class="mb-3">
+                                <label for="senha" class="form-label">Senha (opcional)</label>
+                                <input type="password" class="form-control" id="senha" name="senha">
+                            </div>
+                            <button type="submit" class="btn btn-dark w-100">Listar IDs de Documentos</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="col-md-3">
                 <form method="POST" action="{{ url_for('web.debug_peticao_inicial') }}" class="mb-4">
                     <div class="card">
                         <div class="card-header bg-info text-white">
@@ -349,6 +378,48 @@
                             <div class="alert alert-info">Não foram encontradas movimentações para este processo.</div>
                         {% endif %}
                     </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if documentos_ids %}
+        <h5 class="mt-4">Lista de IDs de Documentos:</h5>
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Documentos do Processo ({{ documentos_ids|length }})</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>ID Documento</th>
+                                <th>Tipo Documento</th>
+                                <th>Descrição</th>
+                                <th>Formato</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for doc in documentos_ids %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ doc.idDocumento }}</td>
+                                <td>{{ doc.tipoDocumento }}</td>
+                                <td>{{ doc.descricao }}</td>
+                                <td>{{ doc.mimetype }}</td>
+                                <td>
+                                    <a href="{{ url_for('web.download_documento', num_processo=num_processo, num_documento=doc.idDocumento) }}" 
+                                        class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-download"></i> Baixar
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

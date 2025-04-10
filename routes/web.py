@@ -156,6 +156,34 @@ def download_documento(num_processo, num_documento):
         flash(f'Erro ao baixar documento: {str(e)}', 'error')
         return render_template('index.html')
 
+@web.route('/debug/documentos-ids', methods=['POST'])
+def debug_document_ids():
+    num_processo = request.form.get('num_processo')
+    cpf = request.form.get('cpf')
+    senha = request.form.get('senha')
+    
+    try:
+        logger.debug(f"Consultando lista de IDs de documentos: {num_processo}")
+        resposta = retorna_processo(
+            num_processo,
+            cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
+            senha=senha or os.environ.get('MNI_SENHA_CONSULTANTE')
+        )
+        
+        # Extrair a lista ordenada de IDs
+        dados = extract_all_document_ids(resposta)
+        logger.debug(f"Lista de IDs extraída: {dados}")
+        
+        return render_template('debug.html', 
+                           resposta=dados,
+                           documentos_ids=dados.get('documentos', []),
+                           num_processo=num_processo)
+                           
+    except Exception as e:
+        logger.error(f"Erro na consulta de IDs de documentos: {str(e)}", exc_info=True)
+        flash(f'Erro na consulta de IDs de documentos: {str(e)}', 'error')
+        return render_template('debug.html')
+
 @web.route('/debug/capa', methods=['POST'])
 def debug_capa_processo():
     num_processo = request.form.get('num_processo')
