@@ -92,6 +92,56 @@ def extract_mni_data(resposta):
         logger.error(f"Erro ao extrair dados MNI: {str(e)}")
         return {'sucesso': False, 'mensagem': f'Erro ao processar dados: {str(e)}'}
         
+def extract_all_document_ids(resposta):
+    """Extrai uma lista única com todos os IDs de documentos do processo, incluindo vinculados"""
+    try:
+        logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
+        
+        documentos_ids = []
+        
+        if not hasattr(resposta, 'processo') or not hasattr(resposta.processo, 'documento'):
+            logger.warning("Processo não possui documentos")
+            return {'sucesso': False, 'mensagem': 'Processo não possui documentos', 'documentos': []}
+        
+        # Função recursiva para extrair IDs dos documentos e seus vinculados
+        def extract_ids_recursivo(doc):
+            # Extrair informações básicas do documento atual
+            doc_info = {
+                'idDocumento': getattr(doc, 'idDocumento', ''),
+                'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
+                'descricao': getattr(doc, 'descricao', ''),
+                'mimetype': getattr(doc, 'mimetype', ''),
+            }
+            
+            # Adicionar documento à lista
+            documentos_ids.append(doc_info)
+            
+            # Processar documentos vinculados se existirem
+            if hasattr(doc, 'documentoVinculado'):
+                docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
+                
+                for doc_vinc in docs_vinc:
+                    extract_ids_recursivo(doc_vinc)
+        
+        # Processar todos os documentos do processo
+        docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
+        for doc in docs:
+            extract_ids_recursivo(doc)
+        
+        logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
+        return {
+            'sucesso': True, 
+            'mensagem': 'Lista de documentos extraída com sucesso',
+            'documentos': documentos_ids
+        }
+    except Exception as e:
+        logger.error(f"Erro ao extrair IDs de documentos: {str(e)}")
+        return {
+            'sucesso': False, 
+            'mensagem': f'Erro ao extrair IDs de documentos: {str(e)}',
+            'documentos': []
+        }
+
 def extract_capa_processo(resposta):
     """Extrai apenas os dados da capa do processo, sem incluir os documentos"""
     try:

@@ -3,7 +3,7 @@ import tempfile
 import os
 import logging
 from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
-from utils import extract_mni_data, extract_capa_processo
+from utils import extract_mni_data, extract_capa_processo, extract_all_document_ids
 import core
 
 # Configure logging

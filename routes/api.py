@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, send_file, request
 import os
 import logging
 from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
-from utils import extract_mni_data, extract_capa_processo
+from utils import extract_mni_data, extract_capa_processo, extract_all_document_ids
 import core
 import tempfile
 
@@ -130,6 +130,36 @@ def get_peticao_inicial(num_processo):
             'mensagem': 'Erro ao buscar petição inicial'
         }), 500
         
+@api.route('/processo/<num_processo>/documentos/ids', methods=['GET'])
+def get_document_ids(num_processo):
+    """
+    Retorna uma lista única com todos os IDs de documentos do processo, incluindo vinculados,
+    na ordem em que aparecem no processo.
+    """
+    try:
+        logger.debug(f"API: Consultando lista de IDs de documentos do processo {num_processo}")
+        cpf, senha = get_mni_credentials()
+
+        if not cpf or not senha:
+            return jsonify({
+                'erro': 'Credenciais MNI não fornecidas',
+                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+            }), 401
+
+        # Obtém o processo completo com documentos
+        resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
+
+        # Extrai apenas os IDs dos documentos em ordem
+        dados = extract_all_document_ids(resposta)
+        return jsonify(dados)
+
+    except Exception as e:
+        logger.error(f"API: Erro ao consultar lista de IDs de documentos: {str(e)}", exc_info=True)
+        return jsonify({
+            'erro': str(e),
+            'mensagem': 'Erro ao consultar lista de IDs de documentos'
+        }), 500
+
 @api.route('/processo/<num_processo>/capa', methods=['GET'])
 def get_capa_processo(num_processo):
     """
