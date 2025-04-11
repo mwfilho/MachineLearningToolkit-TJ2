@@ -390,38 +390,6 @@
                 <h5 class="mb-0">Documentos do Processo ({{ documentos_ids|length }})</h5>
             </div>
             <div class="card-body">
-                <!-- Parte adicional para verificar IDs específicos -->
-                <div class="alert alert-info mb-3">
-                    <h6 class="alert-heading">Verificação de IDs Específicos:</h6>
-                    {% set id1 = '140722098' %}
-                    {% set id2 = '138507087' %}
-                    
-                    {% set encontrado1 = false %}
-                    {% set encontrado2 = false %}
-                    
-                    {% for doc in documentos_ids %}
-                        {% if doc.idDocumento == id1 %}
-                            {% set encontrado1 = true %}
-                        {% endif %}
-                        {% if doc.idDocumento == id2 %}
-                            {% set encontrado2 = true %}
-                        {% endif %}
-                    {% endfor %}
-                    
-                    <div class="d-flex justify-content-between mb-1">
-                        <span>ID 140722098:</span>
-                        <span class="badge {% if encontrado1 %}bg-success{% else %}bg-danger{% endif %}">
-                            {% if encontrado1 %}Presente{% else %}Ausente{% endif %}
-                        </span>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                        <span>ID 138507087:</span>
-                        <span class="badge {% if encontrado2 %}bg-success{% else %}bg-danger{% endif %}">
-                            {% if encontrado2 %}Presente{% else %}Ausente{% endif %}
-                        </span>
-                    </div>
-                </div>
-                
                 <div class="table-responsive">
                     <table class="table table-sm table-hover">
                         <thead>
@@ -436,7 +404,7 @@
                         </thead>
                         <tbody>
                             {% for doc in documentos_ids %}
-                            <tr class="{% if doc.idDocumento == '140722098' or doc.idDocumento == '138507087' %}table-success{% endif %}">
+                            <tr>
                                 <td>{{ loop.index }}</td>
                                 <td>{{ doc.idDocumento }}</td>
                                 <td>{{ doc.tipoDocumento }}</td>

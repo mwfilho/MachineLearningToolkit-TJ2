@@ -148,8 +148,8 @@ def get_document_ids(num_processo):
 
         # Obtém o processo completo com documentos
         resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
-        
-        # Extrai os IDs dos documentos usando a função melhorada que percorre toda a estrutura XML
+
+        # Extrai apenas os IDs dos documentos em ordem
         dados = extract_all_document_ids(resposta)
         return jsonify(dados)
 
