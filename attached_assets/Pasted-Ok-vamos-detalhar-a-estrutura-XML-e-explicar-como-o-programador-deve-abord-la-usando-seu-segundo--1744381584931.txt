@@ -1,0 +1,117 @@
+Ok, vamos detalhar a estrutura XML e explicar como o programador deve abordá-la, usando seu segundo exemplo como base.
+
+Estrutura Hierárquica Principal:
+
+O XML segue uma estrutura hierárquica clara:
+
+Envelope SOAP: soap:Envelope > soap:Body > ns4:consultarProcessoResposta
+
+Resposta Principal: Dentro de consultarProcessoResposta, temos:
+
+sucesso (boolean): Indica se a consulta geral foi bem-sucedida.
+
+mensagem (string): Mensagem descritiva do resultado.
+
+processo: O nó raiz que contém todos os dados do processo judicial.
+
+Nó do Processo (<processo>):
+
+Pode conter metadados básicos do processo diretamente (número, classe, data, etc.) ou dentro de um sub-elemento <dadosBasicos>. Seu código extract_capa_processo tenta lidar com ambas as possibilidades.
+
+Contém uma lista de elementos <ns2:documento>. Esta é a lista principal de documentos juntados ao processo.
+
+Estrutura do Elemento <ns2:documento> (Documento Principal):
+
+Cada <ns2:documento> dentro da lista <processo> representa um item que foi formalmente adicionado ao processo em um determinado momento (associado a um movimento, se presente).
+
+Atributos Importantes:
+
+idDocumento: ID Único Global deste documento específico no sistema de origem. É a chave primária do documento.
+
+tipoDocumento: Código numérico que representa o tipo (ex: '57' para Petição, '52' para Execução, '4050020' para Decisão, etc.). Pode ser consultado via consultar_tipo_documento.
+
+descricao: Descrição textual do documento fornecida pelo usuário ou sistema.
+
+dataHora: Timestamp da criação/inclusão do documento (formato AAAAMMDDHHMMSS).
+
+mimetype: Tipo MIME do arquivo (ex: application/pdf, text/html). Crucial para saber como tratar/salvar o conteúdo.
+
+hash: Hash (geralmente MD5 ou SHA) do conteúdo do documento, para verificação de integridade.
+
+movimento (Opcional): ID do movimento processual ao qual este documento foi associado na juntada.
+
+nivelSigilo: Nível de sigilo do documento (0 = Público).
+
+Elementos Filho:
+
+<ns2:assinatura>: Contém informações sobre a assinatura digital do documento principal (dados da assinatura, cadeia de certificados).
+
+<ns2:outroParametro>: Lista de pares chave-valor (nome/valor) com metadados adicionais, frequentemente específicos do sistema (ex: mni:pje:documento:storageId, nomeArquivo, criadorArquivo, mni:pje:documento:dataJuntada). O código precisa iterar por estes para extrair informações úteis.
+
+<ns2:documentoVinculado> (Opcional, Pode ser uma lista): ESTE É O PONTO CRUCIAL. Se este documento principal tiver anexos, eles aparecerão aqui como uma lista de elementos <ns2:documentoVinculado>.
+
+Estrutura do Elemento <ns2:documentoVinculado> (Anexo):
+
+Cada <ns2:documentoVinculado> representa um arquivo que foi anexado ao seu <ns2:documento> pai.
+
+Atributos Importantes:
+
+idDocumento: ID Único Global deste anexo específico. Note que é diferente do idDocumento do pai.
+
+idDocumentoVinculado: Referência/Chave Estrangeira para o idDocumento do <ns2:documento> pai. É assim que a ligação é estabelecida. Todos os anexos de um mesmo documento principal terão o mesmo idDocumentoVinculado.
+
+tipoDocumento: Código do tipo do anexo.
+
+descricao: Descrição textual do anexo.
+
+dataHora: Timestamp do anexo.
+
+mimetype: Tipo MIME do anexo.
+
+hash: Hash do conteúdo do anexo.
+
+nivelSigilo: Nível de sigilo do anexo.
+
+Elementos Filho:
+
+<ns2:assinatura>: Informações da assinatura digital do anexo.
+
+<ns2:outroParametro>: Metadados adicionais específicos do anexo (ex: mni:pje:documento:numeroOrdem que indica a ordem do anexo, nomeArquivo original, etc.).
+
+Explicação para o Programador (Como Ler a Estrutura):
+
+O erro fundamental no código original (primeira versão) era assumir que todos os documentos, incluindo anexos, estariam na lista principal resposta.processo.documento. O código corrigido (segunda versão com extract_all_document_ids) tenta abordar isso, mas a explicação da lógica de acesso é a seguinte:
+
+Obtenha a Resposta Completa: Faça uma única chamada a consultarProcesso com incluirDocumentos=True. Isso deve retornar toda a estrutura hierárquica descrita acima. Armazene essa resposta (provavelmente um objeto complexo criado pela biblioteca SOAP como Zeep ou similar).
+
+Itere nos Documentos Principais: Acesse a lista de documentos principais (ex: resposta.processo.documento). Para cada doc_principal nesta lista:
+
+a. Processe o Principal: Extraia o idDocumento e outros metadados do doc_principal. Se precisar do conteúdo binário, use este idDocumento para uma chamada subsequente (ou verifique se o conteúdo já veio na primeira resposta, o que é menos comum para MNI).
+
+b. Procure por Anexos: Verifique se o objeto doc_principal possui um atributo/elemento correspondente a <ns2:documentoVinculado> (o nome pode ser documentoVinculado, documentosVinculados, etc., dependendo da biblioteca SOAP).
+
+c. Itere nos Anexos (se existirem): Se o atributo de anexos existir e contiver dados:
+
+Garanta que você está tratando uma lista (mesmo que haja apenas um anexo).
+
+Para cada doc_anexo na lista de anexos:
+
+Processe o Anexo: Extraia o idDocumento (o ID do próprio anexo), idDocumentoVinculado (para confirmar a ligação), e outros metadados do doc_anexo.
+
+Se precisar do conteúdo binário do anexo, use o idDocumento do anexo para a chamada subsequente.
+
+Atenção: Não use o idDocumentoVinculado para buscar o conteúdo do anexo. Ele serve apenas para ligar ao pai.
+
+Por que seu código extract_all_document_ids pode falhar (mesmo com recursão):
+
+Mapeamento Incorreto da Estrutura pela Biblioteca: A forma como Zeep (ou outra biblioteca) transforma o XML em objeto Python pode não ser exatamente como esperado. Às vezes, elementos com o mesmo nome em níveis diferentes podem causar conflito ou serem achatados. A função debug_estrutura_documento que adicionei serve justamente para inspecionar como o objeto doc está realmente estruturado pela biblioteca após o parsing do XML. Verifique nos logs de debug se o atributo documentoVinculado realmente existe nos objetos doc principais e se ele contém os objetos dos anexos.
+
+Tratamento de Objeto Único vs. Lista: Se um documento principal tiver apenas um anexo, a biblioteca SOAP pode mapeá-lo como um objeto direto em vez de uma lista com um único item. O código precisa verificar o tipo e tratar ambos os casos (como docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]). A função extract_all_document_ids parece fazer isso corretamente.
+
+Nomes de Atributos: Verifique se o nome exato do atributo para os anexos no objeto Python é realmente documentoVinculado. Pode variar ligeiramente. Novamente, o debug_estrutura_documento ajuda aqui.
+
+Complexidade da Recursão/Estrutura Inesperada: Se a estrutura XML for mais complexa do que o esperado (ex: documentos vinculados dentro de documentos vinculados, embora raro), a lógica recursiva precisa ser robusta.
+
+Recomendação Final:
+
+Use a função debug_estrutura_documento para imprimir a estrutura exata do objeto resposta e dos objetos documento retornados pela biblioteca SOAP. Compare essa estrutura impressa com a estrutura XML esperada. Isso revelará como acessar corretamente a lista de <ns2:documentoVinculado> dentro de cada <ns2:documento> principal para extrair os IDs e metadados dos anexos. O código extract_all_document_ids está conceitualmente correto na abordagem recursiva, mas pode precisar de ajustes finos baseados na estrutura real do objeto Python gerado pela biblioteca.
