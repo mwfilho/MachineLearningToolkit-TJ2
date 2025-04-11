@@ -1,0 +1,118 @@
+aqui está uma representação simplificada da estrutura XML, focando em como os documentos principais e os vinculados (anexos) se relacionam através dos IDs. Você pode passar isso para o programador:
+<!-- Estrutura geral da resposta do processo -->
+<processo>
+
+    <!-- Exemplo 1: Um documento principal (Petição HTML) com seus anexos PDF -->
+    <documento idDocumento="140722096" tipoDocumento="57" descricao="Petição" mimetype="text/html" movimento="110702979">
+        <!-- Este é o ID único DESTE documento principal -->
+
+        <!-- Lista de documentos VINCULADOS a este documento principal -->
+        <documentoVinculado
+            idDocumento="140722098"
+            idDocumentoVinculado="140722096"  <!-- REFERENCIA o idDocumento do PAI -->
+            tipoDocumento="57"
+            descricao="Pedido de Habilitação - CE - MARIA ELIENE FREIRE BRAGA"
+            mimetype="application/pdf">
+            <!-- Este é o ID único DESTE anexo específico -->
+            <!-- Outros atributos e parâmetros do anexo aqui... -->
+        </documentoVinculado>
+
+        <documentoVinculado
+            idDocumento="140722103"
+            idDocumentoVinculado="140722096"  <!-- REFERENCIA o idDocumento do PAI -->
+            tipoDocumento="4050007"
+            descricao="KIT PROCURAÇÃO DAYCOVAL ATUALIZADO - 01-12"
+            mimetype="application/pdf">
+            <!-- Este é o ID único DESTE anexo específico -->
+            <!-- Outros atributos e parâmetros do anexo aqui... -->
+        </documentoVinculado>
+
+        <documentoVinculado
+            idDocumento="140722105"
+            idDocumentoVinculado="140722096"  <!-- REFERENCIA o idDocumento do PAI -->
+            tipoDocumento="4050007"
+            descricao="KIT PROCURAÇÃO DAYCOVAL ATUALIZADO - 13-22"
+            mimetype="application/pdf">
+            <!-- Este é o ID único DESTE anexo específico -->
+            <!-- Outros atributos e parâmetros do anexo aqui... -->
+        </documentoVinculado>
+
+         <documentoVinculado
+            idDocumento="140722107"
+            idDocumentoVinculado="140722096"  <!-- REFERENCIA o idDocumento do PAI -->
+            tipoDocumento="4050007"
+            descricao="KIT PROCURAÇÃO DAYCOVAL ATUALIZADO - 23-29"
+            mimetype="application/pdf">
+            <!-- Este é o ID único DESTE anexo específico -->
+            <!-- Outros atributos e parâmetros do anexo aqui... -->
+        </documentoVinculado>
+
+        <!-- Outros atributos e parâmetros do documento principal (como assinatura) estariam aqui... -->
+    </documento>
+
+    <!-- Exemplo 2: Outro documento principal (Decisão HTML) SEM anexos neste exemplo -->
+     <documento idDocumento="140690432" tipoDocumento="4050020" descricao="Decisão" mimetype="text/html" movimento="110702379">
+        <!-- Este é o ID único DESTE documento principal -->
+        <!-- NÃO HÁ elementos <documentoVinculado> aqui dentro, pois ele não tem anexos -->
+        <!-- Outros atributos e parâmetros do documento principal (como assinatura) estariam aqui... -->
+    </documento>
+
+    <!-- Exemplo 3: Outro documento principal (Petição Inicial HTML) com seus anexos PDF -->
+    <documento idDocumento="138507083" tipoDocumento="58" descricao="Petição Inicial" mimetype="text/html">
+        <!-- Este é o ID único DESTE documento principal -->
+        <!-- O atributo 'movimento' existiria aqui, mas não está no trecho original -->
+
+        <!-- Lista de documentos VINCULADOS a esta Petição Inicial -->
+        <documentoVinculado
+            idDocumento="138507087"
+            idDocumentoVinculado="138507083"  <!-- REFERENCIA o idDocumento do PAI -->
+            tipoDocumento="4050007"
+            descricao="PROCURAÇÃO AD JUDICIA"
+            mimetype="application/pdf">
+            <!-- Este é o ID único DESTE anexo específico -->
+            <!-- Outros atributos e parâmetros do anexo aqui... -->
+        </documentoVinculado>
+
+        <documentoVinculado
+            idDocumento="138507089"
+            idDocumentoVinculado="138507083"  <!-- REFERENCIA o idDocumento do PAI -->
+            tipoDocumento="4050011"
+            descricao="DECLARAÇÃO HIPOSSUFICIÊNCIA"
+            mimetype="application/pdf">
+            <!-- Este é o ID único DESTE anexo específico -->
+            <!-- Outros atributos e parâmetros do anexo aqui... -->
+        </documentoVinculado>
+
+        <!-- ... outros documentos vinculados para 138507083 ... -->
+         <documentoVinculado
+            idDocumento="138507117"
+            idDocumentoVinculado="138507083"  <!-- REFERENCIA o idDocumento do PAI -->
+            tipoDocumento="57"
+            descricao="PETIÇÃO"
+            mimetype="application/pdf">
+            <!-- Este é o ID único DESTE anexo específico -->
+            <!-- Outros atributos e parâmetros do anexo aqui... -->
+        </documentoVinculado>
+
+
+        <!-- Outros atributos e parâmetros do documento principal (como assinatura) estariam aqui... -->
+    </documento>
+
+    <!-- Outros documentos principais do processo poderiam seguir aqui -->
+
+</processo>
+Use code with caution.
+Xml
+Explicação para o Programador:
+Nível Principal: A tag <processo> contém uma lista de tags <documento>. Cada <documento> representa um item principal adicionado ao processo (como uma petição, uma decisão, um ofício, etc.).
+ID do Principal: Cada <documento> tem seu próprio idDocumento único.
+Nível Vinculado (Anexos): Dentro de uma tag <documento>, pode haver uma lista de tags <documentoVinculado>. Estas representam os arquivos anexos àquele documento principal específico.
+ID do Anexo: Cada <documentoVinculado> também tem seu próprio idDocumento único.
+A Ligação Chave: A tag <documentoVinculado> possui o atributo idDocumentoVinculado. O valor deste atributo é sempre o idDocumento do <documento> pai ao qual ele está anexado. É assim que sabemos qual anexo pertence a qual documento principal.
+Processamento Necessário: Para obter todos os arquivos, o código precisa:
+Iterar pela lista de <documento> dentro de <processo>.
+Para cada <documento>, pegar seu idDocumento e processá-lo (buscar conteúdo, etc.).
+Dentro de cada <documento>, verificar se existe uma lista de <documentoVinculado>.
+Se existir, iterar por essa lista.
+Para cada <documentoVinculado>, pegar seu idDocumento (o ID dele mesmo, não o idDocumentoVinculado) e processá-lo (buscar conteúdo, etc.).
+Essa estrutura aninhada e a referência idDocumentoVinculado são cruciais para reconstruir a organização correta dos documentos e seus anexos. O código atual precisa implementar essa lógica de iteração dupla (principal e depois vinculados).
