@@ -98,6 +98,8 @@ def extract_all_document_ids(resposta):
         logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
         
         documentos_ids = []
+        # Lista para controlar IDs já processados e evitar duplicação
+        ids_processados = set()
         
         if not hasattr(resposta, 'processo') or not hasattr(resposta.processo, 'documento'):
             logger.warning("Processo não possui documentos")
@@ -105,9 +107,17 @@ def extract_all_document_ids(resposta):
         
         # Função recursiva para extrair IDs dos documentos e seus vinculados
         def extract_ids_recursivo(doc):
+            # Pular documento se não tiver ID ou se já foi processado
+            doc_id = getattr(doc, 'idDocumento', '')
+            if not doc_id or doc_id in ids_processados:
+                return
+                
+            # Adicionar ID à lista de processados
+            ids_processados.add(doc_id)
+            
             # Extrair informações básicas do documento atual
             doc_info = {
-                'idDocumento': getattr(doc, 'idDocumento', ''),
+                'idDocumento': doc_id,
                 'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
                 'descricao': getattr(doc, 'descricao', ''),
                 'mimetype': getattr(doc, 'mimetype', ''),
@@ -115,13 +125,21 @@ def extract_all_document_ids(resposta):
             
             # Adicionar documento à lista
             documentos_ids.append(doc_info)
+            logger.debug(f"Adicionado documento ID: {doc_id}, descrição: {doc_info['descricao']}")
             
-            # Processar documentos vinculados se existirem
-            if hasattr(doc, 'documentoVinculado'):
-                docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
-                
-                for doc_vinc in docs_vinc:
-                    extract_ids_recursivo(doc_vinc)
+            # Verificar todos os possíveis atributos que podem conter documentos vinculados
+            elementos_a_verificar = ['documentoVinculado', 'documento', 'documentos', 'anexos']
+            
+            for attr in elementos_a_verificar:
+                if hasattr(doc, attr):
+                    elementos = getattr(doc, attr)
+                    if elementos:
+                        # Converter para lista se não for
+                        elementos_list = elementos if isinstance(elementos, list) else [elementos]
+                        
+                        logger.debug(f"Processando {len(elementos_list)} documentos em {attr} do documento {doc_id}")
+                        for elemento in elementos_list:
+                            extract_ids_recursivo(elemento)
         
         # Processar todos os documentos do processo
         docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
