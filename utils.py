@@ -98,6 +98,7 @@ def extract_all_document_ids(resposta):
         logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
         
         documentos_ids = []
+        processados = set()  # Conjunto para controlar documentos já processados
         
         if not hasattr(resposta, 'processo') or not hasattr(resposta.processo, 'documento'):
             logger.warning("Processo não possui documentos")
@@ -105,9 +106,16 @@ def extract_all_document_ids(resposta):
         
         # Função recursiva para extrair IDs dos documentos e seus vinculados
         def extract_ids_recursivo(doc):
+            # Verificar se já processamos este documento para evitar loops infinitos
+            id_doc = getattr(doc, 'idDocumento', '')
+            if id_doc in processados:
+                return
+            
+            processados.add(id_doc)
+            
             # Extrair informações básicas do documento atual
             doc_info = {
-                'idDocumento': getattr(doc, 'idDocumento', ''),
+                'idDocumento': id_doc,
                 'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
                 'descricao': getattr(doc, 'descricao', ''),
                 'mimetype': getattr(doc, 'mimetype', ''),
@@ -115,16 +123,30 @@ def extract_all_document_ids(resposta):
             
             # Adicionar documento à lista
             documentos_ids.append(doc_info)
+            logger.debug(f"Adicionando documento ID: {id_doc} - {doc_info['descricao']}")
             
-            # Processar documentos vinculados se existirem
+            # Processar documentos vinculados se existirem (inclui todos os tipos possíveis)
+            # 1. Documentos vinculados padrão
             if hasattr(doc, 'documentoVinculado'):
                 docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
+                logger.debug(f"Encontrado {len(docs_vinc)} documentos vinculados para {id_doc}")
                 
                 for doc_vinc in docs_vinc:
                     extract_ids_recursivo(doc_vinc)
+            
+            # 2. Documentos em anexos ou subDocumentos
+            for attr_name in ['anexo', 'subDocumento', 'documento']:
+                if hasattr(doc, attr_name):
+                    docs_anexos = getattr(doc, attr_name)
+                    docs_anexos = docs_anexos if isinstance(docs_anexos, list) else [docs_anexos]
+                    logger.debug(f"Encontrado {len(docs_anexos)} {attr_name}(s) para {id_doc}")
+                    
+                    for doc_anexo in docs_anexos:
+                        extract_ids_recursivo(doc_anexo)
         
         # Processar todos os documentos do processo
         docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
+        logger.debug(f"Iniciando processamento de {len(docs)} documentos principais")
         for doc in docs:
             extract_ids_recursivo(doc)
         
