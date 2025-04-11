@@ -98,6 +98,8 @@ def extract_all_document_ids(resposta):
         logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
         
         documentos_ids = []
+        # Set para controlar IDs já processados e evitar duplicação
+        processed_ids = set()
         
         if not hasattr(resposta, 'processo') or not hasattr(resposta.processo, 'documento'):
             logger.warning("Processo não possui documentos")
@@ -106,8 +108,16 @@ def extract_all_document_ids(resposta):
         # Função recursiva para extrair IDs dos documentos e seus vinculados
         def extract_ids_recursivo(doc):
             # Extrair informações básicas do documento atual
+            doc_id = getattr(doc, 'idDocumento', '')
+            
+            # Evita processar o mesmo documento duas vezes
+            if not doc_id or doc_id in processed_ids:
+                return
+                
+            processed_ids.add(doc_id)
+            
             doc_info = {
-                'idDocumento': getattr(doc, 'idDocumento', ''),
+                'idDocumento': doc_id,
                 'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
                 'descricao': getattr(doc, 'descricao', ''),
                 'mimetype': getattr(doc, 'mimetype', ''),
@@ -115,6 +125,9 @@ def extract_all_document_ids(resposta):
             
             # Adicionar documento à lista
             documentos_ids.append(doc_info)
+            
+            # Log para debug detalhado
+            logger.debug(f"Adicionando documento: ID={doc_id}, Tipo={doc_info['tipoDocumento']}, Desc={doc_info['descricao']}")
             
             # Processar documentos vinculados se existirem
             if hasattr(doc, 'documentoVinculado'):
@@ -125,8 +138,29 @@ def extract_all_document_ids(resposta):
         
         # Processar todos os documentos do processo
         docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
+        
+        # Processamento inicial: documentos principais e seus vinculados
         for doc in docs:
             extract_ids_recursivo(doc)
+            
+        # Mapeamento para documentos vinculados
+        # Alguns documentos podem estar apenas como vinculados sem estar explicitamente nos documentos principais
+        documento_vinculado_mapping = {}
+        
+        # Criar mapeamento de todos documentos vinculados presentes na estrutura
+        for doc in docs:
+            if hasattr(doc, 'documentoVinculado'):
+                docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
+                for doc_vinc in docs_vinc:
+                    vinc_id = getattr(doc_vinc, 'idDocumento', '')
+                    if vinc_id and vinc_id not in documento_vinculado_mapping:
+                        documento_vinculado_mapping[vinc_id] = doc_vinc
+        
+        # Adicionar todos os documentos vinculados que porventura não tenham sido processados
+        for vinc_id, doc_vinc in documento_vinculado_mapping.items():
+            if vinc_id not in processed_ids:
+                logger.debug(f"Processando documento vinculado não-indexado anteriormente: {vinc_id}")
+                extract_ids_recursivo(doc_vinc)
         
         logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
         return {

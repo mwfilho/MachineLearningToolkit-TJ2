@@ -26,10 +26,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def debug_estrutura_documento(doc, nivel=0, prefixo=''):
+def debug_estrutura_documento(doc, nivel=0, prefixo='', check_ids=None):
     """
     Função auxiliar para debug que mapeia toda a estrutura de um documento
+    
+    Args:
+        doc: Documento a ser analisado
+        nivel: Nível de indentação (usado recursivamente)
+        prefixo: Prefixo para exibição (usado recursivamente)
+        check_ids: Lista de IDs para verificar se estão presentes na estrutura
     """
+    found_ids = set()
+    
+    if check_ids is None:
+        check_ids = []
     indent = '  ' * nivel
     logger.debug(f"{indent}{prefixo}{'=' * 40}")
     logger.debug(f"{indent}{prefixo}Analisando documento:")
