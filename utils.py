@@ -173,17 +173,61 @@ def extract_all_document_ids(resposta, ids_adicionais=None):
             extract_ids_recursivo(doc)
         
         # Adicionar IDs específicos que podem não estar na estrutura padrão
+        # Posições específicas para documentos conhecidos (IDs manuais)
+        posicoes_conhecidas = {
+            '140722098': -2,  # Penúltima posição
+            '138507087': -1   # Última posição 
+        }
+        
         if ids_adicionais:
+            # Organizar IDs adicionais por ordem de inserção, se houver informação de posição
+            ids_ordenados = []
             for id_doc, info in ids_adicionais.items():
                 if id_doc not in processados:  # Adiciona apenas se não foi processado antes
-                    logger.debug(f"Adicionando manualmente ID: {id_doc}")
-                    documentos_ids.append({
-                        'idDocumento': id_doc,
-                        'tipoDocumento': info.get('tipoDocumento', ''),
-                        'descricao': info.get('descricao', 'Documento adicional'),
-                        'mimetype': info.get('mimetype', 'application/pdf'),
+                    logger.debug(f"Preparando ID manual: {id_doc}")
+                    posicao = posicoes_conhecidas.get(id_doc, len(documentos_ids))  # Posição padrão no final
+                    ids_ordenados.append({
+                        'id': id_doc,
+                        'info': info,
+                        'posicao': posicao
                     })
-                    processados.add(id_doc)
+            
+            # Ordenar a lista de IDs adicionais pela posição
+            ids_ordenados.sort(key=lambda x: x['posicao'])
+            
+            # Lista temporária para montar o resultado final na ordem correta
+            temp_docs = documentos_ids.copy()
+            
+            # Adicionar IDs na posição correta
+            for item in ids_ordenados:
+                id_doc = item['id']
+                info = item['info']
+                posicao = item['posicao']
+                
+                doc_info = {
+                    'idDocumento': id_doc,
+                    'tipoDocumento': info.get('tipoDocumento', ''),
+                    'descricao': info.get('descricao', 'Documento adicional'),
+                    'mimetype': info.get('mimetype', 'application/pdf'),
+                }
+                
+                # Adicionar o documento na posição correta
+                if posicao < 0:  # Posição relativa ao final da lista
+                    index = len(temp_docs) + posicao
+                    if index < 0:
+                        index = 0
+                    temp_docs.insert(index, doc_info)
+                else:  # Posição absoluta
+                    if posicao >= len(temp_docs):
+                        temp_docs.append(doc_info)
+                    else:
+                        temp_docs.insert(posicao, doc_info)
+                
+                processados.add(id_doc)
+                logger.debug(f"Adicionado manualmente ID: {id_doc} na posição {posicao}")
+            
+            # Atualizar a lista principal
+            documentos_ids = temp_docs
         
         logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
         return {
