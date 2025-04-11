@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, send_file, flash
+from flask import Blueprint, render_template, request, send_file, flash, jsonify
 import tempfile
 import os
 import logging
@@ -156,11 +156,17 @@ def download_documento(num_processo, num_documento):
         flash(f'Erro ao baixar documento: {str(e)}', 'error')
         return render_template('index.html')
 
-@web.route('/debug/documentos-ids', methods=['POST'])
+@web.route('/debug/documentos-ids', methods=['GET', 'POST'])
 def debug_document_ids():
-    num_processo = request.form.get('num_processo')
-    cpf = request.form.get('cpf')
-    senha = request.form.get('senha')
+    # Verificar se é GET ou POST e obter parâmetros de acordo
+    if request.method == 'POST':
+        num_processo = request.form.get('num_processo')
+        cpf = request.form.get('cpf')
+        senha = request.form.get('senha')
+    else:  # GET
+        num_processo = request.args.get('processo')
+        cpf = request.args.get('cpf')
+        senha = request.args.get('senha')
     
     try:
         logger.debug(f"Consultando lista de IDs de documentos: {num_processo}")
@@ -174,6 +180,10 @@ def debug_document_ids():
         dados = extract_all_document_ids(resposta)
         logger.debug(f"Lista de IDs extraída: {dados}")
         
+        # Se solicitado formato json, retornar como JSON
+        if request.args.get('format') == 'json':
+            return jsonify(dados)
+            
         return render_template('debug.html', 
                            resposta=dados,
                            documentos_ids=dados.get('documentos', []),
