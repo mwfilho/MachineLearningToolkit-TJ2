@@ -172,11 +172,24 @@ def debug_document_ids():
         
         # Extrair a lista ordenada de IDs
         dados = extract_all_document_ids(resposta)
-        logger.debug(f"Lista de IDs extraída: {dados}")
+        
+        # Logging detalhado dos documentos encontrados
+        documentos = dados.get('documentos', [])
+        logger.debug(f"Total de documentos extraídos: {len(documentos)}")
+        
+        # Log de cada documento para verificar se os IDs específicos estão sendo incluídos
+        for idx, doc in enumerate(documentos):
+            logger.debug(f"Doc #{idx+1}: ID={doc.get('idDocumento', 'N/A')}, Tipo={doc.get('tipoDocumento', 'N/A')}, Desc={doc.get('descricao', 'N/A')}")
+        
+        # Verifica se os IDs específicos estão presentes
+        ids_verificar = ['140722098', '138507087']
+        for id_verificar in ids_verificar:
+            encontrado = any(doc.get('idDocumento') == id_verificar for doc in documentos)
+            logger.debug(f"ID {id_verificar} está {'PRESENTE' if encontrado else 'AUSENTE'} na lista de documentos")
         
         return render_template('debug.html', 
                            resposta=dados,
-                           documentos_ids=dados.get('documentos', []),
+                           documentos_ids=documentos,
                            num_processo=num_processo)
                            
     except Exception as e:
