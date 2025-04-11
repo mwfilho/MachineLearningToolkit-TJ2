@@ -98,8 +98,6 @@ def extract_all_document_ids(resposta):
         logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
         
         documentos_ids = []
-        # Lista para controlar IDs já processados e evitar duplicação
-        ids_processados = set()
         
         if not hasattr(resposta, 'processo') or not hasattr(resposta.processo, 'documento'):
             logger.warning("Processo não possui documentos")
@@ -107,24 +105,9 @@ def extract_all_document_ids(resposta):
         
         # Função recursiva para extrair IDs dos documentos e seus vinculados
         def extract_ids_recursivo(doc):
-            # Pular documento se não tiver ID ou se já foi processado
-            doc_id = getattr(doc, 'idDocumento', '')
-            
-            # Log especial para IDs que estamos buscando
-            if doc_id in ['140722096', '138507087', '140722098']:
-                logger.debug(f"DOCUMENTO ESPECÍFICO ENCONTRADO: ID={doc_id}")
-                # Debug de todos os atributos do documento
-                logger.debug(f"Atributos: {dir(doc)}")
-            
-            if not doc_id or doc_id in ids_processados:
-                return
-                
-            # Adicionar ID à lista de processados
-            ids_processados.add(doc_id)
-            
             # Extrair informações básicas do documento atual
             doc_info = {
-                'idDocumento': doc_id,
+                'idDocumento': getattr(doc, 'idDocumento', ''),
                 'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
                 'descricao': getattr(doc, 'descricao', ''),
                 'mimetype': getattr(doc, 'mimetype', ''),
@@ -132,181 +115,20 @@ def extract_all_document_ids(resposta):
             
             # Adicionar documento à lista
             documentos_ids.append(doc_info)
-            logger.debug(f"Adicionado documento ID: {doc_id}, descrição: {doc_info['descricao']}")
             
-            # Tratar especificamente os IDs que estamos procurando
-            if doc_id == '138507083':
-                # ID do documento principal que deveria conter o 138507087 como vinculado
-                logger.debug("DOCUMENTO PRINCIPAL 138507083 ENCONTRADO - VERIFICANDO VINCULADOS")
-                
-                # Verifica se tem documentoVinculado e se contém o documento 138507087
-                if hasattr(doc, 'documentoVinculado'):
-                    docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
-                    for doc_vinc in docs_vinc:
-                        vinc_id = getattr(doc_vinc, 'idDocumento', '')
-                        logger.debug(f"VINCULADO AO 138507083: {vinc_id}")
-                        
-                        if vinc_id == '138507087':
-                            logger.debug("DOCUMENTO 138507087 ENCONTRADO COMO VINCULADO!")
-                            # Adiciona explicitamente o documento vinculado
-                            vinc_info = {
-                                'idDocumento': '138507087',
-                                'tipoDocumento': getattr(doc_vinc, 'tipoDocumento', ''),
-                                'descricao': getattr(doc_vinc, 'descricao', ''),
-                                'mimetype': getattr(doc_vinc, 'mimetype', ''),
-                            }
-                            if not any(d['idDocumento'] == '138507087' for d in documentos_ids):
-                                documentos_ids.append(vinc_info)
-                                logger.debug("DOCUMENTO 138507087 ADICIONADO EXPLICITAMENTE!")
-            
-            # Tratar especificamente o ID 140722096
-            if doc_id == '140722096':
-                logger.debug("DOCUMENTO PRINCIPAL 140722096 ENCONTRADO - VERIFICANDO VINCULADOS")
-                
-                # Verifica se tem documentoVinculado e se contém o documento 140722098
-                if hasattr(doc, 'documentoVinculado'):
-                    docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
-                    for doc_vinc in docs_vinc:
-                        vinc_id = getattr(doc_vinc, 'idDocumento', '')
-                        logger.debug(f"VINCULADO AO 140722096: {vinc_id}")
-                        
-                        if vinc_id == '140722098':
-                            logger.debug("DOCUMENTO 140722098 ENCONTRADO COMO VINCULADO!")
-                            # Adiciona explicitamente o documento vinculado
-                            vinc_info = {
-                                'idDocumento': '140722098',
-                                'tipoDocumento': getattr(doc_vinc, 'tipoDocumento', ''),
-                                'descricao': getattr(doc_vinc, 'descricao', ''),
-                                'mimetype': getattr(doc_vinc, 'mimetype', ''),
-                            }
-                            if not any(d['idDocumento'] == '140722098' for d in documentos_ids):
-                                documentos_ids.append(vinc_info)
-                                logger.debug("DOCUMENTO 140722098 ADICIONADO EXPLICITAMENTE!")
-            
-            # Processar documentos vinculados se existirem (documentoVinculado)
+            # Processar documentos vinculados se existirem
             if hasattr(doc, 'documentoVinculado'):
-                docs_vinc = doc.documentoVinculado
-                # Verificar se é lista ou objeto único
-                if not isinstance(docs_vinc, list):
-                    docs_vinc = [docs_vinc]
+                docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
                 
-                logger.debug(f"Processando {len(docs_vinc)} documentos vinculados do documento {doc_id}")
                 for doc_vinc in docs_vinc:
-                    vinc_id = getattr(doc_vinc, 'idDocumento', '')
-                    
-                    # Adicionar explicitamente - independente se já está processado
-                    if vinc_id in ['138507087', '140722098']:
-                        logger.debug(f"Força adição de documento específico: {vinc_id}")
-                        vinc_info = {
-                            'idDocumento': vinc_id,
-                            'tipoDocumento': getattr(doc_vinc, 'tipoDocumento', ''),
-                            'descricao': getattr(doc_vinc, 'descricao', ''),
-                            'mimetype': getattr(doc_vinc, 'mimetype', ''),
-                        }
-                        if not any(d['idDocumento'] == vinc_id for d in documentos_ids):
-                            documentos_ids.append(vinc_info)
-                            logger.debug(f"Documento {vinc_id} adicionado explicitamente")
-                    
-                    # Log especial para documento específico que estamos buscando
-                    if vinc_id in ['138507087', '140722098']:
-                        logger.debug(f"ENCONTRADO DOCUMENTO VINCULADO ESPECÍFICO: ID={vinc_id}, vinculado ao {doc_id}")
-                    
-                    if vinc_id and vinc_id not in ids_processados:
-                        # Registrar ID do documento vinculado
-                        ids_processados.add(vinc_id)
-                        
-                        # Extrair informações do documento vinculado
-                        vinc_info = {
-                            'idDocumento': vinc_id,
-                            'tipoDocumento': getattr(doc_vinc, 'tipoDocumento', ''),
-                            'descricao': getattr(doc_vinc, 'descricao', ''),
-                            'mimetype': getattr(doc_vinc, 'mimetype', ''),
-                        }
-                        
-                        # Adicionar documento vinculado à lista
-                        if not any(d['idDocumento'] == vinc_id for d in documentos_ids):
-                            documentos_ids.append(vinc_info)
-                            logger.debug(f"Adicionado documento vinculado ID: {vinc_id}, descrição: {vinc_info['descricao']}")
-                        
-                        # Verificar recursivamente se o documento vinculado tem mais documentos vinculados
-                        extract_ids_recursivo(doc_vinc)
-            
-            # Verificar outros atributos que podem conter documentos
-            outros_attrs = ['documento', 'documentos', 'anexos']
-            for attr in outros_attrs:
-                if hasattr(doc, attr):
-                    outros_docs = getattr(doc, attr)
-                    if outros_docs:
-                        # Converter para lista se não for
-                        outros_list = outros_docs if isinstance(outros_docs, list) else [outros_docs]
-                        
-                        logger.debug(f"Processando {len(outros_list)} documentos em '{attr}' do documento {doc_id}")
-                        for outro_doc in outros_list:
-                            # Processar recursivamente esse documento
-                            extract_ids_recursivo(outro_doc)
-        
-        # Processamento especial para adicionar documentos específicos
-        def add_documento_especifico(xml_processo, doc_id_pai, doc_id_filho):
-            """Adiciona documento específico a partir do XML diretamente"""
-            if not hasattr(xml_processo, 'documento'):
-                return
-                
-            docs = xml_processo.documento if isinstance(xml_processo.documento, list) else [xml_processo.documento]
-            for doc in docs:
-                if getattr(doc, 'idDocumento', '') == doc_id_pai:
-                    logger.debug(f"Encontrado documento pai {doc_id_pai} no XML")
-                    if hasattr(doc, 'documentoVinculado'):
-                        vincs = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
-                        for vinc in vincs:
-                            vinc_id = getattr(vinc, 'idDocumento', '')
-                            if vinc_id == doc_id_filho:
-                                logger.debug(f"Encontrado documento filho {doc_id_filho} no XML - adicionando diretamente")
-                                vinc_info = {
-                                    'idDocumento': vinc_id,
-                                    'tipoDocumento': getattr(vinc, 'tipoDocumento', ''),
-                                    'descricao': getattr(vinc, 'descricao', ''),
-                                    'mimetype': getattr(vinc, 'mimetype', ''),
-                                }
-                                if not any(d['idDocumento'] == vinc_id for d in documentos_ids):
-                                    documentos_ids.append(vinc_info)
-                                    ids_processados.add(vinc_id)
-                                    logger.debug(f"Documento {vinc_id} adicionado diretamente do XML")
+                    extract_ids_recursivo(doc_vinc)
         
         # Processar todos os documentos do processo
-        docs = resposta.processo.documento
-        if not isinstance(docs, list):
-            docs = [docs]
-            
-        logger.debug(f"Processando {len(docs)} documentos principais do processo")
+        docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
         for doc in docs:
-            # Processar cada documento principal
             extract_ids_recursivo(doc)
         
-        # Verificar logs especiais após o processamento
-        logger.debug(f"IDs processados: {ids_processados}")
-        
-        # Adicionar documentos específicos diretamente do XML
-        add_documento_especifico(resposta.processo, '140722096', '140722098')
-        add_documento_especifico(resposta.processo, '138507083', '138507087')
-        
-        # Verificação final
-        target_ids = ['140722098', '138507087']
-        for target_id in target_ids:
-            if not any(d['idDocumento'] == target_id for d in documentos_ids):
-                logger.debug(f"ID {target_id} ainda não está na lista final - adicionando manualmente")
-                # Adicionar manualmente com mínimo de informações
-                documentos_ids.append({
-                    'idDocumento': target_id,
-                    'tipoDocumento': '4050007' if target_id == '138507087' else '57',
-                    'descricao': 'PROCURAÇÃO AD JUDICIA' if target_id == '138507087' else 'Pedido de Habilitação',
-                    'mimetype': 'application/pdf',
-                })
-        
-        # Organizar a lista de documentos pelo ID
-        documentos_ids = sorted(documentos_ids, key=lambda x: x['idDocumento'])
-        
         logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
-        logger.debug(f"Lista final de IDs: {[d['idDocumento'] for d in documentos_ids]}")
         return {
             'sucesso': True, 
             'mensagem': 'Lista de documentos extraída com sucesso',
@@ -314,8 +136,6 @@ def extract_all_document_ids(resposta):
         }
     except Exception as e:
         logger.error(f"Erro ao extrair IDs de documentos: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
         return {
             'sucesso': False, 
             'mensagem': f'Erro ao extrair IDs de documentos: {str(e)}',
