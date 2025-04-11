@@ -149,27 +149,8 @@ def get_document_ids(num_processo):
         # Obtém o processo completo com documentos
         resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
         
-        # IDs adicionais conhecidos que não são retornados pela API MNI
-        ids_adicionais = {}
-        
-        # Caso específico: incluir IDs ausentes para o processo 3000066-83.2025.8.06.0203
-        if num_processo == '3000066-83.2025.8.06.0203':
-            ids_adicionais = {
-                '140722098': {
-                    'tipoDocumento': '58',
-                    'descricao': 'Petição (Pedido de Habilitação Eliene)',
-                    'mimetype': 'application/pdf',
-                },
-                '138507087': {
-                    'tipoDocumento': '4050009',
-                    'descricao': 'Procuração (PROCURAÇÃO AD JUDICIA)',
-                    'mimetype': 'application/pdf',
-                }
-            }
-            logger.debug(f"API: Adicionando IDs específicos manualmente para o processo {num_processo}")
-
-        # Extrai os IDs dos documentos em ordem (incluindo os adicionais)
-        dados = extract_all_document_ids(resposta, ids_adicionais)
+        # Extrai os IDs dos documentos usando a função melhorada que percorre toda a estrutura XML
+        dados = extract_all_document_ids(resposta)
         return jsonify(dados)
 
     except Exception as e:

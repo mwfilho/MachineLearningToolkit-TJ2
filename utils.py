@@ -130,104 +130,114 @@ def extract_all_document_ids(resposta, ids_adicionais=None):
         def extract_ids_recursivo(doc):
             # Verificar se já processamos este documento para evitar loops infinitos
             id_doc = getattr(doc, 'idDocumento', '')
+            tipo_doc = getattr(doc, 'tipoDocumento', '')
+            descricao = getattr(doc, 'descricao', '')
+            mimetype = getattr(doc, 'mimetype', '')
+            
+            # Se não tiver idDocumento, pode ser que seja idDocumentoVinculado
+            if not id_doc and hasattr(doc, 'idDocumentoVinculado'):
+                id_doc = getattr(doc, 'idDocumentoVinculado', '')
+                logger.debug(f"Usando idDocumentoVinculado como ID: {id_doc}")
+            
+            # Se ainda não tiver ID, verificar outros atributos como id
+            if not id_doc and hasattr(doc, 'id'):
+                id_doc = getattr(doc, 'id', '')
+                logger.debug(f"Usando id como ID: {id_doc}")
+            
+            # Verificar se temos um ID válido
+            if not id_doc:
+                logger.debug(f"Documento sem ID encontrado: {dir(doc)}")
+                return
+            
+            # Se o documento já foi processado, evitar duplicação
             if id_doc in processados:
                 return
             
             processados.add(id_doc)
             
+            # Obter a descrição do documento de outros atributos caso não tenha sido encontrada
+            if not descricao and hasattr(doc, 'nomeDocumento'):
+                descricao = getattr(doc, 'nomeDocumento', '')
+            
             # Extrair informações básicas do documento atual
             doc_info = {
                 'idDocumento': id_doc,
-                'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
-                'descricao': getattr(doc, 'descricao', ''),
-                'mimetype': getattr(doc, 'mimetype', ''),
+                'tipoDocumento': tipo_doc,
+                'descricao': descricao,
+                'mimetype': mimetype,
             }
             
             # Adicionar documento à lista
             documentos_ids.append(doc_info)
             logger.debug(f"Adicionando documento ID: {id_doc} - {doc_info['descricao']}")
             
-            # Processar documentos vinculados se existirem (inclui todos os tipos possíveis)
-            # 1. Documentos vinculados padrão
-            if hasattr(doc, 'documentoVinculado'):
-                docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
-                logger.debug(f"Encontrado {len(docs_vinc)} documentos vinculados para {id_doc}")
+            # Processar todos os atributos do documento buscando estruturas aninhadas
+            for attr_name in dir(doc):
+                # Ignorar métodos e atributos privados
+                if attr_name.startswith('_') or callable(getattr(doc, attr_name)):
+                    continue
                 
-                for doc_vinc in docs_vinc:
-                    extract_ids_recursivo(doc_vinc)
-            
-            # 2. Documentos em anexos ou subDocumentos
-            for attr_name in ['anexo', 'subDocumento', 'documento']:
-                if hasattr(doc, attr_name):
-                    docs_anexos = getattr(doc, attr_name)
-                    docs_anexos = docs_anexos if isinstance(docs_anexos, list) else [docs_anexos]
-                    logger.debug(f"Encontrado {len(docs_anexos)} {attr_name}(s) para {id_doc}")
-                    
-                    for doc_anexo in docs_anexos:
-                        extract_ids_recursivo(doc_anexo)
+                # Obter o valor do atributo
+                attr_value = getattr(doc, attr_name)
+                
+                # Processar somente nós do tipo objeto que podem conter outros documentos
+                if hasattr(attr_value, '__dict__'):
+                    # Se for um objeto único
+                    if attr_name in ['documentoVinculado', 'anexo', 'subDocumento', 'documento']:
+                        logger.debug(f"Processando {attr_name} de {id_doc}")
+                        extract_ids_recursivo(attr_value)
+                    # Se for um objeto com potenciais outros documentos mas não é dos tipos comuns
+                    elif 'documento' in attr_name.lower() or 'anexo' in attr_name.lower():
+                        logger.debug(f"Processando potencial documento em {attr_name} de {id_doc}")
+                        extract_ids_recursivo(attr_value)
+                
+                # Processar listas de objetos
+                elif isinstance(attr_value, list):
+                    # Verificar se é uma lista de documentos ou anexos
+                    if attr_name in ['documentoVinculado', 'anexo', 'subDocumento', 'documento']:
+                        logger.debug(f"Processando lista de {attr_name} de {id_doc}")
+                        for item in attr_value:
+                            if hasattr(item, '__dict__'):
+                                extract_ids_recursivo(item)
+                    # Se o nome do atributo sugere que contém documentos ou anexos
+                    elif 'documento' in attr_name.lower() or 'anexo' in attr_name.lower():
+                        logger.debug(f"Processando potencial lista de documentos em {attr_name} de {id_doc}")
+                        for item in attr_value:
+                            if hasattr(item, '__dict__'):
+                                extract_ids_recursivo(item)
         
-        # Processar todos os documentos do processo
+        # Processar todos os documentos do processo a partir da raiz
+        logger.debug("Processando documento principal")
+        
+        # 1. Processar documentos na raiz do processo
         docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
         logger.debug(f"Iniciando processamento de {len(docs)} documentos principais")
         for doc in docs:
             extract_ids_recursivo(doc)
         
-        # Adicionar IDs específicos que podem não estar na estrutura padrão
-        # Posições específicas para documentos conhecidos (IDs manuais)
-        posicoes_conhecidas = {
-            '140722098': -2,  # Penúltima posição
-            '138507087': -1   # Última posição 
-        }
-        
-        if ids_adicionais:
-            # Organizar IDs adicionais por ordem de inserção, se houver informação de posição
-            ids_ordenados = []
-            for id_doc, info in ids_adicionais.items():
-                if id_doc not in processados:  # Adiciona apenas se não foi processado antes
-                    logger.debug(f"Preparando ID manual: {id_doc}")
-                    posicao = posicoes_conhecidas.get(id_doc, len(documentos_ids))  # Posição padrão no final
-                    ids_ordenados.append({
-                        'id': id_doc,
-                        'info': info,
-                        'posicao': posicao
-                    })
-            
-            # Ordenar a lista de IDs adicionais pela posição
-            ids_ordenados.sort(key=lambda x: x['posicao'])
-            
-            # Lista temporária para montar o resultado final na ordem correta
-            temp_docs = documentos_ids.copy()
-            
-            # Adicionar IDs na posição correta
-            for item in ids_ordenados:
-                id_doc = item['id']
-                info = item['info']
-                posicao = item['posicao']
+        # 2. Verificar e processar todas as estruturas potenciais no objeto processo
+        logger.debug("Verificando estruturas adicionais no objeto processo")
+        for attr_name in dir(resposta.processo):
+            # Ignorar métodos e atributos privados
+            if attr_name.startswith('_') or callable(getattr(resposta.processo, attr_name)):
+                continue
                 
-                doc_info = {
-                    'idDocumento': id_doc,
-                    'tipoDocumento': info.get('tipoDocumento', ''),
-                    'descricao': info.get('descricao', 'Documento adicional'),
-                    'mimetype': info.get('mimetype', 'application/pdf'),
-                }
+            # Ignorar 'documento' que já foi processado acima
+            if attr_name == 'documento':
+                continue
                 
-                # Adicionar o documento na posição correta
-                if posicao < 0:  # Posição relativa ao final da lista
-                    index = len(temp_docs) + posicao
-                    if index < 0:
-                        index = 0
-                    temp_docs.insert(index, doc_info)
-                else:  # Posição absoluta
-                    if posicao >= len(temp_docs):
-                        temp_docs.append(doc_info)
-                    else:
-                        temp_docs.insert(posicao, doc_info)
-                
-                processados.add(id_doc)
-                logger.debug(f"Adicionado manualmente ID: {id_doc} na posição {posicao}")
+            attr_value = getattr(resposta.processo, attr_name)
             
-            # Atualizar a lista principal
-            documentos_ids = temp_docs
+            # Processar atributos que podem conter documentos
+            if 'documento' in attr_name.lower() or 'anexo' in attr_name.lower() or 'arquivo' in attr_name.lower():
+                logger.debug(f"Processando potencial estrutura de documentos em processo.{attr_name}")
+                
+                if isinstance(attr_value, list):
+                    for item in attr_value:
+                        if hasattr(item, '__dict__'):
+                            extract_ids_recursivo(item)
+                elif hasattr(attr_value, '__dict__'):
+                    extract_ids_recursivo(attr_value)
         
         logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
         return {

@@ -170,38 +170,18 @@ def debug_document_ids():
             senha=senha or os.environ.get('MNI_SENHA_CONSULTANTE')
         )
         
-        # IDs adicionais conhecidos para adicionar manualmente
-        # Estes IDs foram observados na interface, mas não estão na estrutura da API
-        ids_adicionais = {}
-        
-        # Verificamos se o processo é o específico que precisa desses IDs
-        if num_processo == '3000066-83.2025.8.06.0203':
-            ids_adicionais = {
-                '140722098': {
-                    'tipoDocumento': '58',  # Assumindo um tipo baseado no contexto
-                    'descricao': 'Petição (Pedido de Habilitação Eliene)',
-                    'mimetype': 'application/pdf',
-                },
-                '138507087': {
-                    'tipoDocumento': '4050009',  # Assumindo um tipo baseado no contexto
-                    'descricao': 'Procuração (PROCURAÇÃO AD JUDICIA)',
-                    'mimetype': 'application/pdf',
-                }
-            }
-            logger.debug(f"Adicionando IDs específicos manualmente para o processo {num_processo}")
-        
-        # Extração dos IDs incluindo os adicionais
-        dados = extract_all_document_ids(resposta, ids_adicionais)
+        # Extração dos IDs usando a função melhorada
+        dados = extract_all_document_ids(resposta)
         
         # Logging detalhado dos documentos encontrados
         documentos = dados.get('documentos', [])
         logger.debug(f"Total de documentos extraídos: {len(documentos)}")
         
-        # Log de cada documento para verificar se os IDs específicos estão sendo incluídos
+        # Log de cada documento para verificar quais IDs foram extraídos
         for idx, doc in enumerate(documentos):
             logger.debug(f"Doc #{idx+1}: ID={doc.get('idDocumento', 'N/A')}, Tipo={doc.get('tipoDocumento', 'N/A')}, Desc={doc.get('descricao', 'N/A')}")
         
-        # Verifica se os IDs específicos estão presentes
+        # Verificar se IDs importantes estão na lista (para fins de debug)
         ids_verificar = ['140722098', '138507087']
         for id_verificar in ids_verificar:
             encontrado = any(doc.get('idDocumento') == id_verificar for doc in documentos)
