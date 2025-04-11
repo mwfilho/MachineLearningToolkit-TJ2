@@ -100,6 +100,7 @@ def extract_all_document_ids(resposta, ids_adicionais=None):
         resposta: Objeto de resposta do MNI contendo a estrutura do processo
         ids_adicionais: Dicionário opcional com IDs adicionais a serem incluídos manualmente
                         no formato {id: {tipoDocumento: str, descricao: str, mimetype: str}}
+                        (Parâmetro mantido por compatibilidade, mas não é mais necessário com a nova implementação)
     """
     try:
         logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
@@ -126,232 +127,81 @@ def extract_all_document_ids(resposta, ids_adicionais=None):
             else:
                 return {'sucesso': False, 'mensagem': 'Processo não possui documentos', 'documentos': []}
         
-        # Mapa para armazenar informações extras de documentos vinculados
-        # que serão processados como documentos principais
-        documentos_vinculados_info = {}
+        # Lista para armazenar todos os IDs de documentos, incluindo vinculados
+        todos_documentos = []
         
-        # Pré-processamento para coletar informações extras dos documentos vinculados que serão tratados como documentos principais
-        def pre_processar_doc_vinculados(doc):
-            # Verificar se o documento tem documentos vinculados
-            if hasattr(doc, 'documentoVinculado'):
-                docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
-                
-                for doc_vinc in docs_vinc:
-                    # Extrair ID do documento vinculado
-                    id_doc_vinculado = getattr(doc_vinc, 'idDocumento', '')
-                    
-                    if id_doc_vinculado:
-                        # Informações extras do documento vinculado
-                        tipo_doc = getattr(doc_vinc, 'tipoDocumento', '')
-                        descricao = getattr(doc_vinc, 'descricao', '')
-                        nome_documento = ''
-                        
-                        # Tentar extrair nome/descrição dos parâmetros
-                        if hasattr(doc_vinc, 'outroParametro'):
-                            params = doc_vinc.outroParametro if isinstance(doc_vinc.outroParametro, list) else [doc_vinc.outroParametro]
-                            for param in params:
-                                if hasattr(param, 'nome') and getattr(param, 'nome', '') == 'nomeDocumento':
-                                    nome_documento = getattr(param, 'valor', '')
-                        
-                        # Usar a melhor descrição disponível
-                        if not descricao and nome_documento:
-                            descricao = nome_documento
-                        
-                        # Armazenar as informações extras
-                        documentos_vinculados_info[id_doc_vinculado] = {
-                            'tipoDocumento': tipo_doc,
-                            'descricao': descricao,
-                            'mimetype': getattr(doc_vinc, 'mimetype', 'application/pdf'),
-                        }
-                        
-                        # Processar documentos vinculados recursivamente
-                        pre_processar_doc_vinculados(doc_vinc)
+        # Primeira etapa: extrair todos os documentos principais e seus vinculados
+        docs_principais = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
         
-        # Pré-processar todos os documentos do processo para extrair informações extras
-        docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
-        for doc in docs:
-            pre_processar_doc_vinculados(doc)
+        logger.debug(f"Total de documentos principais: {len(docs_principais)}")
         
-        # Função recursiva para extrair IDs dos documentos e seus vinculados
-        def extract_ids_recursivo(doc):
-            # Verificar se já processamos este documento para evitar loops infinitos
-            id_doc = getattr(doc, 'idDocumento', '')
-            tipo_doc = getattr(doc, 'tipoDocumento', '')
-            descricao = getattr(doc, 'descricao', '')
-            mimetype = getattr(doc, 'mimetype', '')
+        # Processar cada documento principal
+        for doc_principal in docs_principais:
+            id_doc_principal = getattr(doc_principal, 'idDocumento', '')
             
-            # Se não tiver idDocumento, pode ser que seja idDocumentoVinculado
-            if not id_doc and hasattr(doc, 'idDocumentoVinculado'):
-                id_doc = getattr(doc, 'idDocumentoVinculado', '')
-                logger.debug(f"Usando idDocumentoVinculado como ID: {id_doc}")
-            
-            # Se ainda não tiver ID, verificar outros atributos como id
-            if not id_doc and hasattr(doc, 'id'):
-                id_doc = getattr(doc, 'id', '')
-                logger.debug(f"Usando id como ID: {id_doc}")
-            
-            # Verificar se temos um ID válido
-            if not id_doc:
-                logger.debug(f"Documento sem ID encontrado: {dir(doc)}")
-                return
-            
-            # Se o documento já foi processado, evitar duplicação
-            if id_doc in processados:
-                return
-            
-            processados.add(id_doc)
-            
-            # Obter a descrição do documento de outros atributos caso não tenha sido encontrada
-            if not descricao and hasattr(doc, 'nomeDocumento'):
-                descricao = getattr(doc, 'nomeDocumento', '')
+            if not id_doc_principal:
+                logger.warning("Documento principal sem ID encontrado")
+                continue
                 
-            # Verificar se temos informações extras deste documento como vinculado
-            if id_doc in documentos_vinculados_info:
-                info_extra = documentos_vinculados_info[id_doc]
-                
-                # Se não temos tipo_doc, usar o da informação extra
-                if not tipo_doc:
-                    tipo_doc = info_extra['tipoDocumento']
-                
-                # Se não temos descrição, usar a da informação extra
-                if not descricao:
-                    descricao = info_extra['descricao']
-                    
-                # Se não temos mimetype, usar o da informação extra
-                if not mimetype:
-                    mimetype = info_extra['mimetype']
+            # Extrair informações do documento principal
+            tipo_doc_principal = getattr(doc_principal, 'tipoDocumento', '')
+            descricao_principal = getattr(doc_principal, 'descricao', '')
+            mimetype_principal = getattr(doc_principal, 'mimetype', '')
             
-            # Verificar parâmetros adicionais para extrair mais informações
-            if hasattr(doc, 'outroParametro'):
-                params = doc.outroParametro if isinstance(doc.outroParametro, list) else [doc.outroParametro]
-                for param in params:
-                    if hasattr(param, 'nome') and hasattr(param, 'valor'):
-                        nome_param = getattr(param, 'nome', '')
-                        valor_param = getattr(param, 'valor', '')
-                        
-                        # Extrair nome do documento
-                        if nome_param == 'nomeDocumento' and valor_param and not descricao:
-                            descricao = valor_param
-            
-            # Extrair informações básicas do documento atual
-            doc_info = {
-                'idDocumento': id_doc,
-                'tipoDocumento': tipo_doc,
-                'descricao': descricao,
-                'mimetype': mimetype,
+            # Adicionar documento principal à lista
+            doc_principal_info = {
+                'idDocumento': id_doc_principal,
+                'tipoDocumento': tipo_doc_principal,
+                'descricao': descricao_principal,
+                'mimetype': mimetype_principal,
             }
+            todos_documentos.append(doc_principal_info)
+            processados.add(id_doc_principal)
+            logger.debug(f"Adicionando documento ID: {id_doc_principal} - {descricao_principal}")
             
-            # Adicionar documento à lista
-            documentos_ids.append(doc_info)
-            logger.debug(f"Adicionando documento ID: {id_doc} - {doc_info['descricao']}")
-            
-            # Processar todos os documentos vinculados explicitamente
-            if hasattr(doc, 'documentoVinculado'):
-                docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
-                logger.debug(f"Processando {len(docs_vinc)} documentos vinculados para {id_doc}")
+            # Processar documentos vinculados a este documento principal
+            if hasattr(doc_principal, 'documentoVinculado'):
+                docs_vinculados = doc_principal.documentoVinculado if isinstance(doc_principal.documentoVinculado, list) else [doc_principal.documentoVinculado]
+                logger.debug(f"Processando {len(docs_vinculados)} documentos vinculados para {id_doc_principal}")
                 
-                for doc_vinc in docs_vinc:
-                    vinc_id = getattr(doc_vinc, 'idDocumento', '')
-                    if vinc_id and vinc_id not in processados:
-                        # Extrai informações do documento vinculado
-                        vinc_tipo = getattr(doc_vinc, 'tipoDocumento', '')
-                        vinc_desc = getattr(doc_vinc, 'descricao', '')
-                        vinc_mime = getattr(doc_vinc, 'mimetype', 'application/pdf')
+                for doc_vinculado in docs_vinculados:
+                    id_doc_vinculado = getattr(doc_vinculado, 'idDocumento', '')
+                    
+                    if not id_doc_vinculado or id_doc_vinculado in processados:
+                        continue
                         
-                        # Verificar parâmetros adicionais para descrição
-                        if hasattr(doc_vinc, 'outroParametro'):
-                            params = doc_vinc.outroParametro if isinstance(doc_vinc.outroParametro, list) else [doc_vinc.outroParametro]
-                            for param in params:
-                                if hasattr(param, 'nome') and hasattr(param, 'valor'):
-                                    nome_param = getattr(param, 'nome', '')
-                                    valor_param = getattr(param, 'valor', '')
-                                    
-                                    # Extrair nome do documento
-                                    if nome_param == 'nomeDocumento' and valor_param and not vinc_desc:
-                                        vinc_desc = valor_param
-                        
-                        # Adiciona o documento vinculado à lista
-                        doc_vinc_info = {
-                            'idDocumento': vinc_id,
-                            'tipoDocumento': vinc_tipo,
-                            'descricao': vinc_desc,
-                            'mimetype': vinc_mime,
-                        }
-                        
-                        documentos_ids.append(doc_vinc_info)
-                        processados.add(vinc_id)
-                        logger.debug(f"Adicionando documento vinculado ID: {vinc_id} - {doc_vinc_info['descricao']}")
-                        
-                        # Processar subvinculados recursivamente
-                        extract_ids_recursivo(doc_vinc)
-            
-            # Processar outros atributos do documento buscando estruturas aninhadas
-            for attr_name in dir(doc):
-                # Ignorar métodos, atributos privados e documentoVinculado (já processado acima)
-                if attr_name.startswith('_') or callable(getattr(doc, attr_name)) or attr_name == 'documentoVinculado':
-                    continue
-                
-                # Obter o valor do atributo
-                attr_value = getattr(doc, attr_name)
-                
-                # Processar somente nós do tipo objeto que podem conter outros documentos
-                if hasattr(attr_value, '__dict__'):
-                    # Se for um objeto único potencialmente contendo documentos
-                    if attr_name in ['anexo', 'subDocumento', 'documento']:
-                        logger.debug(f"Processando {attr_name} de {id_doc}")
-                        extract_ids_recursivo(attr_value)
-                    # Se for um objeto com potenciais outros documentos mas não é dos tipos comuns
-                    elif 'documento' in attr_name.lower() or 'anexo' in attr_name.lower():
-                        logger.debug(f"Processando potencial documento em {attr_name} de {id_doc}")
-                        extract_ids_recursivo(attr_value)
-                
-                # Processar listas de objetos
-                elif isinstance(attr_value, list):
-                    # Verificar se é uma lista de documentos ou anexos
-                    if attr_name in ['anexo', 'subDocumento', 'documento']:
-                        logger.debug(f"Processando lista de {attr_name} de {id_doc}")
-                        for item in attr_value:
-                            if hasattr(item, '__dict__'):
-                                extract_ids_recursivo(item)
-                    # Se o nome do atributo sugere que contém documentos ou anexos
-                    elif 'documento' in attr_name.lower() or 'anexo' in attr_name.lower():
-                        logger.debug(f"Processando potencial lista de documentos em {attr_name} de {id_doc}")
-                        for item in attr_value:
-                            if hasattr(item, '__dict__'):
-                                extract_ids_recursivo(item)
+                    # Extrair informações do documento vinculado
+                    tipo_doc_vinculado = getattr(doc_vinculado, 'tipoDocumento', '')
+                    descricao_vinculado = getattr(doc_vinculado, 'descricao', '')
+                    mimetype_vinculado = getattr(doc_vinculado, 'mimetype', 'application/pdf')
+                    
+                    # Verificar parâmetros adicionais para obter mais informações
+                    if hasattr(doc_vinculado, 'outroParametro'):
+                        params = doc_vinculado.outroParametro if isinstance(doc_vinculado.outroParametro, list) else [doc_vinculado.outroParametro]
+                        for param in params:
+                            if hasattr(param, 'nome') and getattr(param, 'nome', '') == 'nomeDocumento':
+                                if not descricao_vinculado:  # Se não tiver descrição, usar o nome do documento
+                                    descricao_vinculado = getattr(param, 'valor', '')
+                    
+                    # Adicionar documento vinculado à lista
+                    doc_vinculado_info = {
+                        'idDocumento': id_doc_vinculado,
+                        'tipoDocumento': tipo_doc_vinculado,
+                        'descricao': descricao_vinculado,
+                        'mimetype': mimetype_vinculado,
+                    }
+                    todos_documentos.append(doc_vinculado_info)
+                    processados.add(id_doc_vinculado)
+                    logger.debug(f"Adicionando documento vinculado ID: {id_doc_vinculado} - {descricao_vinculado}")
         
-        # Processar todos os documentos do processo a partir da raiz
-        logger.debug("Processando documento principal")
+        # Atualizar a lista de documentos
+        documentos_ids = todos_documentos
         
-        # 1. Processar documentos na raiz do processo
-        docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
-        logger.debug(f"Iniciando processamento de {len(docs)} documentos principais")
-        for doc in docs:
-            extract_ids_recursivo(doc)
+        # A função recursiva não é mais necessária aqui
+        # O processamento direto é suficiente para capturar todos os documentos
         
-        # 2. Verificar e processar todas as estruturas potenciais no objeto processo
-        logger.debug("Verificando estruturas adicionais no objeto processo")
-        for attr_name in dir(resposta.processo):
-            # Ignorar métodos e atributos privados
-            if attr_name.startswith('_') or callable(getattr(resposta.processo, attr_name)):
-                continue
-                
-            # Ignorar 'documento' que já foi processado acima
-            if attr_name == 'documento':
-                continue
-                
-            attr_value = getattr(resposta.processo, attr_name)
-            
-            # Processar atributos que podem conter documentos
-            if 'documento' in attr_name.lower() or 'anexo' in attr_name.lower() or 'arquivo' in attr_name.lower():
-                logger.debug(f"Processando potencial estrutura de documentos em processo.{attr_name}")
-                
-                if isinstance(attr_value, list):
-                    for item in attr_value:
-                        if hasattr(item, '__dict__'):
-                            extract_ids_recursivo(item)
-                elif hasattr(attr_value, '__dict__'):
-                    extract_ids_recursivo(attr_value)
+        # A extração direto no formato correto já foi feita, não precisa
+        # processar com a função recursiva neste caso
         
         logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
         return {
