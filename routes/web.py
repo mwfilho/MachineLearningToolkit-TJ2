@@ -25,46 +25,8 @@ def debug_consulta():
     cpf = request.form.get('cpf')
     senha = request.form.get('senha')
 
-    # Lista de processos alternativos que sabemos que funcionam
-    processos_alternativos = [
-        '0800490-75.2021.8.06.0000',  # Processo alternativo de teste
-        '0070337-91.2008.8.06.0001',  # Outro processo alternativo
-    ]
-
     try:
         logger.debug(f"Consultando processo: {num_processo}")
-        
-        # Verificar se o processo solicitado é o problemático específico
-        if num_processo == '3000066-83.2025.8.06.0203':
-            logger.warning(f"Processo problemático detectado: {num_processo}")
-            logger.warning("Tentando usar processo alternativo para diagnóstico...")
-            
-            # Fazer tentativa com processo alternativo primeiro para verificar 
-            # se a autenticação está funcionando
-            processo_teste = processos_alternativos[0]
-            try:
-                test_resposta = retorna_processo(
-                    processo_teste,
-                    cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
-                    senha=senha or os.environ.get('MNI_SENHA_CONSULTANTE'),
-                    incluir_documentos=False
-                )
-                logger.info(f"Teste com processo alternativo bem-sucedido: {processo_teste}")
-                
-                # Se o teste funcionou, provavelmente o problema é com o processo específico
-                flash(f'O processo específico {num_processo} não pôde ser consultado, ' +
-                     f'mas a autenticação MNI está funcionando. ' +
-                     f'Este processo pode não existir ou não estar acessível.', 'warning')
-                
-                # Oferecer a opção de consultar o processo alternativo
-                flash(f'Você pode tentar consultar um processo alternativo como {processo_teste}', 'info')
-                return render_template('debug.html')
-            except Exception as test_e:
-                # Se nem o teste funcionou, o problema pode ser mais geral
-                logger.error(f"Erro até mesmo com processo alternativo: {str(test_e)}")
-                # Prosseguir com o erro original
-                raise
-        
         resposta = retorna_processo(
             num_processo,
             cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
@@ -102,18 +64,7 @@ def debug_consulta():
 
     except Exception as e:
         logger.error(f"Erro na consulta de debug: {str(e)}", exc_info=True)
-        error_msg = str(e)
-        
-        if "Limite de requisições excedido" in error_msg:
-            flash(error_msg, 'warning')
-            flash('O sistema está limitando o número de requisições para evitar o bloqueio da senha pelo tribunal.', 'info')
-            flash('Por favor, aguarde alguns minutos antes de tentar novamente.', 'info')
-        elif "bloqueada" in error_msg.lower() or "bloqueado" in error_msg.lower():
-            flash('Erro de autenticação: Sua senha no MNI parece estar bloqueada.', 'error')
-            flash('Entre em contato com o suporte do TJCE para reativação da senha.', 'warning')
-        else:
-            flash(f'Erro na consulta: {error_msg}', 'error')
-        
+        flash(f'Erro na consulta: {str(e)}', 'error')
         return render_template('debug.html')
 
 @web.route('/debug/documento', methods=['POST'])
@@ -143,18 +94,7 @@ def debug_documento():
 
     except Exception as e:
         logger.error(f"Erro na consulta do documento: {str(e)}", exc_info=True)
-        error_msg = str(e)
-        
-        if "Limite de requisições excedido" in error_msg:
-            flash(error_msg, 'warning')
-            flash('O sistema está limitando o número de requisições para evitar o bloqueio da senha pelo tribunal.', 'info')
-            flash('Por favor, aguarde alguns minutos antes de tentar novamente.', 'info')
-        elif "bloqueada" in error_msg.lower() or "bloqueado" in error_msg.lower():
-            flash('Erro de autenticação: Sua senha no MNI parece estar bloqueada.', 'error')
-            flash('Entre em contato com o suporte do TJCE para reativação da senha.', 'warning')
-        else:
-            flash(f'Erro na consulta do documento: {error_msg}', 'error')
-        
+        flash(f'Erro na consulta do documento: {str(e)}', 'error')
         return render_template('debug.html')
 
 @web.route('/debug/peticao-inicial', methods=['POST'])
@@ -184,18 +124,7 @@ def debug_peticao_inicial():
                                
     except Exception as e:
         logger.error(f"Erro na consulta da petição inicial: {str(e)}", exc_info=True)
-        error_msg = str(e)
-        
-        if "Limite de requisições excedido" in error_msg:
-            flash(error_msg, 'warning')
-            flash('O sistema está limitando o número de requisições para evitar o bloqueio da senha pelo tribunal.', 'info')
-            flash('Por favor, aguarde alguns minutos antes de tentar novamente.', 'info')
-        elif "bloqueada" in error_msg.lower() or "bloqueado" in error_msg.lower():
-            flash('Erro de autenticação: Sua senha no MNI parece estar bloqueada.', 'error')
-            flash('Entre em contato com o suporte do TJCE para reativação da senha.', 'warning')
-        else:
-            flash(f'Erro na consulta da petição inicial: {error_msg}', 'error')
-        
+        flash(f'Erro na consulta da petição inicial: {str(e)}', 'error')
         return render_template('debug.html')
 
 @web.route('/download_documento/<num_processo>/<num_documento>')
@@ -224,18 +153,7 @@ def download_documento(num_processo, num_documento):
 
     except Exception as e:
         logger.error(f"Erro ao baixar documento: {str(e)}", exc_info=True)
-        error_msg = str(e)
-        
-        if "Limite de requisições excedido" in error_msg:
-            flash(error_msg, 'warning')
-            flash('O sistema está limitando o número de requisições para evitar o bloqueio da senha pelo tribunal.', 'info')
-            flash('Por favor, aguarde alguns minutos antes de tentar novamente.', 'info')
-        elif "bloqueada" in error_msg.lower() or "bloqueado" in error_msg.lower():
-            flash('Erro de autenticação: Sua senha no MNI parece estar bloqueada.', 'error')
-            flash('Entre em contato com o suporte do TJCE para reativação da senha.', 'warning')
-        else:
-            flash(f'Erro ao baixar documento: {error_msg}', 'error')
-        
+        flash(f'Erro ao baixar documento: {str(e)}', 'error')
         return render_template('index.html')
 
 @web.route('/debug/documentos-ids', methods=['POST'])
@@ -244,46 +162,8 @@ def debug_document_ids():
     cpf = request.form.get('cpf')
     senha = request.form.get('senha')
     
-    # Lista de processos alternativos que sabemos que funcionam
-    processos_alternativos = [
-        '0800490-75.2021.8.06.0000',  # Processo alternativo de teste
-        '0070337-91.2008.8.06.0001',  # Outro processo alternativo
-    ]
-    
     try:
         logger.debug(f"Consultando lista de IDs de documentos: {num_processo}")
-        
-        # Verificar se o processo solicitado é o problemático específico
-        if num_processo == '3000066-83.2025.8.06.0203':
-            logger.warning(f"Processo problemático detectado: {num_processo}")
-            logger.warning("Tentando usar processo alternativo para diagnóstico...")
-            
-            # Fazer tentativa com processo alternativo primeiro para verificar 
-            # se a autenticação está funcionando
-            processo_teste = processos_alternativos[0]
-            try:
-                test_resposta = retorna_processo(
-                    processo_teste,
-                    cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
-                    senha=senha or os.environ.get('MNI_SENHA_CONSULTANTE'),
-                    incluir_documentos=False
-                )
-                logger.info(f"Teste com processo alternativo bem-sucedido: {processo_teste}")
-                
-                # Se o teste funcionou, provavelmente o problema é com o processo específico
-                flash(f'O processo específico {num_processo} não pôde ser consultado, ' +
-                     f'mas a autenticação MNI está funcionando. ' +
-                     f'Este processo pode não existir ou não estar acessível.', 'warning')
-                
-                # Oferecer a opção de consultar o processo alternativo
-                flash(f'Você pode tentar consultar um processo alternativo como {processo_teste}', 'info')
-                return render_template('debug.html')
-            except Exception as test_e:
-                # Se nem o teste funcionou, o problema pode ser mais geral
-                logger.error(f"Erro até mesmo com processo alternativo: {str(test_e)}")
-                # Prosseguir com o erro original
-                raise
-        
         resposta = retorna_processo(
             num_processo,
             cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
@@ -301,23 +181,7 @@ def debug_document_ids():
                            
     except Exception as e:
         logger.error(f"Erro na consulta de IDs de documentos: {str(e)}", exc_info=True)
-        
-        # Tornar a mensagem de erro mais amigável para o usuário
-        erro_msg = str(e)
-        if "Limite de requisições excedido" in erro_msg:
-            flash(erro_msg, 'warning')
-            flash('O sistema está limitando o número de requisições para evitar o bloqueio da senha pelo tribunal.', 'info')
-            flash('Por favor, aguarde alguns minutos antes de tentar novamente.', 'info')
-        elif "postAuthenticate" in erro_msg:
-            # Verificar se é um caso específico de senha bloqueada
-            if "bloqueada" in erro_msg.lower() or "bloqueado" in erro_msg.lower():
-                flash(f'Erro de autenticação: Sua senha no MNI parece estar bloqueada. Entre em contato com o suporte do TJCE para reativação.', 'error')
-            else:
-                flash(f'Erro de autenticação ao consultar o processo. O processo {num_processo} pode não existir ou não estar acessível.', 'error')
-                flash(f'Você pode tentar consultar um processo alternativo como {processos_alternativos[0]}', 'info')
-        else:
-            flash(f'Erro na consulta de IDs de documentos: {erro_msg}', 'error')
-        
+        flash(f'Erro na consulta de IDs de documentos: {str(e)}', 'error')
         return render_template('debug.html')
 
 @web.route('/debug/capa', methods=['POST'])
@@ -326,43 +190,8 @@ def debug_capa_processo():
     cpf = request.form.get('cpf')
     senha = request.form.get('senha')
 
-    # Lista de processos alternativos que sabemos que funcionam
-    processos_alternativos = [
-        '0800490-75.2021.8.06.0000',  # Processo alternativo de teste
-        '0070337-91.2008.8.06.0001',  # Outro processo alternativo
-    ]
-
     try:
         logger.debug(f"Consultando capa do processo: {num_processo}")
-        
-        # Verificar se o processo solicitado é o problemático específico
-        if num_processo == '3000066-83.2025.8.06.0203':
-            logger.warning(f"Processo problemático detectado: {num_processo}")
-            logger.warning("Tentando usar processo alternativo para diagnóstico...")
-            
-            # Fazer tentativa com processo alternativo primeiro para verificar 
-            # se a autenticação está funcionando
-            processo_teste = processos_alternativos[0]
-            try:
-                test_resposta = retorna_processo(
-                    processo_teste,
-                    cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
-                    senha=senha or os.environ.get('MNI_SENHA_CONSULTANTE'),
-                    incluir_documentos=False
-                )
-                logger.info(f"Teste com processo alternativo bem-sucedido: {processo_teste}")
-                
-                # Se o teste funcionou, provavelmente o problema é com o processo específico
-                flash(f'O processo específico {num_processo} não pôde ser consultado, ' +
-                     f'mas a autenticação MNI está funcionando. ' +
-                     f'Este processo pode não existir ou não estar acessível.', 'warning')
-            except Exception as test_e:
-                # Se nem o teste funcionou, o problema pode ser mais geral
-                logger.error(f"Erro até mesmo com processo alternativo: {str(test_e)}")
-                # Prosseguir com o erro original
-                raise
-        
-        # Tentar consultar o processo solicitado (a menos que já tenhamos detectado um problema)
         resposta = retorna_processo(
             num_processo,
             cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
@@ -381,21 +210,5 @@ def debug_capa_processo():
 
     except Exception as e:
         logger.error(f"Erro na consulta da capa: {str(e)}", exc_info=True)
-        
-        # Tornar a mensagem de erro mais amigável para o usuário
-        erro_msg = str(e)
-        if "Limite de requisições excedido" in erro_msg:
-            flash(erro_msg, 'warning')
-            flash('O sistema está limitando o número de requisições para evitar o bloqueio da senha pelo tribunal.', 'info')
-            flash('Por favor, aguarde alguns minutos antes de tentar novamente.', 'info')
-        elif "postAuthenticate" in erro_msg:
-            # Verificar se é um caso específico de senha bloqueada
-            if "bloqueada" in erro_msg.lower() or "bloqueado" in erro_msg.lower():
-                flash(f'Erro de autenticação: Sua senha no MNI parece estar bloqueada. Entre em contato com o suporte do TJCE para reativação.', 'error')
-            else:
-                flash(f'Erro de autenticação ao consultar o processo. O processo {num_processo} pode não existir ou não estar acessível.', 'error')
-                flash(f'Você pode tentar consultar um processo alternativo como {processos_alternativos[0]}', 'info')
-        else:
-            flash(f'Erro na consulta da capa: {erro_msg}', 'error')
-            
+        flash(f'Erro na consulta da capa: {str(e)}', 'error')
         return render_template('debug.html')

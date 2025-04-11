@@ -18,7 +18,6 @@ from configparser import ConfigParser
 from datetime import datetime
 from zeep.exceptions import Fault
 from datetime import date
-from rate_limiter import mni_rate_limiter
 
 # Configure logging
 logging.basicConfig(
@@ -102,13 +101,6 @@ def retorna_processo(num_processo, cpf=None, senha=None, incluir_documentos=True
     logger.debug(f"\n{'=' * 80}\nIniciando consulta ao processo {num_processo}\n{'=' * 80}")
     logger.debug(f"Usando consultante: {cpf_consultante}")
     logger.debug(f"Incluindo documentos: {incluir_documentos}")
-    
-    # Verificar limite de taxa para este CPF consultante
-    if not mni_rate_limiter.can_make_request(cpf_consultante):
-        wait_time = mni_rate_limiter.get_wait_time(cpf_consultante)
-        error_msg = f"Limite de requisições excedido para o consultante {cpf_consultante}. Aguarde {int(wait_time)} segundos antes de tentar novamente."
-        logger.warning(error_msg)
-        raise ExcecaoConsultaMNI(error_msg)
 
     request_data = {
         'idConsultante': cpf_consultante,
@@ -192,13 +184,6 @@ def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None
     logger.debug(f"Consultando documento {num_documento} do processo {num_processo}")
     logger.debug(f"Usando consultante: {cpf_consultante}")
     logger.debug(f"{'=' * 80}\n")
-    
-    # Verificar limite de taxa para este CPF consultante
-    if not mni_rate_limiter.can_make_request(cpf_consultante):
-        wait_time = mni_rate_limiter.get_wait_time(cpf_consultante)
-        error_msg = f"Limite de requisições excedido para o consultante {cpf_consultante}. Aguarde {int(wait_time)} segundos antes de tentar novamente."
-        logger.warning(error_msg)
-        return registro_erro(num_processo, num_documento, error_msg)
 
     request_data = {
         'idConsultante': cpf_consultante,
@@ -397,19 +382,6 @@ def retorna_peticao_inicial_e_anexos(num_processo, cpf=None, senha=None):
         logger.debug(f"Buscando petição inicial e anexos do processo {num_processo}")
         logger.debug(f"{'=' * 80}\n")
         
-        cpf_consultante = cpf or MNI_ID_CONSULTANTE
-        
-        # Verificar limite de taxa para este CPF consultante para esta operação específica
-        # (embora internamente a função retorna_processo já verifique o rate limit novamente)
-        if not mni_rate_limiter.can_make_request(cpf_consultante):
-            wait_time = mni_rate_limiter.get_wait_time(cpf_consultante)
-            error_msg = f"Limite de requisições excedido para o consultante {cpf_consultante}. Aguarde {int(wait_time)} segundos antes de tentar novamente."
-            logger.warning(error_msg)
-            return {
-                "numero_processo": num_processo,
-                "msg_erro": error_msg
-            }
-            
         # 1. Consultar o processo completo
         resposta_processo = retorna_processo(num_processo, cpf=cpf, senha=senha)
         
