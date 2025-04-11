@@ -93,168 +93,49 @@ def extract_mni_data(resposta):
         return {'sucesso': False, 'mensagem': f'Erro ao processar dados: {str(e)}'}
         
 def extract_all_document_ids(resposta):
-    """
-    Extrai uma lista única com todos os IDs de documentos do processo,
-    incluindo principais e vinculados, usando a biblioteca Zeep para processamento de XML SOAP.
-    """
+    """Extrai uma lista única com todos os IDs de documentos do processo, incluindo vinculados"""
     try:
-        logger.debug(f"Extraindo lista de IDs de documentos utilizando Zeep. Tipo de resposta: {type(resposta)}")
+        logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
         
-        documentos_info = []
-        ids_processados = set()  # Controla IDs de *documentos* já adicionados ao resultado
-        documentos_vinculados_por_pai = {}  # Mapeia ID do pai -> lista de IDs vinculados
+        documentos_ids = []
         
         if not hasattr(resposta, 'processo') or not hasattr(resposta.processo, 'documento'):
-            logger.warning("A resposta do processo não contém o nó 'documento'.")
-            return {'sucesso': True, 'mensagem': 'Processo não contém documentos na resposta.', 'documentos': []}
-
-        # 1. PRIMEIRA PASSAGEM: Obter todos os documentos principais e construir o mapa de hierarquia
-        docs_principais = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
-        logger.debug(f"Encontrados {len(docs_principais)} documentos principais")
+            logger.warning("Processo não possui documentos")
+            return {'sucesso': False, 'mensagem': 'Processo não possui documentos', 'documentos': []}
         
-        logger.debug("-------- DOCUMENTOS PRINCIPAIS --------")
-        # Primeira passagem para adicionar documentos principais
-        for doc in docs_principais:
-            doc_id = getattr(doc, 'idDocumento', None)
-            if doc_id:
-                logger.debug(f"Documento principal: ID={doc_id}, tipo={getattr(doc, 'tipoDocumento', '')}, descrição={getattr(doc, 'descricao', '')}")
-                
-                if doc_id not in ids_processados:
-                    ids_processados.add(doc_id)
-                    doc_info = {
-                        'idDocumento': doc_id,
-                        'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
-                        'descricao': getattr(doc, 'descricao', ''),
-                        'dataHora': getattr(doc, 'dataHora', ''),
-                        'mimetype': getattr(doc, 'mimetype', ''),
-                        'nivelSigilo': getattr(doc, 'nivelSigilo', 0),
-                        'movimento': getattr(doc, 'movimento', None),
-                        'hash': getattr(doc, 'hash', ''),
-                        'documentos_vinculados': []  # Placeholder para documentos vinculados
-                    }
-                    documentos_info.append(doc_info)
-                    documentos_vinculados_por_pai[doc_id] = []  # Inicializa a lista de vinculados para este documento
-        
-        logger.debug("-------- DOCUMENTOS VINCULADOS --------")
-        # 2. SEGUNDA PASSAGEM: Processar todos os documentos vinculados
-        for doc in docs_principais:
-            doc_id = getattr(doc, 'idDocumento', None)
+        # Função recursiva para extrair IDs dos documentos e seus vinculados
+        def extract_ids_recursivo(doc):
+            # Extrair informações básicas do documento atual
+            doc_info = {
+                'idDocumento': getattr(doc, 'idDocumento', ''),
+                'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
+                'descricao': getattr(doc, 'descricao', ''),
+                'mimetype': getattr(doc, 'mimetype', ''),
+            }
             
-            if not hasattr(doc, 'documentoVinculado'):
-                logger.debug(f"Documento {doc_id} não possui documentos vinculados")
-                continue
-                
-            # Garantir que temos uma lista de documentos vinculados
-            vincs = doc.documentoVinculado
-            if not isinstance(vincs, list):
-                vincs = [vincs]
-                
-            logger.debug(f"Documento {doc_id} tem {len(vincs)} documentos vinculados")
+            # Adicionar documento à lista
+            documentos_ids.append(doc_info)
             
-            # Processar cada documento vinculado
-            for i, vinc in enumerate(vincs):
-                vinc_id = getattr(vinc, 'idDocumento', None)
-                vinc_pai_id = getattr(vinc, 'idDocumentoVinculado', None)
+            # Processar documentos vinculados se existirem
+            if hasattr(doc, 'documentoVinculado'):
+                docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
                 
-                logger.info(f"Documento vinculado #{i+1}: ID={vinc_id}, vinculado ao pai={vinc_pai_id}")
-                
-                if vinc_id and vinc_id not in ids_processados:
-                    ids_processados.add(vinc_id)
-                    
-                    vinc_info = {
-                        'idDocumento': vinc_id,
-                        'tipoDocumento': getattr(vinc, 'tipoDocumento', ''),
-                        'descricao': getattr(vinc, 'descricao', ''),
-                        'dataHora': getattr(vinc, 'dataHora', ''),
-                        'mimetype': getattr(vinc, 'mimetype', ''),
-                        'nivelSigilo': getattr(vinc, 'nivelSigilo', 0),
-                        'movimento': getattr(vinc, 'movimento', None),
-                        'hash': getattr(vinc, 'hash', ''),
-                        'documentos_vinculados': []  # Vinculados do vinculado (atualmente não processados)
-                    }
-                    
-                    # Adicionar ao mapa de hierarquia
-                    if vinc_pai_id in documentos_vinculados_por_pai:
-                        documentos_vinculados_por_pai[vinc_pai_id].append(vinc_id)
-                
-                    # Adicionar à lista principal
-                    documentos_info.append(vinc_info)
-                    
-        # 3. TERCEIRA PASSAGEM: Reorganizar os documentos em árvore hierárquica
-        logger.debug("-------- ORGANIZANDO HIERARQUIA DE DOCUMENTOS --------")
-        # Adicionar informações de hierarquia aos documentos
-        for doc_info in documentos_info:
-            doc_id = doc_info['idDocumento']
-            if doc_id in documentos_vinculados_por_pai:
-                vinculados_ids = documentos_vinculados_por_pai[doc_id]
-                
-                # Para cada ID vinculado, buscar o documento completo
-                if vinculados_ids:
-                    for vinc_id in vinculados_ids:
-                        vinc_docs = [d for d in documentos_info if d['idDocumento'] == vinc_id]
-                        if vinc_docs:
-                            doc_info['documentos_vinculados'].append(vinc_docs[0])
-                            logger.debug(f"Adicionado documento {vinc_id} como vinculado de {doc_id}")
+                for doc_vinc in docs_vinc:
+                    extract_ids_recursivo(doc_vinc)
         
-        # 4. Verificar se existem documentos conhecidos faltando
-        # Este passo é apenas uma verificação extra para garantir que não estamos perdendo documentos
-        ids_encontrados = {d['idDocumento'] for d in documentos_info}
+        # Processar todos os documentos do processo
+        docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
+        for doc in docs:
+            extract_ids_recursivo(doc)
         
-        documentos_problematicos = {
-            "16558397": ["16558407", "16558419"],
-            "140722096": ["140722098", "140722103"]
-        }
-        
-        for pai_id, filhos_ids in documentos_problematicos.items():
-            for id_filho in filhos_ids:
-                if id_filho not in ids_encontrados:
-                    logger.warning(f"ALERTA: Documento crítico {id_filho} (vinculado a {pai_id}) NÃO foi encontrado!")
-                else:
-                    logger.info(f"Verificação de ID crítico: {id_filho} foi encontrado na lista final!")
-        
-        # 5. RESULTADO FINAL
-        # Flatten a hierarquia para retornar uma lista plana de todos os documentos 
-        resultado_final = []
-        
-        # Função recursiva para extrair todos os documentos da árvore hierárquica
-        def extrair_documento_e_vinculados(doc, nivel=0):
-            # Clonar o documento sem os vinculados para evitar recursão infinita
-            doc_clone = doc.copy()
-            vinculados = doc_clone.pop('documentos_vinculados', [])
-            
-            # Adicionar informação de pai se não for o documento principal (nivel > 0)
-            if nivel > 0 and 'idDocumentoPai' not in doc_clone:
-                # Idealmente, devemos ter essa informação do Zeep, mas como fallback
-                # podemos tentar encontrar o pai baseado no mapa de hierarquia
-                for pai_id, filhos in documentos_vinculados_por_pai.items():
-                    if doc_clone['idDocumento'] in filhos:
-                        doc_clone['idDocumentoPai'] = pai_id
-                        break
-            
-            # Adicionar à lista final
-            resultado_final.append(doc_clone)
-            
-            # Processar vinculados recursivamente
-            for vinc in vinculados:
-                extrair_documento_e_vinculados(vinc, nivel+1)
-        
-        # Processar apenas documentos principais (não vinculados)
-        for doc in documentos_info:
-            if not any(doc['idDocumento'] in filhos for filhos in documentos_vinculados_por_pai.values()):
-                extrair_documento_e_vinculados(doc)
-                
-        logger.info(f"Extração de IDs concluída. Total de IDs únicos encontrados: {len(resultado_final)}")
-        
-        # Ordenar a lista final pelo ID do documento
-        resultado_final = sorted(resultado_final, key=lambda x: str(x.get('idDocumento', '')))
-        
+        logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
         return {
-            'sucesso': True,
+            'sucesso': True, 
             'mensagem': 'Lista de documentos extraída com sucesso',
-            'documentos': resultado_final
+            'documentos': documentos_ids
         }
     except Exception as e:
-        logger.error(f"Erro ao extrair IDs de documentos: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao extrair IDs de documentos: {str(e)}")
         return {
             'sucesso': False, 
             'mensagem': f'Erro ao extrair IDs de documentos: {str(e)}',
