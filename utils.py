@@ -138,31 +138,82 @@ def extract_all_document_ids(resposta, ids_adicionais=None):
         
         logger.debug(f"Total de documentos principais: {len(docs_principais)}")
         
-        # Adicionar manualmente os IDs específicos que não estão aparecendo
-        # Esta é uma solução temporária enquanto investigamos o problema estrutural
-        ids_especificos = {
-            '140722098': {
-                'tipoDocumento': '57',
-                'descricao': 'Pedido de Habilitação - CE - MARIA ELIENE FREIRE BRAGA',
-                'mimetype': 'application/pdf'
-            },
-            '138507087': {
-                'tipoDocumento': '4050007',
-                'descricao': 'PROCURAÇÃO AD JUDICIA',
-                'mimetype': 'application/pdf'
-            }
-        }
+        # Vamos examinar a estrutura do documento antes de iniciar a extração
+        logger.debug("Iniciando análise detalhada da estrutura XML para capturar todos os elementos")
+        # Recursivamente encontrar todos os IDs de documentos e vínculos
+        def encontrar_ids_documentos(obj, path="", nivel=0):
+            if not hasattr(obj, "__dict__") and not isinstance(obj, list):
+                return
+                
+            # Se for uma lista, processar cada item
+            if isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    encontrar_ids_documentos(item, f"{path}[{i}]", nivel)
+                return
+                
+            # Verificar se o objeto tem atributos importantes
+            id_doc = None
+            tipo_doc = None
+            desc_doc = None
+            mime_doc = None
+            
+            # Capturar o ID do documento se disponível
+            if hasattr(obj, "idDocumento"):
+                id_doc = getattr(obj, "idDocumento")
+                tipo_doc = getattr(obj, "tipoDocumento", "")
+                desc_doc = getattr(obj, "descricao", "")
+                mime_doc = getattr(obj, "mimetype", "application/pdf")
+                
+                logger.debug(f"{'  ' * nivel}Encontrado idDocumento={id_doc} em {path}")
+                
+                # Verificar se este documento já foi processado
+                if id_doc and id_doc not in processados:
+                    # Adicionar à lista de documentos
+                    info_doc = {
+                        'idDocumento': id_doc,
+                        'tipoDocumento': tipo_doc,
+                        'descricao': desc_doc,
+                        'mimetype': mime_doc,
+                    }
+                    todos_documentos.append(info_doc)
+                    processados.add(id_doc)
+                    logger.debug(f"{'  ' * nivel}Adicionado documento ID={id_doc} tipo={tipo_doc} desc={desc_doc}")
+            
+            # Processar atributos do objeto para encontrar outros IDs
+            for attr_name in dir(obj):
+                # Ignorar métodos e atributos internos
+                if attr_name.startswith('_') or callable(getattr(obj, attr_name)):
+                    continue
+                    
+                attr_value = getattr(obj, attr_name)
+                
+                # Se for outroParametro, pode conter informações importantes
+                if attr_name == "outroParametro":
+                    params = attr_value if isinstance(attr_value, list) else [attr_value]
+                    
+                    for param in params:
+                        if hasattr(param, "nome") and hasattr(param, "valor"):
+                            nome = getattr(param, "nome", "")
+                            valor = getattr(param, "valor", "")
+                            
+                            # Parâmetros específicos que contêm informações relevantes
+                            if nome == "idArquivoOrigem" and valor and valor not in processados:
+                                logger.debug(f"{'  ' * nivel}Encontrado idArquivoOrigem={valor} em {path}")
+                                # Não adiciona diretamente, pois geralmente é apenas uma referência
+                                
+                            elif nome == "nomeDocumento" and valor and desc_doc == "":
+                                # Atualizar a descrição do documento atual
+                                if id_doc and id_doc in processados:
+                                    for doc in todos_documentos:
+                                        if doc["idDocumento"] == id_doc:
+                                            doc["descricao"] = valor
+                                            logger.debug(f"{'  ' * nivel}Atualizada descrição para ID={id_doc}: {valor}")
+                
+                # Continuar a procura recursivamente em outros atributos
+                encontrar_ids_documentos(attr_value, f"{path}.{attr_name}", nivel + 1)
         
-        for id_doc, info in ids_especificos.items():
-            info_doc = {
-                'idDocumento': id_doc,
-                'tipoDocumento': info['tipoDocumento'],
-                'descricao': info['descricao'],
-                'mimetype': info['mimetype']
-            }
-            todos_documentos.append(info_doc)
-            processados.add(id_doc)
-            logger.debug(f"Adicionando documento específico ID: {id_doc} - {info['descricao']} (adicionado manualmente)")
+        # Iniciar a busca recursiva a partir do nó principal
+        encontrar_ids_documentos(resposta.processo, "processo")
         
         # Processar cada documento principal conforme a estrutura explicada pelo usuário
         for doc_principal in docs_principais:
