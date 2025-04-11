@@ -93,46 +93,100 @@ def extract_mni_data(resposta):
         return {'sucesso': False, 'mensagem': f'Erro ao processar dados: {str(e)}'}
         
 def extract_all_document_ids(resposta):
-    """Extrai uma lista única com todos os IDs de documentos do processo, incluindo vinculados"""
+    """
+    Extrai uma lista única com todos os IDs de documentos do processo, 
+    incluindo principais e vinculados, usando uma abordagem de busca em largura (BFS).
+    """
     try:
         logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
         
-        documentos_ids = []
-        
+        documentos_info = []
+        ids_processados = set()  # Controla IDs de *documentos* já adicionados ao resultado
+        objetos_na_fila = set()  # Controla IDs de *objetos python* já adicionados à fila
+
         if not hasattr(resposta, 'processo') or not hasattr(resposta.processo, 'documento'):
-            logger.warning("Processo não possui documentos")
-            return {'sucesso': False, 'mensagem': 'Processo não possui documentos', 'documentos': []}
+            logger.warning("A resposta do processo não contém o nó 'documento'.")
+            return {'sucesso': False, 'mensagem': 'Processo não contém documentos na resposta.', 'documentos': []}
+
+        # Fila para busca em largura
+        queue = []
+        initial_docs = resposta.processo.documento
+        if initial_docs:
+            # Garante que initial_docs seja sempre uma lista para facilitar a iteração
+            queue.extend(initial_docs if isinstance(initial_docs, list) else [initial_docs])
+            for doc in queue:
+                objetos_na_fila.add(id(doc))  # Adiciona ID do objeto python inicial
         
-        # Função recursiva para extrair IDs dos documentos e seus vinculados
-        def extract_ids_recursivo(doc):
-            # Extrair informações básicas do documento atual
-            doc_info = {
-                'idDocumento': getattr(doc, 'idDocumento', ''),
-                'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
-                'descricao': getattr(doc, 'descricao', ''),
-                'mimetype': getattr(doc, 'mimetype', ''),
-            }
-            
-            # Adicionar documento à lista
-            documentos_ids.append(doc_info)
-            
-            # Processar documentos vinculados se existirem
-            if hasattr(doc, 'documentoVinculado'):
-                docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
+        logger.debug(f"Iniciando BFS com {len(queue)} documentos iniciais.")
+
+        while queue:
+            current_obj = queue.pop(0)  # Pega o primeiro objeto da fila
+
+            # Tenta extrair informações do documento atual
+            try:
+                doc_id = getattr(current_obj, 'idDocumento', None)
+
+                # Processa apenas se for um documento com ID e que ainda não foi adicionado ao resultado
+                if doc_id and doc_id not in ids_processados:
+                    ids_processados.add(doc_id)
+                    doc_info = {
+                        'idDocumento': doc_id,
+                        'tipoDocumento': getattr(current_obj, 'tipoDocumento', ''),
+                        'descricao': getattr(current_obj, 'descricao', ''),
+                        'mimetype': getattr(current_obj, 'mimetype', ''),
+                        # Adicione outros campos se necessário
+                    }
+                    documentos_info.append(doc_info)
+                    logger.debug(f"Documento ID {doc_id} adicionado. Descrição: '{doc_info['descricao']}'")
+                elif doc_id:
+                    logger.debug(f"Documento ID {doc_id} já processado, pulando.")
+
+                # Procura por filhos (documentos vinculados ou aninhados)
+                # Todos os nomes de atributos que podem conter listas/objetos de documentos
+                possible_children_attrs = ['documentoVinculado', 'documento', 'documentos', 'anexos'] 
                 
-                for doc_vinc in docs_vinc:
-                    extract_ids_recursivo(doc_vinc)
+                for attr_name in possible_children_attrs:
+                    if hasattr(current_obj, attr_name):
+                        children = getattr(current_obj, attr_name)
+                        if children:
+                            # Garante que children seja uma lista
+                            child_list = children if isinstance(children, list) else [children]
+                            
+                            added_count = 0
+                            for child in child_list:
+                                # Adiciona à fila apenas se o objeto ainda não foi adicionado
+                                if child is not None and id(child) not in objetos_na_fila: 
+                                    queue.append(child)
+                                    objetos_na_fila.add(id(child))
+                                    added_count += 1
+                            if added_count > 0:
+                                logger.debug(f"Adicionados {added_count} filhos do atributo '{attr_name}' do doc ID '{doc_id or 'N/A'}' à fila.")
+
+            except Exception as e:
+                logger.error(f"Erro ao processar objeto na fila: {e}. Objeto: {type(current_obj)}", exc_info=True)
+                # Continua o processamento dos outros itens da fila
+
+        # Ordenar a lista final pelo ID do documento (opcional, mas bom para consistência)
+        documentos_info = sorted(documentos_info, key=lambda x: str(x.get('idDocumento', '')))
+
+        logger.debug(f"Extração de IDs concluída. Total de IDs únicos encontrados: {len(documentos_info)}")
         
-        # Processar todos os documentos do processo
-        docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
-        for doc in docs:
-            extract_ids_recursivo(doc)
-        
-        logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
+        # Log de verificação para os IDs problemáticos mencionados no documento
+        ids_finais = {d['idDocumento'] for d in documentos_info}
+        if '140722096' in ids_finais:
+            logger.info("ID 140722096 encontrado na lista final.")
+        else:
+            logger.warning("ID 140722096 NÃO encontrado na lista final.")
+            
+        if '138507087' in ids_finais:
+            logger.info("ID 138507087 encontrado na lista final.")
+        else:
+            logger.warning("ID 138507087 NÃO encontrado na lista final.")
+
         return {
-            'sucesso': True, 
+            'sucesso': True,
             'mensagem': 'Lista de documentos extraída com sucesso',
-            'documentos': documentos_ids
+            'documentos': documentos_info
         }
     except Exception as e:
         logger.error(f"Erro ao extrair IDs de documentos: {str(e)}")
