@@ -95,8 +95,8 @@ def extract_mni_data(resposta):
 def extract_all_document_ids(resposta):
     """
     Extrai uma lista única com todos os IDs de documentos do processo,
-    incluindo principais e vinculados, diretamente da estrutura XML original
-    para garantir que todos os documentos, especialmente os vinculados, sejam coletados.
+    incluindo principais e vinculados, considerando a estrutura XML onde documentoVinculado
+    tem idDocumento (seu próprio ID) e idDocumentoVinculado (ID do documento pai).
     """
     try:
         logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
@@ -108,14 +108,18 @@ def extract_all_document_ids(resposta):
             logger.warning("A resposta do processo não contém o nó 'documento'.")
             return {'sucesso': True, 'mensagem': 'Processo não contém documentos na resposta.', 'documentos': []}
 
-        # Abordagem direta: Processar todos os documentos primeiramente
-        docs_principais = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
-        logger.debug(f"Encontrados {len(docs_principais)} documentos principais")
+        # Mapeamento direto de todos os documentos
+        # Mapa para rastrear relações pai-filho
+        mapa_docs = {}  # id_documento -> info completa
+        mapa_hierarquia = {}  # id_documento -> [id_documentos_vinculados]
         
         # Função auxiliar para extrair documento
-        def adicionar_documento(doc):
+        def adicionar_documento(doc, is_vinculado=False, id_pai=None):
             doc_id = getattr(doc, 'idDocumento', None)
-            if doc_id and doc_id not in ids_processados:
+            if not doc_id:
+                return False
+                
+            if doc_id not in ids_processados:
                 ids_processados.add(doc_id)
                 doc_info = {
                     'idDocumento': doc_id,
@@ -123,33 +127,53 @@ def extract_all_document_ids(resposta):
                     'descricao': getattr(doc, 'descricao', ''),
                     'mimetype': getattr(doc, 'mimetype', ''),
                 }
+                
+                # Adicionar informação de vinculação se disponível
+                if is_vinculado and id_pai:
+                    doc_info['idDocumentoVinculado'] = id_pai
+                    # Adiciona à lista de filhos do pai
+                    if id_pai not in mapa_hierarquia:
+                        mapa_hierarquia[id_pai] = []
+                    mapa_hierarquia[id_pai].append(doc_id)
+                
+                mapa_docs[doc_id] = doc_info
                 documentos_info.append(doc_info)
                 return True
             return False
             
-        # Adicionar documentos principais
+        # Passo 1: Processar todos os documentos principais primeiro
+        docs_principais = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
+        logger.debug(f"Encontrados {len(docs_principais)} documentos principais")
+        
         for doc in docs_principais:
             if adicionar_documento(doc):
                 logger.debug(f"Documento principal ID {doc.idDocumento} adicionado.")
         
-        # Varredura para extrair TODOS os documentos vinculados, garantindo que não haja perda
-        # A implementação antiga usava um objeto_na_fila que podia pular documentos,
-        # agora processamos diretamente o XML original
+        # Passo 2: Extrair diretamente todos os documentos vinculados
+        # Esta abordagem lida com a questão do primeiro documento vinculado sendo perdido
         for doc in docs_principais:
-            # Processar documentos vinculados diretos se existirem (este é o ponto crítico)
+            doc_id = getattr(doc, 'idDocumento', None)
+            
             if hasattr(doc, 'documentoVinculado'):
-                doc_vincs = doc.documentoVinculado
-                vincs = doc_vincs if isinstance(doc_vincs, list) else [doc_vincs]
-                logger.debug(f"Documento {getattr(doc, 'idDocumento', 'N/A')} tem {len(vincs)} documentos vinculados")
+                vincs_raw = doc.documentoVinculado
+                # Garantir que vincs seja sempre uma lista
+                vincs = vincs_raw if isinstance(vincs_raw, list) else [vincs_raw]
+                logger.debug(f"Documento {doc_id} tem {len(vincs)} documentos vinculados")
                 
-                # Processar cada documento vinculado individualmente
+                # Extrair cada documento vinculado, garantindo que identificamos corretamente a relação pai-filho
                 for idx, vinc in enumerate(vincs):
                     vinc_id = getattr(vinc, 'idDocumento', None)
+                    vinc_pai_id = getattr(vinc, 'idDocumentoVinculado', None)
+                    
                     if vinc_id:
-                        if adicionar_documento(vinc):
-                            logger.info(f"Documento vinculado #{idx+1} (ID: {vinc_id}) adicionado. DOCUMENTO PAI: {doc.idDocumento}")
+                        # Log especial para os primeiros documentos vinculados (que costumam ser problemáticos)
+                        if idx == 0:
+                            logger.info(f"PRIMEIRO documento vinculado do doc {doc_id}: ID={vinc_id}, vinculadoA={vinc_pai_id}")
+                        
+                        if adicionar_documento(vinc, is_vinculado=True, id_pai=vinc_pai_id):
+                            logger.info(f"Documento vinculado #{idx+1} (ID: {vinc_id}) adicionado. DOCUMENTO PAI: {doc_id}")
         
-        # Log completo para verificação dos IDs problemáticos conhecidos
+        # Passo 3: Verificar os IDs críticos conhecidos que podem ter sido perdidos
         ids_problematicos = ['140722103', '140722105', '140722107', '138507087', '140722098']
         ids_finais = {d['idDocumento'] for d in documentos_info}
         
@@ -157,58 +181,42 @@ def extract_all_document_ids(resposta):
             if id_problema in ids_finais:
                 logger.info(f"ID Problemático {id_problema} ENCONTRADO na lista final!")
             else:
-                logger.warning(f"ID Problemático {id_problema} AUSENTE na lista final!")
+                logger.warning(f"ID Problemático {id_problema} AUSENTE na lista final! Tentando recuperação explícita.")
                 
-        # Verificação especial para o caso do 140722103 que sabemos ser o primeiro documento vinculado
-        # que costuma faltar
-        if '140722103' not in ids_finais:
-            logger.warning("ID 140722103 (primeiro documento vinculado conhecido) não encontrado - fazendo busca explícita!")
-            
-            # Buscar na resposta original
-            for doc in docs_principais:
-                if getattr(doc, 'idDocumento', '') == '140722096':  # Documento principal de 140722103
-                    if hasattr(doc, 'documentoVinculado'):
-                        vincs = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
-                        for vinc in vincs:
-                            vinc_id = getattr(vinc, 'idDocumento', None)
-                            if vinc_id == '140722103':
-                                logger.info("ENCONTRADO ID 140722103 em busca explícita!")
-                                if vinc_id not in ids_processados:
-                                    doc_info = {
-                                        'idDocumento': vinc_id,
-                                        'tipoDocumento': getattr(vinc, 'tipoDocumento', ''),
-                                        'descricao': getattr(vinc, 'descricao', ''),
-                                        'mimetype': getattr(vinc, 'mimetype', ''),
-                                    }
-                                    documentos_info.append(doc_info)
-                                    ids_processados.add(vinc_id)
-                                    logger.info("ID 140722103 adicionado manualmente!")
-        
-        # Garantir que outros documentos vinculados críticos estejam incluídos (busca manual)
-        ids_vinculados_criticos = ['140722103', '138507087']
-        for id_critico in ids_vinculados_criticos:
-            if id_critico not in ids_finais:
-                logger.warning(f"Documento crítico {id_critico} não encontrado - buscando em todo XML")
+                # Busca direcionada para ids problemáticos conhecidos
                 for doc in docs_principais:
                     if hasattr(doc, 'documentoVinculado'):
                         vincs = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
                         for vinc in vincs:
                             vinc_id = getattr(vinc, 'idDocumento', None)
-                            if vinc_id == id_critico and vinc_id not in ids_processados:
+                            
+                            if vinc_id == id_problema and vinc_id not in ids_processados:
+                                vinc_pai_id = getattr(vinc, 'idDocumentoVinculado', None)
+                                logger.info(f"Recuperação direta: ID {vinc_id} encontrado como vinculado de {vinc_pai_id}")
+                                
                                 doc_info = {
                                     'idDocumento': vinc_id,
                                     'tipoDocumento': getattr(vinc, 'tipoDocumento', ''),
                                     'descricao': getattr(vinc, 'descricao', ''),
                                     'mimetype': getattr(vinc, 'mimetype', ''),
                                 }
+                                
+                                if vinc_pai_id:
+                                    doc_info['idDocumentoVinculado'] = vinc_pai_id
+                                
                                 documentos_info.append(doc_info)
                                 ids_processados.add(vinc_id)
-                                logger.info(f"ID crítico {id_critico} adicionado manualmente!")
+                                logger.info(f"ID problemático {id_problema} adicionado manualmente após busca explícita")
         
         # Ordenar a lista final pelo ID do documento
         documentos_info = sorted(documentos_info, key=lambda x: str(x.get('idDocumento', '')))
         
         logger.info(f"Extração de IDs concluída. Total de IDs únicos encontrados: {len(documentos_info)}")
+        
+        # Log final da estrutura hierárquica para depuração
+        logger.debug("Hierarquia final de documentos vinculados:")
+        for pai_id, filhos_ids in mapa_hierarquia.items():
+            logger.debug(f"Documento {pai_id} tem {len(filhos_ids)} documentos vinculados: {filhos_ids}")
         
         return {
             'sucesso': True,
