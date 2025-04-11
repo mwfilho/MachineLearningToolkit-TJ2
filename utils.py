@@ -92,8 +92,15 @@ def extract_mni_data(resposta):
         logger.error(f"Erro ao extrair dados MNI: {str(e)}")
         return {'sucesso': False, 'mensagem': f'Erro ao processar dados: {str(e)}'}
         
-def extract_all_document_ids(resposta):
-    """Extrai uma lista única com todos os IDs de documentos do processo, incluindo vinculados"""
+def extract_all_document_ids(resposta, ids_adicionais=None):
+    """
+    Extrai uma lista única com todos os IDs de documentos do processo, incluindo vinculados.
+    
+    Args:
+        resposta: Objeto de resposta do MNI contendo a estrutura do processo
+        ids_adicionais: Dicionário opcional com IDs adicionais a serem incluídos manualmente
+                        no formato {id: {tipoDocumento: str, descricao: str, mimetype: str}}
+    """
     try:
         logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
         
@@ -102,7 +109,22 @@ def extract_all_document_ids(resposta):
         
         if not hasattr(resposta, 'processo') or not hasattr(resposta.processo, 'documento'):
             logger.warning("Processo não possui documentos")
-            return {'sucesso': False, 'mensagem': 'Processo não possui documentos', 'documentos': []}
+            if ids_adicionais:  # Se temos IDs adicionais, mesmo sem documentos na resposta
+                logger.info(f"Adicionando {len(ids_adicionais)} IDs manualmente")
+                for id_doc, info in ids_adicionais.items():
+                    documentos_ids.append({
+                        'idDocumento': id_doc,
+                        'tipoDocumento': info.get('tipoDocumento', ''),
+                        'descricao': info.get('descricao', 'Documento adicional'),
+                        'mimetype': info.get('mimetype', 'application/pdf'),
+                    })
+                return {
+                    'sucesso': True, 
+                    'mensagem': 'Lista de documentos extraída com sucesso (apenas IDs adicionais)',
+                    'documentos': documentos_ids
+                }
+            else:
+                return {'sucesso': False, 'mensagem': 'Processo não possui documentos', 'documentos': []}
         
         # Função recursiva para extrair IDs dos documentos e seus vinculados
         def extract_ids_recursivo(doc):
@@ -149,6 +171,19 @@ def extract_all_document_ids(resposta):
         logger.debug(f"Iniciando processamento de {len(docs)} documentos principais")
         for doc in docs:
             extract_ids_recursivo(doc)
+        
+        # Adicionar IDs específicos que podem não estar na estrutura padrão
+        if ids_adicionais:
+            for id_doc, info in ids_adicionais.items():
+                if id_doc not in processados:  # Adiciona apenas se não foi processado antes
+                    logger.debug(f"Adicionando manualmente ID: {id_doc}")
+                    documentos_ids.append({
+                        'idDocumento': id_doc,
+                        'tipoDocumento': info.get('tipoDocumento', ''),
+                        'descricao': info.get('descricao', 'Documento adicional'),
+                        'mimetype': info.get('mimetype', 'application/pdf'),
+                    })
+                    processados.add(id_doc)
         
         logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
         return {
