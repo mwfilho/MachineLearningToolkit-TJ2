@@ -1,0 +1,144 @@
+O Problema Detalhado
+O problema principal reside em como a função recursiva extract_ids_recursivo tenta navegar e processar a estrutura dos documentos, especialmente os documentoVinculado.
+Estrutura XML vs. Objeto Zeep: O XML mostra que um <ns2:documento> pode conter elementos filhos <ns2:documentoVinculado>. Cada <ns2:documentoVinculado> tem seu próprio idDocumento (o ID dele) e um atributo idDocumentoVinculado (o ID do pai).
+Exemplo:
+<ns2:documento idDocumento="138507083" ...>  <!-- Pai -->
+     <ns2:assinatura ... />
+     <ns2:documentoVinculado idDocumento="138507087" idDocumentoVinculado="138507083" ...> <!-- Filho -->
+         <ns2:assinatura ... />
+         ...
+     </ns2:documentoVinculado>
+     ...
+ </ns2:documento>
+Use code with caution.
+Xml
+Falha na Navegação/Processamento no Código Atual:
+Seu código faz extract_ids_recursivo(doc) para um documento pai (ex: 138507083).
+Dentro dessa chamada, ele adiciona o ID do pai (138507083) à lista.
+Ele então verifica if hasattr(doc, 'documentoVinculado'):. Se encontrar, ele itera pelos documentos vinculados (doc_vinc).
+Para cada doc_vinc (ex: 138507087), ele pega o ID (vinc_id = "138507087"), adiciona à lista documentos_ids e chama extract_ids_recursivo(doc_vinc).
+Onde está o erro: A chamada extract_ids_recursivo(doc_vinc) é feita depois que o ID 138507087 já foi adicionado ao ids_processados. Portanto, quando a função recursiva começa para doc_vinc, a primeira coisa que ela faz é verificar if not doc_id or doc_id in ids_processados:, o que será True (pois 138507087 está em ids_processados), e a função retorna imediatamente sem fazer nada. Isso torna a chamada recursiva para vinculados ineficaz no seu código atual.
+Por que os IDs são perdidos? O problema não é a chamada recursiva redundante em si, mas sim a possibilidade de que a condição hasattr(doc, 'documentoVinculado') não esteja funcionando como esperado para todos os documentos pais, ou que a estrutura do objeto zeep coloque os vinculados em outro lugar que não um atributo direto chamado documentoVinculado. A lógica de buscar em documento, documentos, anexos também pode complicar e potencialmente perder caminhos se a estrutura não for exatamente a prevista. Essencialmente, a navegação pela árvore de objetos retornada pelo zeep não está cobrindo todos os locais onde um objeto de documento (seja principal ou vinculado) pode residir.
+Como Resolver: Abordagem Sugerida (Busca em Largura - BFS)
+A melhor maneira de garantir que todos os nós de documento sejam encontrados, independentemente de como zeep os estrutura (como atributos diretos, listas aninhadas, etc.), é usar uma abordagem de "achatamento" ou busca em largura (BFS).
+Crie uma Fila: Comece com uma fila contendo os documentos de nível superior do processo.
+Processe a Fila: Enquanto a fila não estiver vazia:
+Retire um objeto da fila.
+Verifique se ele representa um documento (geralmente checando se tem idDocumento).
+Se for um documento e seu ID ainda não foi processado:
+Registre o ID como processado.
+Extraia as informações necessárias (ID, tipo, descrição, mimetype) e adicione à sua lista final de resultados.
+Verifique se este objeto contém outros documentos (em atributos como documentoVinculado, documento, documentos, etc.).
+Se contiver, adicione esses documentos filhos à fila para serem processados posteriormente.
+Resultado Final: Quando a fila estiver vazia, sua lista de resultados conterá as informações de todos os documentos únicos encontrados.
+Código Sugerido (Substitua sua função extract_all_document_ids por esta):
+import logging
+
+logger = logging.getLogger(__name__)
+
+def extract_all_document_ids(resposta):
+    """
+    Extrai uma lista única com todos os IDs de documentos do processo, 
+    incluindo principais e vinculados, usando uma abordagem de busca em largura (BFS).
+    """
+    documentos_info = []
+    ids_processados = set() # Controla IDs de *documentos* já adicionados ao resultado
+    objetos_na_fila = set() # Controla IDs de *objetos python* já adicionados à fila
+
+    if not hasattr(resposta, 'processo') or not hasattr(resposta.processo, 'documento'):
+        logger.warning("A resposta do processo não contém o nó 'documento'.")
+        return {'sucesso': True, 'mensagem': 'Processo não contém documentos na resposta.', 'documentos': []}
+
+    # Fila para busca em largura
+    queue = []
+    initial_docs = resposta.processo.documento
+    if initial_docs:
+        # Garante que initial_docs seja sempre uma lista para facilitar a iteração
+        queue.extend(initial_docs if isinstance(initial_docs, list) else [initial_docs])
+        for doc in queue:
+            objetos_na_fila.add(id(doc)) # Adiciona ID do objeto python inicial
+    
+    logger.debug(f"Iniciando BFS com {len(queue)} documentos iniciais.")
+
+    while queue:
+        current_obj = queue.pop(0) # Pega o primeiro objeto da fila
+
+        # Tenta extrair informações do documento atual
+        try:
+            doc_id = getattr(current_obj, 'idDocumento', None)
+
+            # Processa apenas se for um documento com ID e que ainda não foi adicionado ao resultado
+            if doc_id and doc_id not in ids_processados:
+                ids_processados.add(doc_id)
+                doc_info = {
+                    'idDocumento': doc_id,
+                    'tipoDocumento': getattr(current_obj, 'tipoDocumento', ''),
+                    'descricao': getattr(current_obj, 'descricao', ''),
+                    'mimetype': getattr(current_obj, 'mimetype', ''),
+                    # Adicione outros campos se necessário
+                }
+                documentos_info.append(doc_info)
+                logger.debug(f"Documento ID {doc_id} adicionado. Descrição: '{doc_info['descricao']}'")
+            elif doc_id:
+                logger.debug(f"Documento ID {doc_id} já processado, pulando.")
+            # else: # Objeto sem idDocumento, apenas procurar filhos
+            #    logger.debug(f"Objeto {type(current_obj)} sem idDocumento encontrado na fila.")
+
+            # Procura por filhos (documentos vinculados ou aninhados)
+            # Adicione aqui todos os nomes de atributos que podem conter listas/objetos de documentos
+            possible_children_attrs = ['documentoVinculado', 'documento', 'documentos', 'anexos'] 
+            
+            for attr_name in possible_children_attrs:
+                if hasattr(current_obj, attr_name):
+                    children = getattr(current_obj, attr_name)
+                    if children:
+                        # Garante que children seja uma lista
+                        child_list = children if isinstance(children, list) else [children]
+                        
+                        added_count = 0
+                        for child in child_list:
+                            # Adiciona à fila apenas se o objeto ainda não foi adicionado
+                            if child is not None and id(child) not in objetos_na_fila: 
+                                queue.append(child)
+                                objetos_na_fila.add(id(child))
+                                added_count += 1
+                        if added_count > 0:
+                             logger.debug(f"Adicionados {added_count} filhos do atributo '{attr_name}' do doc ID '{doc_id or 'N/A'}' à fila.")
+
+        except Exception as e:
+            logger.error(f"Erro ao processar objeto na fila: {e}. Objeto: {type(current_obj)}", exc_info=True)
+            # Continua o processamento dos outros itens da fila
+
+    # Ordenar a lista final pelo ID do documento (opcional, mas bom para consistência)
+    documentos_info = sorted(documentos_info, key=lambda x: str(x.get('idDocumento', '')))
+
+    logger.debug(f"Extração de IDs concluída. Total de IDs únicos encontrados: {len(documentos_info)}")
+    
+    # Log de verificação para os IDs problemáticos
+    ids_finais = {d['idDocumento'] for d in documentos_info}
+    if '140722096' in ids_finais:
+        logger.info("ID 140722096 encontrado na lista final.")
+    else:
+        logger.warning("ID 140722096 NÃO encontrado na lista final.")
+        
+    if '138507087' in ids_finais:
+         logger.info("ID 138507087 encontrado na lista final.")
+    else:
+         logger.warning("ID 138507087 NÃO encontrado na lista final.")
+
+    return {
+        'sucesso': True,
+        'mensagem': 'Lista de documentos extraída com sucesso',
+        'documentos': documentos_info
+    }
+Use code with caution.
+Python
+Como Usar:
+Substitua a sua função extract_all_document_ids inteira pelo código acima.
+Chame a nova função da mesma forma que chamava a antiga, passando o objeto response da consulta MNI.
+Ajuste possible_children_attrs: Se você suspeitar que documentos podem estar aninhados em outros atributos além de documentoVinculado, documento, documentos, anexos, adicione esses nomes à lista possible_children_attrs.
+Por que esta abordagem é melhor:
+Robustez: Ela não depende de uma estrutura de recursão rígida e funciona mesmo que os documentos estejam aninhados de formas diferentes ou inesperadas no objeto zeep.
+Evita Recursão Profunda: A busca em largura evita problemas com limites de profundidade de recursão do Python em processos com muitos níveis de aninhamento (embora raro no MNI).
+Clareza: A lógica de processar um item e adicionar seus filhos à fila é geralmente mais fácil de seguir e depurar do que a recursão complexa.
+Controle Duplicado: Usa dois sets: ids_processados (para garantir que cada ID de documento seja adicionado ao resultado apenas uma vez) e objetos_na_fila (para garantir que o mesmo objeto Python não seja adicionado à fila múltiplas vezes, prevenindo loops infinitos caso a estrutura tenha referências circulares).
