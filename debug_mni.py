@@ -102,7 +102,13 @@ def testar_autenticacao():
                 # Verificar se é um erro específico de autenticação
                 error_str = str(soap_fault)
                 if "loginFailed" in error_str or "postAuthenticate" in error_str:
-                    logger.error("ERRO DE AUTENTICAÇÃO: Credenciais inválidas ou serviço com problemas")
+                    # Verificar se é um caso específico de senha bloqueada
+                    if "bloqueada" in error_str.lower() or "bloqueado" in error_str.lower():
+                        logger.error("ERRO DE AUTENTICAÇÃO: Senha bloqueada")
+                        logger.error("A conta no MNI parece estar bloqueada. Entre em contato com o suporte do TJCE.")
+                    else:
+                        logger.error("ERRO DE AUTENTICAÇÃO: Credenciais inválidas ou serviço com problemas")
+                    
                     logger.error("=== DETALHES DO ERRO ===")
                     logger.error(f"Código de erro: {getattr(soap_fault, 'code', 'N/A')}")
                     logger.error(f"Detalhes: {getattr(soap_fault, 'detail', 'N/A')}")
@@ -113,6 +119,12 @@ def testar_autenticacao():
                         try:
                             detail_dict = serialize_object(soap_fault.detail)
                             logger.error(f"Detalhes serializados: {json.dumps(detail_dict, indent=2)}")
+                            
+                            # Tentar extrair mensagem específica relacionada ao bloqueio da senha
+                            if isinstance(detail_dict, dict) and 'mensagem' in detail_dict:
+                                msg = detail_dict['mensagem']
+                                if isinstance(msg, str) and ('bloqueada' in msg.lower() or 'bloqueado' in msg.lower()):
+                                    logger.error(f"CONFIRMADO: Senha bloqueada: {msg}")
                         except Exception as parse_err:
                             logger.error(f"Erro ao analisar detalhes do erro: {str(parse_err)}")
                 return False

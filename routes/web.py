@@ -261,8 +261,12 @@ def debug_document_ids():
         # Tornar a mensagem de erro mais amigável para o usuário
         erro_msg = str(e)
         if "postAuthenticate" in erro_msg:
-            flash(f'Erro de autenticação ao consultar o processo. O processo {num_processo} pode não existir ou não estar acessível.', 'error')
-            flash(f'Você pode tentar consultar um processo alternativo como {processos_alternativos[0]}', 'info')
+            # Verificar se é um caso específico de senha bloqueada
+            if "bloqueada" in erro_msg.lower() or "bloqueado" in erro_msg.lower():
+                flash(f'Erro de autenticação: Sua senha no MNI parece estar bloqueada. Entre em contato com o suporte do TJCE para reativação.', 'error')
+            else:
+                flash(f'Erro de autenticação ao consultar o processo. O processo {num_processo} pode não existir ou não estar acessível.', 'error')
+                flash(f'Você pode tentar consultar um processo alternativo como {processos_alternativos[0]}', 'info')
         else:
             flash(f'Erro na consulta de IDs de documentos: {erro_msg}', 'error')
         
@@ -333,7 +337,12 @@ def debug_capa_processo():
         # Tornar a mensagem de erro mais amigável para o usuário
         erro_msg = str(e)
         if "postAuthenticate" in erro_msg:
-            flash(f'Erro de autenticação ao consultar o processo. O processo {num_processo} pode não existir ou não estar acessível.', 'error')
+            # Verificar se é um caso específico de senha bloqueada
+            if "bloqueada" in erro_msg.lower() or "bloqueado" in erro_msg.lower():
+                flash(f'Erro de autenticação: Sua senha no MNI parece estar bloqueada. Entre em contato com o suporte do TJCE para reativação.', 'error')
+            else:
+                flash(f'Erro de autenticação ao consultar o processo. O processo {num_processo} pode não existir ou não estar acessível.', 'error')
+                flash(f'Você pode tentar consultar um processo alternativo como {processos_alternativos[0]}', 'info')
         else:
             flash(f'Erro na consulta da capa: {erro_msg}', 'error')
             

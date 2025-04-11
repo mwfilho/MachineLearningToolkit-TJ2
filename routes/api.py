@@ -94,9 +94,15 @@ def get_processo(num_processo):
         
         # Melhorar a resposta para erros específicos
         if "postAuthenticate" in erro_msg:
-            resposta['detalhe'] = f'Erro de autenticação ao consultar o processo. O processo {num_processo} pode não existir ou não estar acessível.'
-            resposta['sugestao'] = f'Você pode tentar consultar um processo alternativo como {processos_alternativos[0]}'
-            status_code = 404
+            # Verificar se é um caso específico de senha bloqueada
+            if "bloqueada" in erro_msg.lower() or "bloqueado" in erro_msg.lower():
+                resposta['detalhe'] = 'Erro de autenticação: Sua senha no MNI parece estar bloqueada.'
+                resposta['sugestao'] = 'Entre em contato com o suporte do TJCE para reativação da senha.'
+                status_code = 401  # Unauthorized é mais apropriado para este caso
+            else:
+                resposta['detalhe'] = f'Erro de autenticação ao consultar o processo. O processo {num_processo} pode não existir ou não estar acessível.'
+                resposta['sugestao'] = f'Você pode tentar consultar um processo alternativo como {processos_alternativos[0]}'
+                status_code = 404
             
         return jsonify(resposta), status_code
 
