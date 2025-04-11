@@ -93,7 +93,11 @@ def extract_mni_data(resposta):
         return {'sucesso': False, 'mensagem': f'Erro ao processar dados: {str(e)}'}
         
 def extract_all_document_ids(resposta):
-    """Extrai uma lista única com todos os IDs de documentos do processo, incluindo vinculados"""
+    """
+    Extrai uma lista única com todos os IDs de documentos do processo, incluindo vinculados.
+    Usa múltiplas abordagens para garantir que todos os documentos sejam encontrados,
+    independentemente de como o Zeep SOAP client interpreta o XML.
+    """
     try:
         logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
         
@@ -104,10 +108,6 @@ def extract_all_document_ids(resposta):
         if not hasattr(resposta, 'processo') or not hasattr(resposta.processo, 'documento'):
             logger.warning("Processo não possui documentos")
             return {'sucesso': False, 'mensagem': 'Processo não possui documentos', 'documentos': []}
-            
-        # FASE 1: Extração direta de documentos e seus metadados
-        # Lista de documentos conhecidos com seus metadados
-        known_documents = {}
         
         # Função auxiliar para adicionar documento à lista
         def add_document(doc_id, doc_type, doc_desc, doc_mime):
@@ -120,112 +120,136 @@ def extract_all_document_ids(resposta):
                     'mimetype': doc_mime
                 }
                 documentos_ids.append(doc_info)
-                known_documents[doc_id] = doc_info
                 logger.debug(f"Adicionando documento: ID={doc_id}, Tipo={doc_type}, Desc={doc_desc}")
                 return True
             return False
         
-        # Função para extrair informações recursivamente
-        def process_document(doc):
-            # Extrair informações do documento atual
-            doc_id = getattr(doc, 'idDocumento', '')
-            doc_type = getattr(doc, 'tipoDocumento', '')
-            doc_desc = getattr(doc, 'descricao', '')
-            doc_mime = getattr(doc, 'mimetype', '')
+        # ABORDAGEM 1: Processar documentos através do objeto Zeep
+        try:
+            # Processar todos os documentos do processo usando a API do Zeep
+            if isinstance(resposta.processo.documento, list):
+                docs = resposta.processo.documento
+            else:
+                docs = [resposta.processo.documento]
+                
+            logger.debug(f"Processo tem {len(docs)} documento(s) principal(is)")
             
-            # Adicionar documento atual
-            add_document(doc_id, doc_type, doc_desc, doc_mime)
-            
-            # Processar documentos vinculados
-            if hasattr(doc, 'documentoVinculado'):
-                if isinstance(doc.documentoVinculado, list):
-                    doc_list = doc.documentoVinculado
-                else:
-                    doc_list = [doc.documentoVinculado]
-                    
-                for vinc in doc_list:
-                    vinc_id = getattr(vinc, 'idDocumento', '')
-                    vinc_type = getattr(vinc, 'tipoDocumento', '')
-                    vinc_desc = getattr(vinc, 'descricao', '')
-                    vinc_mime = getattr(vinc, 'mimetype', '')
-                    add_document(vinc_id, vinc_type, vinc_desc, vinc_mime)
-        
-        # Processar todos os documentos do processo
-        if isinstance(resposta.processo.documento, list):
-            docs = resposta.processo.documento
-        else:
-            docs = [resposta.processo.documento]
-            
-        logger.debug(f"Processo tem {len(docs)} documento(s) principal(is)")
-        
-        # Primeira passagem - processar documentos principais
-        for doc in docs:
-            process_document(doc)
-        
-        # FASE 2: Extrair manualmente documentos vinculados a partir dos elementos raw XML
-        # Esta abordagem é necessária pois o Zeep SOAP client às vezes não parseia corretamente
-        # todos os elementos em estruturas XML complexas
-        
-        # Lista de IDs críticos que devemos garantir que sejam extraídos
-        ids_criticos = ['140722098', '138507087']
-        missing_ids = [id_critico for id_critico in ids_criticos if id_critico not in processed_ids]
-        
-        if missing_ids:
-            logger.warning(f"Documentos críticos não foram encontrados na extração padrão: {missing_ids}")
-            
-            # Tentativa de forçar extração manual para IDs críticos
-            # Para cada ID crítico, adicionar um documento hardcoded temporariamente
-            # para garantir que não falhe na consulta
-            for id_critico in missing_ids:
-                if id_critico == '140722098':
-                    add_document(
-                        '140722098', 
-                        '57', 
-                        'Pedido de Habilitação - CE - MARIA ELIENE FREIRE BRAGA',
-                        'application/pdf'
-                    )
-                elif id_critico == '138507087':
-                    add_document(
-                        '138507087',
-                        '4050007',
-                        'PROCURAÇÃO AD JUDICIA',
-                        'application/pdf'
-                    )
-        
-        # FASE 3: Verificação final para IDs restantes a partir do XML bruto
-        # Essa abordagem é usada como último recurso para encontrar outros documentos
-        
-        # Tentar extrair documentos a partir do XML serializado
-        import re
-        
-        # Tentar obter o XML bruto da resposta (funciona com Zeep)
-        xml_str = None
-        
-        # Tentativa 1: verificar se há método _raw_elements (alguns clientes SOAP)
-        if hasattr(resposta, '_raw_elements'):
-            xml_str = str(resposta._raw_elements)
-        
-        # Tentativa 2: converter toda a resposta para string (pode conter XML)
-        if not xml_str:
-            xml_str = str(resposta)
-        
-        if xml_str:
-            # Padrão regex para encontrar documentos no XML
-            doc_pattern = r'idDocumento="([^"]+)"[^>]*tipoDocumento="([^"]+)"[^>]*descricao="([^"]+)"[^>]*mimetype="([^"]+)"'
-            matches = re.findall(doc_pattern, xml_str)
-            
-            for match in matches:
-                doc_id, doc_type, doc_desc, doc_mime = match
+            # Função para processar documento e seus vinculados recursivamente
+            def process_document_recursive(doc):
+                # Extrair informações do documento atual
+                doc_id = getattr(doc, 'idDocumento', '')
+                doc_type = getattr(doc, 'tipoDocumento', '')
+                doc_desc = getattr(doc, 'descricao', '')
+                doc_mime = getattr(doc, 'mimetype', '')
+                
+                # Adicionar documento atual
                 add_document(doc_id, doc_type, doc_desc, doc_mime)
-        
-        # Verificar se os IDs críticos foram encontrados
-        still_missing = [id_critico for id_critico in ids_criticos if id_critico not in processed_ids]
-        if still_missing:
-            logger.warning(f"ATENÇÃO: Os seguintes IDs críticos não foram encontrados: {still_missing}")
+                
+                # Processar documentos vinculados
+                if hasattr(doc, 'documentoVinculado'):
+                    if isinstance(doc.documentoVinculado, list):
+                        doc_list = doc.documentoVinculado
+                    else:
+                        doc_list = [doc.documentoVinculado]
+                        
+                    for vinc in doc_list:
+                        vinc_id = getattr(vinc, 'idDocumento', '')
+                        vinc_type = getattr(vinc, 'tipoDocumento', '')
+                        vinc_desc = getattr(vinc, 'descricao', '')
+                        vinc_mime = getattr(vinc, 'mimetype', '')
+                        add_document(vinc_id, vinc_type, vinc_desc, vinc_mime)
             
-            # Como último recurso, adicionar documentos com informações mínimas
-            for id_critico in still_missing:
-                add_document(id_critico, '', f'Documento {id_critico}', '')
+            # Processar documentos principais e seus vinculados
+            for doc in docs:
+                process_document_recursive(doc)
+                
+        except Exception as e:
+            logger.error(f"Erro na primeira abordagem de extração: {str(e)}")
+        
+        # ABORDAGEM 2: Extrair todos documentos a partir do XML bruto usando regex
+        # Essa abordagem garante que todos os documentos sejam encontrados, 
+        # independentemente de como o Zeep está lidando com a estrutura XML
+        try:
+            import re
+            
+            # Tentar obter o XML bruto da resposta
+            xml_str = None
+            
+            # Tentativa 1: se a resposta tem um atributo _raw_elements ou similar
+            raw_attrs = ['_raw_elements', '_raw_response', 'raw', '_raw']
+            for attr in raw_attrs:
+                if hasattr(resposta, attr):
+                    xml_str = str(getattr(resposta, attr))
+                    break
+            
+            # Tentativa 2: serializar o objeto resposta completo
+            if not xml_str:
+                try:
+                    import json
+                    from zeep.helpers import serialize_object
+                    obj_dict = serialize_object(resposta)
+                    xml_str = json.dumps(obj_dict)
+                except:
+                    pass
+            
+            # Tentativa 3: converter diretamente para string
+            if not xml_str:
+                xml_str = str(resposta)
+            
+            if xml_str:
+                # Extrair IDs e metadados de qualquer elemento <documento> ou <documentoVinculado>
+                # Padrão 1: Captura atributos idDocumento, tipoDocumento, descricao e mimetype em qualquer ordem
+                patterns = [
+                    # Padrão para capturar idDocumento, tipoDocumento, descricao, mimetype em qualquer ordem
+                    r'(?:documento|documentoVinculado)[^>]*?idDocumento="([^"]+)"[^>]*?tipoDocumento="([^"]+)"[^>]*?descricao="([^"]+)"[^>]*?mimetype="([^"]+)"',
+                    
+                    # Padrão mais flexível para capturar apenas idDocumento
+                    r'(?:documento|documentoVinculado)[^>]*?idDocumento="([^"]+)"'
+                ]
+                
+                for pattern in patterns:
+                    logger.debug(f"Aplicando padrão regex: {pattern}")
+                    
+                    if pattern.count('(') == 4:  # Completo com 4 grupos
+                        matches = re.findall(pattern, xml_str)
+                        logger.debug(f"Encontrados {len(matches)} documentos com padrão completo")
+                        
+                        for match in matches:
+                            doc_id, doc_type, doc_desc, doc_mime = match
+                            add_document(doc_id, doc_type, doc_desc, doc_mime)
+                    else:  # Padrão com apenas ID
+                        id_matches = re.findall(pattern, xml_str)
+                        logger.debug(f"Encontrados {len(id_matches)} IDs adicionais")
+                        
+                        for doc_id in id_matches:
+                            if doc_id and doc_id not in processed_ids:
+                                # Buscar atributos adicionais no XML
+                                type_match = re.search(f'idDocumento="{doc_id}"[^>]*?tipoDocumento="([^"]+)"', xml_str)
+                                desc_match = re.search(f'idDocumento="{doc_id}"[^>]*?descricao="([^"]+)"', xml_str)
+                                mime_match = re.search(f'idDocumento="{doc_id}"[^>]*?mimetype="([^"]+)"', xml_str)
+                                
+                                doc_type = type_match.group(1) if type_match else ''
+                                doc_desc = desc_match.group(1) if desc_match else f'Documento {doc_id}'
+                                doc_mime = mime_match.group(1) if mime_match else ''
+                                
+                                add_document(doc_id, doc_type, doc_desc, doc_mime)
+                
+                # Verificar IDs em outroParametro que possam conter idArquivoOrigem
+                id_param_pattern = r'nome="idArquivoOrigem"\s+valor="([^"]+)"'
+                id_param_matches = re.findall(id_param_pattern, xml_str)
+                logger.debug(f"Encontrados {len(id_param_matches)} IDs em outroParametro")
+                
+                for doc_id in id_param_matches:
+                    if doc_id and doc_id not in processed_ids:
+                        # Buscar nome do documento para usar como descrição
+                        nome_match = re.search(f'nome="nomeDocumento"\\s+valor="([^"]+)".*?idArquivoOrigem"\\s+valor="{doc_id}"', 
+                                                xml_str, re.DOTALL)
+                        doc_desc = nome_match.group(1) if nome_match else f'Documento {doc_id}'
+                        
+                        add_document(doc_id, '', doc_desc, '')
+        
+        except Exception as e:
+            logger.error(f"Erro na segunda abordagem de extração (XML bruto): {str(e)}")
         
         logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
         return {
@@ -233,6 +257,7 @@ def extract_all_document_ids(resposta):
             'mensagem': 'Lista de documentos extraída com sucesso',
             'documentos': documentos_ids
         }
+        
     except Exception as e:
         logger.error(f"Erro ao extrair IDs de documentos: {str(e)}")
         return {
