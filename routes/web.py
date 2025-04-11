@@ -102,7 +102,18 @@ def debug_consulta():
 
     except Exception as e:
         logger.error(f"Erro na consulta de debug: {str(e)}", exc_info=True)
-        flash(f'Erro na consulta: {str(e)}', 'error')
+        error_msg = str(e)
+        
+        if "Limite de requisições excedido" in error_msg:
+            flash(error_msg, 'warning')
+            flash('O sistema está limitando o número de requisições para evitar o bloqueio da senha pelo tribunal.', 'info')
+            flash('Por favor, aguarde alguns minutos antes de tentar novamente.', 'info')
+        elif "bloqueada" in error_msg.lower() or "bloqueado" in error_msg.lower():
+            flash('Erro de autenticação: Sua senha no MNI parece estar bloqueada.', 'error')
+            flash('Entre em contato com o suporte do TJCE para reativação da senha.', 'warning')
+        else:
+            flash(f'Erro na consulta: {error_msg}', 'error')
+        
         return render_template('debug.html')
 
 @web.route('/debug/documento', methods=['POST'])
@@ -132,7 +143,18 @@ def debug_documento():
 
     except Exception as e:
         logger.error(f"Erro na consulta do documento: {str(e)}", exc_info=True)
-        flash(f'Erro na consulta do documento: {str(e)}', 'error')
+        error_msg = str(e)
+        
+        if "Limite de requisições excedido" in error_msg:
+            flash(error_msg, 'warning')
+            flash('O sistema está limitando o número de requisições para evitar o bloqueio da senha pelo tribunal.', 'info')
+            flash('Por favor, aguarde alguns minutos antes de tentar novamente.', 'info')
+        elif "bloqueada" in error_msg.lower() or "bloqueado" in error_msg.lower():
+            flash('Erro de autenticação: Sua senha no MNI parece estar bloqueada.', 'error')
+            flash('Entre em contato com o suporte do TJCE para reativação da senha.', 'warning')
+        else:
+            flash(f'Erro na consulta do documento: {error_msg}', 'error')
+        
         return render_template('debug.html')
 
 @web.route('/debug/peticao-inicial', methods=['POST'])
