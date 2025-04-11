@@ -1,0 +1,73 @@
+<processo>
+    <!-- Lista de Documentos Principais do Processo -->
+
+    <!-- Documento Principal A (idDocumento="140739993") -->
+    <ns2:documento idDocumento="140739993" descricao="Execução / Cumprimento de Sentença" mimetype="application/pdf" ...>
+        <!-- Metadados e Assinatura do Documento Principal A -->
+        <ns2:assinatura ... />
+        <ns2:outroParametro nome="mni:pje:documento:storageId" valor="..."/>
+        <!-- ... outros metadados do principal ... -->
+
+        <!-- Lista de Anexos do Documento Principal A -->
+        <ns2:documentoVinculado idDocumento="140740000"       <!-- ID ÚNICO DESTE ANEXO -->
+                                idDocumentoVinculado="140739993" <!-- REFERÊNCIA AO PAI (140739993) -->
+                                descricao="DANO MATERIAL ATUALIZADO..."
+                                mimetype="application/pdf" ...>
+            <!-- Metadados e Assinatura do Anexo 1 -->
+            <ns2:assinatura ... />
+            <ns2:outroParametro nome="mni:pje:documento:numeroOrdem" valor="1"/>
+            <ns2:outroParametro nome="mni:pje:documento:storageId" valor="..."/>
+            <!-- ... outros metadados do anexo 1 ... -->
+        </ns2:documentoVinculado>
+
+        <ns2:documentoVinculado idDocumento="140739997"       <!-- ID ÚNICO DESTE ANEXO -->
+                                idDocumentoVinculado="140739993" <!-- REFERÊNCIA AO PAI (140739993) -->
+                                descricao="DANO MORAL ATUALIZADO..."
+                                mimetype="application/pdf" ...>
+            <!-- Metadados e Assinatura do Anexo 2 -->
+            <ns2:assinatura ... />
+            <ns2:outroParametro nome="mni:pje:documento:numeroOrdem" valor="2"/>
+            <!-- ... outros metadados do anexo 2 ... -->
+        </ns2:documentoVinculado>
+
+         <ns2:documentoVinculado idDocumento="140739998"       <!-- ID ÚNICO DESTE ANEXO -->
+                                idDocumentoVinculado="140739993" <!-- REFERÊNCIA AO PAI (140739993) -->
+                                descricao="PROCURAÇÃO PÚBLICA"
+                                mimetype="application/pdf" ...>
+            <!-- Metadados e Assinatura do Anexo 3 -->
+            <ns2:assinatura ... />
+            <ns2:outroParametro nome="mni:pje:documento:numeroOrdem" valor="3"/>
+            <!-- ... outros metadados do anexo 3 ... -->
+        </ns2:documentoVinculado>
+
+    </ns2:documento> <!-- Fim do Documento Principal A -->
+
+    <!-- Documento Principal B (idDocumento="88665877") -->
+    <ns2:documento idDocumento="88665877" descricao="Petição" mimetype="text/html" ...>
+        <!-- Metadados e Assinatura do Documento Principal B -->
+        <ns2:assinatura ... />
+        <!-- ... outros metadados do principal ... -->
+
+        <!-- Anexo do Documento Principal B -->
+        <ns2:documentoVinculado idDocumento="88665878"       <!-- ID ÚNICO DESTE ANEXO -->
+                                idDocumentoVinculado="88665877" <!-- REFERÊNCIA AO PAI (88665877) -->
+                                descricao="PETIÇÃO OF MARIA DO CARMO DA SILVA"
+                                mimetype="application/pdf" ...>
+             <!-- Metadados e Assinatura do Anexo 1 de B -->
+             <ns2:assinatura ... />
+             <ns2:outroParametro nome="mni:pje:documento:numeroOrdem" valor="1"/>
+             <!-- ... outros metadados do anexo 1 de B ... -->
+        </ns2:documentoVinculado>
+
+    </ns2:documento> <!-- Fim do Documento Principal B -->
+
+     <!-- Documento Principal C (idDocumento="88567792") -->
+    <ns2:documento idDocumento="88567792" descricao="Certidão trânsito em julgado" mimetype="text/html" ...>
+         <!-- Metadados e Assinatura do Documento Principal C -->
+         <ns2:assinatura ... />
+         <!-- ESTE DOCUMENTO NÃO TEM ANEXOS -->
+    </ns2:documento> <!-- Fim do Documento Principal C -->
+
+    <!-- ... outros documentos principais podem seguir ... -->
+
+</processo>

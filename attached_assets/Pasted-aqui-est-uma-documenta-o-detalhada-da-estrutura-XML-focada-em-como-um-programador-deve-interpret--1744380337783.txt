@@ -1,0 +1,111 @@
+aqui está uma documentação detalhada da estrutura XML, focada em como um programador deve interpretá-la para extrair todos os documentos (principais e vinculados) e seus metadados.
+Documentação da Estrutura XML da Resposta consultarProcesso (MNI)
+Objetivo: Entender como os documentos e seus anexos (documentos vinculados) são organizados na resposta XML do serviço consultarProcesso do MNI, para permitir a extração correta de todos os arquivos e metadados associados.
+Estrutura Geral:
+A resposta SOAP contém um elemento <processo> que, por sua vez, contém uma lista de elementos <ns2:documento>. Cada <ns2:documento> representa uma entrada principal de documento no processo (como uma petição, decisão, certidão, etc.). Dentro de cada <ns2:documento>, pode haver uma lista aninhada de <ns2:documentoVinculado>, que são os anexos daquele documento principal.
+Hierarquia e IDs:
+A chave para entender a estrutura é a relação entre idDocumento e idDocumentoVinculado:
+Documento Principal (<ns2:documento>):
+Está diretamente sob a tag <processo>.
+Possui um atributo idDocumento que é o identificador único desse documento principal dentro do sistema.
+Contém metadados próprios (tipo, descrição, mimetype, dataHora, hash, movimento associado, assinatura, etc.).
+Pode conter uma lista de zero ou mais elementos <ns2:documentoVinculado> aninhados.
+Documento Vinculado/Anexo (<ns2:documentoVinculado>):
+Está aninhado dentro de um elemento <ns2:documento> (seu pai).
+Possui seu próprio atributo idDocumento, que é o identificador único deste anexo específico.
+Possui um atributo idDocumentoVinculado, cujo valor referencia o idDocumento do elemento <ns2:documento> pai. É esta a ligação que define a qual documento principal o anexo pertence.
+Contém metadados próprios (tipo, descrição, mimetype, dataHora, hash, assinatura, etc.).
+Também contém elementos <ns2:outroParametro> com metadados adicionais específicos do sistema (PJe, etc.).
+Exemplo Estrutural Simplificado (Baseado no XML Fornecido):
+<processo>
+    <!-- Lista de Documentos Principais do Processo -->
+
+    <!-- Documento Principal A (idDocumento="140739993") -->
+    <ns2:documento idDocumento="140739993" descricao="Execução / Cumprimento de Sentença" mimetype="application/pdf" ...>
+        <!-- Metadados e Assinatura do Documento Principal A -->
+        <ns2:assinatura ... />
+        <ns2:outroParametro nome="mni:pje:documento:storageId" valor="..."/>
+        <!-- ... outros metadados do principal ... -->
+
+        <!-- Lista de Anexos do Documento Principal A -->
+        <ns2:documentoVinculado idDocumento="140740000"       <!-- ID ÚNICO DESTE ANEXO -->
+                                idDocumentoVinculado="140739993" <!-- REFERÊNCIA AO PAI (140739993) -->
+                                descricao="DANO MATERIAL ATUALIZADO..."
+                                mimetype="application/pdf" ...>
+            <!-- Metadados e Assinatura do Anexo 1 -->
+            <ns2:assinatura ... />
+            <ns2:outroParametro nome="mni:pje:documento:numeroOrdem" valor="1"/>
+            <ns2:outroParametro nome="mni:pje:documento:storageId" valor="..."/>
+            <!-- ... outros metadados do anexo 1 ... -->
+        </ns2:documentoVinculado>
+
+        <ns2:documentoVinculado idDocumento="140739997"       <!-- ID ÚNICO DESTE ANEXO -->
+                                idDocumentoVinculado="140739993" <!-- REFERÊNCIA AO PAI (140739993) -->
+                                descricao="DANO MORAL ATUALIZADO..."
+                                mimetype="application/pdf" ...>
+            <!-- Metadados e Assinatura do Anexo 2 -->
+            <ns2:assinatura ... />
+            <ns2:outroParametro nome="mni:pje:documento:numeroOrdem" valor="2"/>
+            <!-- ... outros metadados do anexo 2 ... -->
+        </ns2:documentoVinculado>
+
+         <ns2:documentoVinculado idDocumento="140739998"       <!-- ID ÚNICO DESTE ANEXO -->
+                                idDocumentoVinculado="140739993" <!-- REFERÊNCIA AO PAI (140739993) -->
+                                descricao="PROCURAÇÃO PÚBLICA"
+                                mimetype="application/pdf" ...>
+            <!-- Metadados e Assinatura do Anexo 3 -->
+            <ns2:assinatura ... />
+            <ns2:outroParametro nome="mni:pje:documento:numeroOrdem" valor="3"/>
+            <!-- ... outros metadados do anexo 3 ... -->
+        </ns2:documentoVinculado>
+
+    </ns2:documento> <!-- Fim do Documento Principal A -->
+
+    <!-- Documento Principal B (idDocumento="88665877") -->
+    <ns2:documento idDocumento="88665877" descricao="Petição" mimetype="text/html" ...>
+        <!-- Metadados e Assinatura do Documento Principal B -->
+        <ns2:assinatura ... />
+        <!-- ... outros metadados do principal ... -->
+
+        <!-- Anexo do Documento Principal B -->
+        <ns2:documentoVinculado idDocumento="88665878"       <!-- ID ÚNICO DESTE ANEXO -->
+                                idDocumentoVinculado="88665877" <!-- REFERÊNCIA AO PAI (88665877) -->
+                                descricao="PETIÇÃO OF MARIA DO CARMO DA SILVA"
+                                mimetype="application/pdf" ...>
+             <!-- Metadados e Assinatura do Anexo 1 de B -->
+             <ns2:assinatura ... />
+             <ns2:outroParametro nome="mni:pje:documento:numeroOrdem" valor="1"/>
+             <!-- ... outros metadados do anexo 1 de B ... -->
+        </ns2:documentoVinculado>
+
+    </ns2:documento> <!-- Fim do Documento Principal B -->
+
+     <!-- Documento Principal C (idDocumento="88567792") -->
+    <ns2:documento idDocumento="88567792" descricao="Certidão trânsito em julgado" mimetype="text/html" ...>
+         <!-- Metadados e Assinatura do Documento Principal C -->
+         <ns2:assinatura ... />
+         <!-- ESTE DOCUMENTO NÃO TEM ANEXOS -->
+    </ns2:documento> <!-- Fim do Documento Principal C -->
+
+    <!-- ... outros documentos principais podem seguir ... -->
+
+</processo>
+Use code with caution.
+Xml
+Estratégia de Parsing Recomendada:
+Para extrair todos os documentos e seus anexos corretamente, o código deve seguir esta lógica:
+Acessar a Lista Principal: Obtenha a lista de elementos <ns2:documento> que são filhos diretos do elemento <processo>. A biblioteca SOAP (como Zeep) geralmente mapeia isso para um atributo de lista no objeto de resposta (ex: resposta.processo.documento).
+Iterar sobre Documentos Principais: Percorra cada elemento (doc_principal) nesta lista principal.
+Extrair Dados do Principal: Capture o idDocumento, descricao, mimetype, dataHora, hash, movimento, assinatura, e outros metadados relevantes do doc_principal.
+Buscar Conteúdo do Principal (se necessário): Use o idDocumento do doc_principal para chamar retorna_documento_processo e obter o conteúdo binário (conteudo) e confirmar o mimetype.
+Salvar/Processar o Principal: Use os dados extraídos (especialmente idDocumento para nomear o arquivo e mimetype para a extensão) para salvar ou processar o documento principal.
+Verificar e Iterar sobre Anexos: Dentro do loop principal, para cada doc_principal:
+Checar Existência de Anexos: Verifique se existe uma lista de elementos aninhados <ns2:documentoVinculado> (ex: if hasattr(doc_principal, 'documentoVinculado') and doc_principal.documentoVinculado:).
+Iterar sobre Anexos: Se a lista existir e não estiver vazia, percorra cada elemento (doc_vinculado) nela.
+Extrair Dados do Anexo: Capture o idDocumento (do próprio anexo), idDocumentoVinculado (para confirmar a ligação com o pai), descricao, mimetype, dataHora, hash, assinatura e os <ns2:outroParametro> relevantes do doc_vinculado.
+Buscar Conteúdo do Anexo: Use o idDocumento do doc_vinculado para chamar retorna_documento_processo e obter seu conteúdo binário (conteudo) e confirmar o mimetype.
+Salvar/Processar o Anexo: Use os dados extraídos (especialmente o idDocumento do anexo para nomear o arquivo e mimetype para a extensão) para salvar ou processar o documento anexo.
+Metadados Adicionais (<ns2:outroParametro>):
+Tanto <ns2:documento> quanto <ns2:documentoVinculado> podem conter uma lista de <ns2:outroParametro>. Estes são pares chave-valor (nome/valor) com informações adicionais, muitas vezes específicas do sistema de origem (como PJe). O código deve iterar por esses parâmetros e extrair os valores de interesse (ex: nomeArquivo, storageId, numeroOrdem, etc.) se forem necessários.
+Conclusão:
+Seguindo essa estrutura de iteração aninhada (primeiro pelos documentos principais, depois pelos vinculados dentro de cada principal) e usando o idDocumento correto para cada chamada de busca de conteúdo, o programador poderá processar e baixar todos os arquivos e metadados contidos na resposta XML.
