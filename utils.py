@@ -127,23 +127,57 @@ def extract_all_document_ids(resposta):
             documentos_ids.append(doc_info)
             logger.debug(f"Adicionado documento ID: {doc_id}, descrição: {doc_info['descricao']}")
             
-            # Verificar todos os possíveis atributos que podem conter documentos vinculados
-            elementos_a_verificar = ['documentoVinculado', 'documento', 'documentos', 'anexos']
-            
-            for attr in elementos_a_verificar:
-                if hasattr(doc, attr):
-                    elementos = getattr(doc, attr)
-                    if elementos:
-                        # Converter para lista se não for
-                        elementos_list = elementos if isinstance(elementos, list) else [elementos]
+            # Processar documentos vinculados se existirem (documentoVinculado)
+            if hasattr(doc, 'documentoVinculado'):
+                docs_vinc = doc.documentoVinculado
+                # Verificar se é lista ou objeto único
+                if not isinstance(docs_vinc, list):
+                    docs_vinc = [docs_vinc]
+                
+                logger.debug(f"Processando {len(docs_vinc)} documentos vinculados do documento {doc_id}")
+                for doc_vinc in docs_vinc:
+                    vinc_id = getattr(doc_vinc, 'idDocumento', '')
+                    if vinc_id and vinc_id not in ids_processados:
+                        # Registrar ID do documento vinculado
+                        ids_processados.add(vinc_id)
                         
-                        logger.debug(f"Processando {len(elementos_list)} documentos em {attr} do documento {doc_id}")
-                        for elemento in elementos_list:
-                            extract_ids_recursivo(elemento)
+                        # Extrair informações do documento vinculado
+                        vinc_info = {
+                            'idDocumento': vinc_id,
+                            'tipoDocumento': getattr(doc_vinc, 'tipoDocumento', ''),
+                            'descricao': getattr(doc_vinc, 'descricao', ''),
+                            'mimetype': getattr(doc_vinc, 'mimetype', ''),
+                        }
+                        
+                        # Adicionar documento vinculado à lista
+                        documentos_ids.append(vinc_info)
+                        logger.debug(f"Adicionado documento vinculado ID: {vinc_id}, descrição: {vinc_info['descricao']}")
+                        
+                        # Verificar recursivamente se o documento vinculado tem mais documentos vinculados
+                        extract_ids_recursivo(doc_vinc)
+            
+            # Verificar outros atributos que podem conter documentos
+            outros_attrs = ['documento', 'documentos', 'anexos']
+            for attr in outros_attrs:
+                if hasattr(doc, attr):
+                    outros_docs = getattr(doc, attr)
+                    if outros_docs:
+                        # Converter para lista se não for
+                        outros_list = outros_docs if isinstance(outros_docs, list) else [outros_docs]
+                        
+                        logger.debug(f"Processando {len(outros_list)} documentos em '{attr}' do documento {doc_id}")
+                        for outro_doc in outros_list:
+                            # Processar recursivamente esse documento
+                            extract_ids_recursivo(outro_doc)
         
         # Processar todos os documentos do processo
-        docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
+        docs = resposta.processo.documento
+        if not isinstance(docs, list):
+            docs = [docs]
+            
+        logger.debug(f"Processando {len(docs)} documentos principais do processo")
         for doc in docs:
+            # Processar cada documento principal
             extract_ids_recursivo(doc)
         
         logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
@@ -154,6 +188,8 @@ def extract_all_document_ids(resposta):
         }
     except Exception as e:
         logger.error(f"Erro ao extrair IDs de documentos: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             'sucesso': False, 
             'mensagem': f'Erro ao extrair IDs de documentos: {str(e)}',
