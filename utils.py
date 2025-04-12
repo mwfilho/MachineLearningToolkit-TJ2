@@ -180,6 +180,7 @@ def extract_all_document_ids(resposta, num_processo=None, cpf=None, senha=None):
                 docs_map = {d['idDocumento']: d for d in documentos_ids}
                 
                 # Para cada ID do XML, pega os metadados se disponíveis ou cria um novo
+                # IMPORTANTE: Manter a ORDEM EXATA dos documentos como aparece no XML
                 for id_doc in xml_ids:
                     if id_doc in docs_map:
                         final_documents.append(docs_map[id_doc])
@@ -187,12 +188,15 @@ def extract_all_document_ids(resposta, num_processo=None, cpf=None, senha=None):
                         final_documents.append({
                             'idDocumento': id_doc,
                             'tipoDocumento': '',  # Não temos os metadados para este documento
-                            'descricao': '',
+                            'descricao': f'Documento {id_doc}',
                             'mimetype': '',
                         })
                 
-                # Substitui a lista de documentos pela final
+                # Substitui a lista de documentos pela final, preservando a ordem do XML
                 documentos_ids = final_documents
+                
+                # Log adicional para verificar a ordem final
+                logger.debug(f"Ordem final dos IDs: {[d['idDocumento'] for d in documentos_ids]}")
         
         # Se não conseguimos extrair documentos de nenhuma maneira
         if not documentos_ids:
