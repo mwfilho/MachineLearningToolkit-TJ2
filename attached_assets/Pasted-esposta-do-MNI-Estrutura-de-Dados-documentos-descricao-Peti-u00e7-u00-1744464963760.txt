@@ -1,0 +1,151 @@
+esposta do MNI
+Estrutura de Dados:
+{
+  "documentos": [
+    {
+      "descricao": "Peti\u00e7\u00e3o",
+      "idDocumento": "140722096",
+      "mimetype": "text/html",
+      "tipoDocumento": "57"
+    },
+    {
+      "descricao": "Documento 140722098",
+      "idDocumento": "140722098",
+      "mimetype": "",
+      "tipoDocumento": ""
+    },
+    {
+      "descricao": "KIT PROCURA\u00c7\u00c3O DAYCOVAL ATUALIZADO - 01-12",
+      "idDocumento": "140722103",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050007"
+    },
+    {
+      "descricao": "KIT PROCURA\u00c7\u00c3O DAYCOVAL ATUALIZADO - 13-22",
+      "idDocumento": "140722105",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050007"
+    },
+    {
+      "descricao": "KIT PROCURA\u00c7\u00c3O DAYCOVAL ATUALIZADO - 23-29",
+      "idDocumento": "140722107",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050007"
+    },
+    {
+      "descricao": "Decis\u00e3o",
+      "idDocumento": "140690432",
+      "mimetype": "text/html",
+      "tipoDocumento": "4050020"
+    },
+    {
+      "descricao": "Peti\u00e7\u00e3o Inicial",
+      "idDocumento": "138507083",
+      "mimetype": "text/html",
+      "tipoDocumento": "58"
+    },
+    {
+      "descricao": "Documento 138507087",
+      "idDocumento": "138507087",
+      "mimetype": "",
+      "tipoDocumento": ""
+    },
+    {
+      "descricao": "DECLARA\u00c7\u00c3O HIPOSSUFICI\u00caNCIA",
+      "idDocumento": "138507089",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050011"
+    },
+    {
+      "descricao": "CARTEIRA IDENTIDADE",
+      "idDocumento": "138507090",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050010"
+    },
+    {
+      "descricao": "COMPROVANTE ENDERE\u00c7O",
+      "idDocumento": "138507091",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050011"
+    },
+    {
+      "descricao": "EXTRATO CONSIG - PENSAO",
+      "idDocumento": "138507092",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050011"
+    },
+    {
+      "descricao": "EXTRATO DO INSS",
+      "idDocumento": "138507094",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050011"
+    },
+    {
+      "descricao": "CPF",
+      "idDocumento": "138507097",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050010"
+    },
+    {
+      "descricao": "SUBSTABELECIMENTO",
+      "idDocumento": "138507099",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050009"
+    },
+    {
+      "descricao": "C\u00c1LCULO",
+      "idDocumento": "138507104",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050011"
+    },
+    {
+      "descricao": "PARECER",
+      "idDocumento": "138507105",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050011"
+    },
+    {
+      "descricao": "C\u00c1LCULO COMPLETO",
+      "idDocumento": "138507107",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050011"
+    },
+    {
+      "descricao": "PARECER T\u00c9CNICO",
+      "idDocumento": "138507109",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "4050011"
+    },
+    {
+      "descricao": "PETI\u00c7\u00c3O",
+      "idDocumento": "138507117",
+      "mimetype": "application/pdf",
+      "tipoDocumento": "57"
+    }
+  ],
+  "mensagem": "Lista de documentos extra\u00edda com sucesso",
+  "sucesso": true
+}
+Lista de IDs de Documentos:
+Documentos do Processo (20)
+#	ID Documento	Tipo Documento	Descrição	Formato	Ações
+1	140722096	57	Petição	text/html	
+2	140722098		Documento 140722098		
+3	140722103	4050007	KIT PROCURAÇÃO DAYCOVAL ATUALIZADO - 01-12	application/pdf	
+4	140722105	4050007	KIT PROCURAÇÃO DAYCOVAL ATUALIZADO - 13-22	application/pdf	
+5	140722107	4050007	KIT PROCURAÇÃO DAYCOVAL ATUALIZADO - 23-29	application/pdf	
+6	140690432	4050020	Decisão	text/html	
+7	138507083	58	Petição Inicial	text/html	
+8	138507087		Documento 138507087		
+9	138507089	4050011	DECLARAÇÃO HIPOSSUFICIÊNCIA	application/pdf	
+10	138507090	4050010	CARTEIRA IDENTIDADE	application/pdf	
+11	138507091	4050011	COMPROVANTE ENDEREÇO	application/pdf	
+12	138507092	4050011	EXTRATO CONSIG - PENSAO	application/pdf	
+13	138507094	4050011	EXTRATO DO INSS	application/pdf	
+14	138507097	4050010	CPF	application/pdf	
+15	138507099	4050009	SUBSTABELECIMENTO	application/pdf	
+16	138507104	4050011	CÁLCULO	application/pdf	
+17	138507105	4050011	PARECER	application/pdf	
+18	138507107	4050011	CÁLCULO COMPLETO	application/pdf	
+19	138507109	4050011	PARECER TÉCNICO	application/pdf	
+20	138507117	57	PETIÇÃO	application/pdf	
