@@ -394,14 +394,20 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
     Returns:
         list: Lista de todos os IDs de documentos encontrados ou None em caso de erro
     """
-    url = MNI_URL
-    all_document_ids = set()
+    # Extrai apenas o URL base sem o ?wsdl
+    url_parts = MNI_URL.split('?')
+    url_base = url_parts[0]
+    logger.debug(f"Usando URL base para request: {url_base}")
+    
+    all_document_ids = []  # Mudado de set para list para preservar a ordem
     cpf_consultante = cpf or MNI_ID_CONSULTANTE
     senha_consultante = senha or MNI_SENHA_CONSULTANTE
 
     if not cpf_consultante or not senha_consultante:
         logger.error("Credenciais MNI não fornecidas para extrair_ids_requests_lxml")
         return None
+
+    logger.debug(f"Usando credenciais - CPF: {cpf_consultante[:3]}****{cpf_consultante[-3:]}")
 
     # Construção do envelope SOAP manual baseado no exemplo fornecido
     soap_envelope = f"""<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://www.cnj.jus.br/servico-intercomunicacao-2.2.2/" xmlns:tip="http://www.cnj.jus.br/tipos-servico-intercomunicacao-2.2.2">
@@ -424,8 +430,9 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
                'SOAPAction': soap_action}
 
     try:
-        logger.debug(f"Enviando requisição SOAP manual para {num_processo}...")
-        response = requests.post(url, data=soap_envelope.encode('utf-8'), headers=headers, timeout=120)
+        logger.debug(f"Enviando requisição SOAP manual para {num_processo} via {url_base}...")
+        # A URL para o request tem que ser o endpoint sem o ?wsdl
+        response = requests.post(url_base, data=soap_envelope.encode('utf-8'), headers=headers, timeout=120)
         logger.debug(f"Resposta recebida. Status: {response.status_code}")
         response.raise_for_status() # Lança exceção para erros 4xx/5xx
 
@@ -500,14 +507,20 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
         )
 
         logger.debug(f"Encontrados {len(document_ids_xpath)} atributos @idDocumento no XML bruto com XPath.")
-        all_document_ids.update(document_ids_xpath) # Adiciona todos os IDs encontrados ao set
+        
+        # Adicionar IDs em ordem (sem usar set para preservar a ordem exata)
+        # Convertendo NodeSet para lista de strings
+        for doc_id in document_ids_xpath:
+            if doc_id not in all_document_ids:
+                all_document_ids.append(doc_id)
 
-        logger.debug(f"Total de IDs únicos extraídos do XML bruto via lxml: {len(all_document_ids)}")
+        logger.debug(f"Total de IDs extraídos do XML bruto via lxml: {len(all_document_ids)}")
         if not all_document_ids:
              logger.warning(f"Nenhum ID de documento extraído do XML bruto para o processo {num_processo}")
              return []
 
-        return sorted(list(all_document_ids))
+        # Não precisamos ordenar, pois queremos manter a ordem original exata
+        return all_document_ids
 
     except requests.exceptions.Timeout:
          logger.error(f"Timeout (requests+lxml) ao consultar {num_processo}")
