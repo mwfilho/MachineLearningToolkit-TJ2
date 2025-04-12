@@ -241,7 +241,7 @@ def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None
                         logger.debug(f"Verificando documento: ID={getattr(doc, 'idDocumento', 'N/A')}")
 
                         # Verifica se é o documento procurado
-                        if str(getattr(doc, 'idDocumento', '')) == str(target_id):
+                        if str(getattr(doc, 'idDocumento', '')).strip() == str(target_id).strip():
                             logger.debug(f"Documento {target_id} encontrado!")
                             return doc
 
