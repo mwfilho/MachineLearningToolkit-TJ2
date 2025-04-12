@@ -200,12 +200,79 @@ def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None
     logger.debug(f"Consultando documento {num_documento} do processo {num_processo}")
     logger.debug(f"Usando consultante: {cpf_consultante}")
     logger.debug(f"{'=' * 80}\n")
-
+    
+    # Primeira tentativa: buscar o documento diretamente via documento específico
+    try:
+        logger.debug("Tentando buscar documento diretamente pelo ID")
+        client_direct = Client(url)
+        
+        # Definir formato da requisição para busca direta
+        request_data_direct = {
+            'idConsultante': cpf_consultante,
+            'senhaConsultante': senha_consultante,
+            'numeroProcesso': num_processo,
+            'documento': num_documento.strip(),  # Garante que o ID não tenha espaços
+            'incluirDocumentos': True
+        }
+        
+        logger.debug(f"Enviando requisição SOAP direta para documento {num_documento}")
+        try:
+            response_direct = client_direct.service.consultarProcesso(**request_data_direct)
+            
+            if response_direct and getattr(response_direct, 'sucesso', False):
+                logger.debug("Busca direta pelo documento bem sucedida!")
+                
+                # Converter para EasyDict para facilitar o acesso
+                data_dict_direct = serialize_object(response_direct)
+                response_direct = EasyDict(data_dict_direct)
+                
+                if hasattr(response_direct, 'processo') and hasattr(response_direct.processo, 'documento'):
+                    doc = response_direct.processo.documento
+                    docs_direct = doc if isinstance(doc, list) else [doc]
+                    
+                    for doc_item in docs_direct:
+                        doc_id = str(getattr(doc_item, 'idDocumento', '')).strip()
+                        if doc_id == str(num_documento).strip():
+                            logger.debug(f"Documento {num_documento} encontrado pela busca direta!")
+                            
+                            if doc_item.conteudo is None:
+                                logger.debug(f"Documento {num_documento} encontrado mas sem conteúdo")
+                                # Continuar para o método padrão
+                                break
+                                
+                            # Atribuir valores padrão se não existirem
+                            descricao = getattr(doc_item, 'descricao', f"Documento {num_documento}")
+                            id_tipo_documento = getattr(doc_item, 'tipoDocumento', '')
+                            mimetype = getattr(doc_item, 'mimetype', 'application/octet-stream')
+                            
+                            # Se o mimetype estiver vazio, tentar deduzir pelo conteúdo
+                            if not mimetype and doc_item.conteudo:
+                                if len(doc_item.conteudo) > 4 and doc_item.conteudo[:4] == b'%PDF':
+                                    mimetype = 'application/pdf'
+                                else:
+                                    mimetype = 'application/octet-stream'
+                                    
+                            return {
+                                'num_processo': num_processo,
+                                'id_documento': doc_item.idDocumento,
+                                'id_tipo_documento': id_tipo_documento,
+                                'descricao': descricao,
+                                'mimetype': mimetype,
+                                'conteudo': doc_item.conteudo
+                            }
+        except Exception as direct_error:
+            logger.debug(f"Erro na busca direta: {str(direct_error)}")
+            # Continuar para o método padrão
+    except Exception as direct_setup_error:
+        logger.debug(f"Erro ao tentar configurar busca direta: {str(direct_setup_error)}")
+        # Continuar para o método padrão
+    
+    # Método padrão - segunda tentativa
+    logger.debug("Usando método padrão para buscar documento")
     request_data = {
         'idConsultante': cpf_consultante,
         'senhaConsultante': senha_consultante,
         'numeroProcesso': num_processo,
-        'documento': num_documento,
         'incluirDocumentos': True  # Garante que todos os documentos serão incluídos
     }
 
