@@ -170,9 +170,14 @@ def debug_document_ids():
             senha=senha or os.environ.get('MNI_SENHA_CONSULTANTE')
         )
         
-        # Extrair a lista ordenada de IDs
-        dados = extract_all_document_ids(resposta)
+        # Extrair a lista ordenada de IDs utilizando a nova abordagem robusta
+        # Passamos o número do processo e credenciais para permitir nova consulta via XML/lxml
+        cpf_final = cpf or os.environ.get('MNI_ID_CONSULTANTE')
+        senha_final = senha or os.environ.get('MNI_SENHA_CONSULTANTE')
+        dados = extract_all_document_ids(resposta, num_processo=num_processo, cpf=cpf_final, senha=senha_final)
+        
         logger.debug(f"Lista de IDs extraída: {dados}")
+        logger.debug(f"Total de documentos encontrados: {len(dados.get('documentos', []))}")
         
         return render_template('debug.html', 
                            resposta=dados,
