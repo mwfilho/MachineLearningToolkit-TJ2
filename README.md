@@ -1,126 +1,103 @@
-# API MNI - Sistema de Consulta Processual
+# MNI Document Processing System
 
-## Descrição
-API para consulta de processos judiciais através do Modelo Nacional de Interoperabilidade (MNI).
+O Sistema de Processamento de Documentos MNI é uma aplicação Flask avançada que aproveita o Modelo Nacional de Interoperabilidade (MNI) para realizar consultas e processamento de documentos judiciais de forma eficiente e robusta.
+
+## Visão Geral
+
+Este sistema foi desenvolvido para interagir com os serviços web SOAP do MNI, permitindo a consulta, processamento e download de documentos judiciais, oferecendo mecanismos avançados para garantir a extração completa de todos os documentos de um processo.
+
+## Tecnologias Utilizadas
+
+- **Flask**: Framework web para o backend
+- **Flask-SQLAlchemy**: ORM para interação com o banco de dados
+- **Zeep**: Cliente SOAP para comunicação com serviços web MNI
+- **lxml**: Processamento avançado de XML
+- **Requests**: Requisições HTTP para chamadas SOAP manuais
+- **Gunicorn**: Servidor WSGI para produção
 
 ## Endpoints da API
 
-1. **Consulta de Processo Completo**
-   - `GET /api/v1/processo/<num_processo>`
-   - Retorna o processo com todos os documentos.
+### Endpoints Web (Interface de Usuário)
 
-2. **Consulta da Capa do Processo**
-   - `GET /api/v1/processo/<num_processo>/capa`
-   - Retorna apenas os dados básicos e movimentações do processo.
+| Rota | Método | Descrição |
+|------|--------|-----------|
+| `/` | GET | Página inicial da aplicação |
+| `/debug` | GET | Interface de depuração para testes |
+| `/debug/consulta` | POST | Consulta detalhada de processos incluindo documentos |
+| `/debug/documento` | POST | Consulta de documentos específicos |
+| `/debug/peticao-inicial` | POST | Consulta de petição inicial e anexos |
+| `/download_documento/<num_processo>/<num_documento>` | GET | Download de documentos |
+| `/debug/documentos-ids` | POST | Consulta de IDs de documentos |
+| `/debug/capa-processo` | POST | Consulta da capa do processo |
 
-3. **Download de Documento**
-   - `GET /api/v1/processo/<num_processo>/documento/<num_documento>`
-   - Baixa um documento específico do processo.
+### Endpoints REST API
 
-4. **Petição Inicial e Anexos**
-   - `GET /api/v1/processo/<num_processo>/peticao-inicial`
-   - Retorna a petição inicial e seus anexos.
+| Rota | Método | Descrição |
+|------|--------|-----------|
+| `/api/v1/processo/<num_processo>` | GET | Retorna todos os dados do processo incluindo documentos |
+| `/api/v1/processo/<num_processo>/documento/<num_documento>` | GET | Faz download de um documento específico |
+| `/api/v1/processo/<num_processo>/peticao-inicial` | GET | Retorna a petição inicial e seus anexos |
+| `/api/v1/processo/<num_processo>/documentos/ids` | GET | Retorna lista de IDs de documentos do processo |
+| `/api/v1/processo/<num_processo>/capa` | GET | Retorna apenas os dados da capa do processo |
 
 ## Autenticação
 
-Todas as requisições exigem credenciais MNI, que podem ser fornecidas através dos headers:
-- `X-MNI-CPF` - CPF/CNPJ do consultante
-- `X-MNI-SENHA` - Senha do consultante
+A autenticação é realizada utilizando credenciais MNI (CPF/CNPJ e senha) que podem ser fornecidas de três formas:
 
-## Como usar com cURL
+1. Headers HTTP (`X-MNI-CPF` e `X-MNI-SENHA`)
+2. Variáveis de ambiente (`MNI_ID_CONSULTANTE` e `MNI_SENHA_CONSULTANTE`)
+3. Formulários na interface web
 
-### Consultar processo completo
-```bash
-curl -X GET "http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000" \
-  -H "X-MNI-CPF: seu_cpf_ou_cnpj" \
-  -H "X-MNI-SENHA: sua_senha"
-```
+## Recursos Avançados
 
-### Consultar apenas a capa do processo
-```bash
-curl -X GET "http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/capa" \
-  -H "X-MNI-CPF: seu_cpf_ou_cnpj" \
-  -H "X-MNI-SENHA: sua_senha"
-```
+### Extração Robusta de Documentos
 
-### Baixar um documento específico
-```bash
-curl -X GET "http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/documento/12345" \
-  -H "X-MNI-CPF: seu_cpf_ou_cnpj" \
-  -H "X-MNI-SENHA: sua_senha" \
-  --output documento.pdf
-```
+O sistema implementa dois métodos complementares para garantir a extração completa de todos os documentos de um processo:
 
-### Consultar petição inicial e anexos
-```bash
-curl -X GET "http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/peticao-inicial" \
-  -H "X-MNI-CPF: seu_cpf_ou_cnpj" \
-  -H "X-MNI-SENHA: sua_senha"
-```
+1. **Abordagem Zeep**: Utiliza o cliente SOAP Zeep para extrair documentos e suas relações
+2. **Abordagem XML/lxml**: Processa o XML bruto para garantir a extração de todos os documentos, incluindo aqueles que podem ser perdidos pelo Zeep
 
-## Como usar com Postman
+### Algoritmo BFS para Relacionamento de Documentos
 
-1. Abra o Postman e crie uma nova requisição.
+Utiliza algoritmo de Busca em Largura (BFS) para rastrear e mapear complexos relacionamentos entre documentos principais e vinculados.
 
-2. Selecione o método `GET` e insira a URL de um dos endpoints:
-   - `http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000`
-   - `http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/capa`
-   - `http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/documento/12345`
-   - `http://localhost:5000/api/v1/processo/0000000-00.0000.0.00.0000/peticao-inicial`
+### Tratamento de MTOM/XOP
 
-3. Na aba "Headers", adicione as credenciais MNI:
-   - Key: `X-MNI-CPF` | Value: `seu_cpf_ou_cnpj`
-   - Key: `X-MNI-SENHA` | Value: `sua_senha`
+Implementa tratamento especial para mensagens SOAP com formato MTOM/XOP (otimização para transferência de dados binários).
 
-4. Clique em "Send" para enviar a requisição.
+## Modelos de Dados
 
-5. Para o endpoint de download de documentos, o arquivo será baixado automaticamente.
+- **User**: Modelo para autenticação e gerenciamento de usuários
 
-## Exemplo de Resposta JSON
+## Como o Código Funciona
 
-### Consulta de processo
-```json
-{
-  "processo": {
-    "numero": "0000000-00.0000.0.00.0000",
-    "classe": "Procedimento Comum Cível",
-    "assuntos": ["Indenização por Dano Material", "Indenização por Dano Moral"],
-    "dataDistribuicao": "2022-01-01T10:00:00",
-    "orgaoJulgador": "1ª Vara Cível",
-    "valorCausa": 10000.0
-  },
-  "documentos": [
-    {
-      "id": "12345",
-      "tipoDocumento": "Petição Inicial",
-      "dataDocumento": "2022-01-01T09:30:00",
-      "mimetype": "application/pdf"
-    },
-    {
-      "id": "12346",
-      "tipoDocumento": "Procuração",
-      "dataDocumento": "2022-01-01T09:35:00",
-      "mimetype": "application/pdf"
-    }
-  ],
-  "movimentacoes": [
-    {
-      "dataMovimentacao": "2022-01-02T11:00:00",
-      "descricao": "Despacho - Cite-se o réu"
-    },
-    {
-      "dataMovimentacao": "2022-01-01T10:00:00",
-      "descricao": "Distribuído por sorteio"
-    }
-  ]
-}
-```
+### Fluxo de Consulta de Processos
 
-## Interface de Depuração
+1. As requisições chegam pelos endpoints web ou API
+2. As credenciais são validadas e obtidas (de headers, formulários ou variáveis de ambiente)
+3. A consulta ao MNI é realizada via SOAP (Zeep) ou requisições manuais (requests + lxml)
+4. Os dados são processados, estruturados e retornados ao cliente
 
-Para testar a API de forma interativa, você pode usar a interface de depuração disponível em:
-- `/debug` - Interface principal
-- `/debug/consulta` - Processo completo
-- `/debug/capa` - Apenas capa do processo
-- `/debug/documento` - Documento específico
-- `/debug/peticao-inicial` - Petição inicial
+### Extração de Documentos
+
+O sistema implementa um mecanismo de extração em duas etapas:
+
+1. **Consulta Principal**: Obtém os dados gerais do processo e documentos principais
+2. **Extração Completa**: Garante a extração de todos os documentos, incluindo vinculados, usando uma abordagem robusta baseada em XML
+
+### Considerações de Segurança
+
+- Tratamento de credenciais via variáveis de ambiente
+- Validação de inputs
+- Tratamento adequado de erros e exceções
+- Proteção contra falhas de comunicação com o serviço MNI
+
+## Histórico de Desenvolvimento
+
+O sistema foi desenvolvido com foco em robustez e confiabilidade para processamento de documentos judiciais. A implementação atual aborda desafios específicos:
+
+1. **Extração Completa de Documentos**: Desenvolvimento de um método robusto para garantir a extração de todos os documentos, inclusive os que podem ser perdidos pelo cliente SOAP
+2. **Otimização de Performance**: Implementação de consultas otimizadas para acelerar o processamento
+3. **Interface de Depuração**: Criação de ferramentas para facilitar o diagnóstico e análise de problemas
+
+O sistema está funcionando perfeitamente e pronto para uso em produção.
