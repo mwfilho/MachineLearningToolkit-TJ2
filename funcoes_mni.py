@@ -201,9 +201,112 @@ def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None
     logger.debug(f"Usando consultante: {cpf_consultante}")
     logger.debug(f"{'=' * 80}\n")
     
-    # Primeira tentativa: buscar o documento diretamente via documento específico
+    # Primeira tentativa: Método usando o envelope SOAP manual com o documento especificado diretamente
     try:
-        logger.debug("Tentando buscar documento diretamente pelo ID")
+        logger.debug(f"Tentando abordagem direta com SOAP manual para documento {num_documento}")
+        
+        # Construir o envelope SOAP manualmente para obter o documento específico
+        soap_envelope = f"""<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://www.cnj.jus.br/servico-intercomunicacao-2.2.2/" xmlns:tip="http://www.cnj.jus.br/tipos-servico-intercomunicacao-2.2.2">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <ser:consultarProcesso>
+         <tip:idConsultante>{cpf_consultante}</tip:idConsultante>
+         <tip:senhaConsultante>{senha_consultante}</tip:senhaConsultante>
+         <tip:numeroProcesso>{num_processo}</tip:numeroProcesso>
+         <tip:movimentos>false</tip:movimentos>
+         <tip:incluirCabecalho>false</tip:incluirCabecalho>
+         <tip:incluirDocumentos>true</tip:incluirDocumentos>
+         <tip:documento>{num_documento.strip()}</tip:documento>
+      </ser:consultarProcesso>
+   </soapenv:Body>
+</soapenv:Envelope>
+"""
+        # SOAPAction obtida do WSDL
+        soap_action = "http://www.cnj.jus.br/servico-intercomunicacao-2.2.2/consultarProcesso"
+        headers = {'Content-Type': 'text/xml; charset=utf-8',
+                  'SOAPAction': soap_action}
+        
+        # Obter URL base sem ?wsdl
+        url_parts = url.split('?')
+        url_base = url_parts[0]
+        
+        logger.debug(f"Enviando requisição SOAP manual para documento {num_documento}...")
+        response = requests.post(url_base, data=soap_envelope.encode('utf-8'), headers=headers, timeout=120)
+        logger.debug(f"Resposta recebida para documento {num_documento}. Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            # --- Tratamento de MTOM/XOP ---
+            content_type = response.headers.get('Content-Type', '')
+            xml_to_parse = None
+
+            if 'multipart/related' in content_type:
+                logger.debug("Resposta é multipart/related (MTOM/XOP)")
+                http_message_bytes = b"Content-Type: " + content_type.encode('utf-8') + b"\r\n\r\n" + response.content
+                msg = message_from_bytes(http_message_bytes, policy=default_policy)
+
+                if msg.is_multipart():
+                    # Procurar a parte com o conteúdo do documento
+                    found_xml_part = False
+                    found_document_part = False
+                    document_content = None
+                    document_mimetype = 'application/octet-stream'
+                    
+                    for part in msg.iter_parts():
+                        part_ct = part.get_content_type()
+                        logger.debug(f"  Encontrada parte com Content-Type: {part_ct}")
+                        
+                        # Procurar pelo XML principal
+                        if not found_xml_part and ('application/xop+xml' in part_ct or 'text/xml' in part_ct):
+                            xml_to_parse = part.get_payload(decode=True)
+                            found_xml_part = True
+                            logger.debug("  Encontrada parte XML principal")
+                            
+                        # Procurar pelo conteúdo binário do documento
+                        elif 'application/' in part_ct or 'text/' in part_ct or 'image/' in part_ct:
+                            document_content = part.get_payload(decode=True)
+                            document_mimetype = part_ct
+                            found_document_part = True
+                            logger.debug(f"  Encontrada parte com o conteúdo do documento: {part_ct}")
+                    
+                    # Se encontramos o conteúdo do documento diretamente
+                    if found_document_part and document_content:
+                        logger.debug("Documento encontrado diretamente na resposta MTOM/XOP")
+                        return {
+                            'num_processo': num_processo,
+                            'id_documento': num_documento,
+                            'id_tipo_documento': '',  # Não temos essa informação na resposta binária
+                            'descricao': f"Documento {num_documento}",
+                            'mimetype': document_mimetype,
+                            'conteudo': document_content
+                        }
+                    
+                    # Se não encontramos conteúdo direto, mas encontramos XML
+                    if found_xml_part and xml_to_parse:
+                        # Continuar com a análise do XML para extrair o documento
+                        logger.debug("XML principal encontrado, analisando...")
+                    else:
+                        logger.debug("Não foi possível encontrar partes necessárias na resposta MTOM")
+                        # Continuar para a próxima abordagem
+                        
+                else:
+                    logger.debug("Content-Type era multipart, mas a mensagem não foi parseada como tal")
+            elif 'text/xml' in content_type or 'application/soap+xml' in content_type:
+                logger.debug("Resposta parece ser XML simples")
+                xml_to_parse = response.content
+            else:
+                logger.debug(f"Content-Type inesperado: {content_type}")
+                # Continuar para a próxima abordagem
+        else:
+            logger.debug(f"Erro na requisição: {response.status_code}")
+            # Continuar para a próxima abordagem
+    
+    except Exception as manual_error:
+        logger.debug(f"Erro na abordagem manual: {str(manual_error)}")
+        # Continuar para a próxima abordagem
+    
+    # Segunda tentativa: usar a abordagem zeep com documento específico
+    try:
+        logger.debug("Tentando buscar documento diretamente pelo ID usando zeep")
         client_direct = Client(url)
         
         # Definir formato da requisição para busca direta
@@ -215,7 +318,7 @@ def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None
             'incluirDocumentos': True
         }
         
-        logger.debug(f"Enviando requisição SOAP direta para documento {num_documento}")
+        logger.debug(f"Enviando requisição SOAP via zeep para documento {num_documento}")
         try:
             response_direct = client_direct.service.consultarProcesso(**request_data_direct)
             
@@ -261,13 +364,13 @@ def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None
                                 'conteudo': doc_item.conteudo
                             }
         except Exception as direct_error:
-            logger.debug(f"Erro na busca direta: {str(direct_error)}")
+            logger.debug(f"Erro na busca direta via zeep: {str(direct_error)}")
             # Continuar para o método padrão
     except Exception as direct_setup_error:
-        logger.debug(f"Erro ao tentar configurar busca direta: {str(direct_setup_error)}")
+        logger.debug(f"Erro ao tentar configurar busca direta via zeep: {str(direct_setup_error)}")
         # Continuar para o método padrão
     
-    # Método padrão - segunda tentativa
+    # Método padrão - terceira tentativa
     logger.debug("Usando método padrão para buscar documento")
     request_data = {
         'idConsultante': cpf_consultante,
