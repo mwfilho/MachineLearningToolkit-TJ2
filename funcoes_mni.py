@@ -178,7 +178,7 @@ def retorna_processo(num_processo, cpf=None, senha=None, incluir_documentos=True
 
 def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None):
     """
-    Retorna um documento específico de um processo usando a abordagem direta de XML.
+    Retorna um documento específico de um processo.
 
     Args:
         num_processo (str): Número do processo
@@ -189,207 +189,133 @@ def retorna_documento_processo(num_processo, num_documento, cpf=None, senha=None
     Returns:
         dict: Dados do documento incluindo seu conteúdo
     """
-    # Extrai apenas o URL base sem o ?wsdl
-    url_parts = MNI_URL.split('?')
-    url_base = url_parts[0]
-    logger.debug(f"Usando URL base para request: {url_base}")
-    
+    url = MNI_URL
     cpf_consultante = cpf or MNI_ID_CONSULTANTE
     senha_consultante = senha or MNI_SENHA_CONSULTANTE
 
     if not cpf_consultante or not senha_consultante:
-        logger.error("Credenciais MNI não fornecidas")
-        return registro_erro(num_processo, num_documento, "Credenciais MNI não fornecidas")
+        raise ExcecaoConsultaMNI("Credenciais MNI não fornecidas")
 
     logger.debug(f"\n{'=' * 80}")
     logger.debug(f"Consultando documento {num_documento} do processo {num_processo}")
-    logger.debug(f"Usando consultante: {cpf_consultante[:3]}****{cpf_consultante[-3:]}")
+    logger.debug(f"Usando consultante: {cpf_consultante}")
     logger.debug(f"{'=' * 80}\n")
 
-    # Construção do envelope SOAP manual baseado no exemplo fornecido
-    soap_envelope = f"""<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://www.cnj.jus.br/servico-intercomunicacao-2.2.2/" xmlns:tip="http://www.cnj.jus.br/tipos-servico-intercomunicacao-2.2.2">
-   <soapenv:Header/>
-   <soapenv:Body>
-      <ser:consultarProcesso>
-         <tip:idConsultante>{cpf_consultante}</tip:idConsultante>
-         <tip:senhaConsultante>{senha_consultante}</tip:senhaConsultante>
-         <tip:numeroProcesso>{num_processo}</tip:numeroProcesso>
-         <tip:incluirDocumentos>true</tip:incluirDocumentos>
-         <tip:documento>{num_documento}</tip:documento>
-      </ser:consultarProcesso>
-   </soapenv:Body>
-</soapenv:Envelope>
-"""
-    # SOAPAction obtida do WSDL
-    soap_action = "http://www.cnj.jus.br/servico-intercomunicacao-2.2.2/consultarProcesso"
-    headers = {'Content-Type': 'text/xml; charset=utf-8',
-               'SOAPAction': soap_action}
+    request_data = {
+        'idConsultante': cpf_consultante,
+        'senhaConsultante': senha_consultante,
+        'numeroProcesso': num_processo,
+        'documento': num_documento,
+        'incluirDocumentos': True  # Garante que todos os documentos serão incluídos
+    }
 
     try:
-        logger.debug(f"Enviando requisição SOAP manual para documento {num_documento} do processo {num_processo}...")
-        # A URL para o request deve ser o endpoint sem o ?wsdl
-        response = requests.post(url_base, data=soap_envelope.encode('utf-8'), headers=headers, timeout=180)
-        logger.debug(f"Resposta recebida. Status: {response.status_code}")
-        response.raise_for_status() # Lança exceção para erros 4xx/5xx
+        client = Client(url)
+        logger.debug("Cliente SOAP criado com sucesso")
 
-        # --- Tratamento de MTOM/XOP ---
-        content_type = response.headers.get('Content-Type', '')
-        xml_to_parse = None
-        document_content = None
+        with client.settings(strict=False, xml_huge_tree=True):
+            logger.debug("Enviando requisição SOAP")
+            response = client.service.consultarProcesso(**request_data)
+            logger.debug("Resposta SOAP recebida")
 
-        if 'multipart/related' in content_type:
-            logger.debug("Resposta é multipart/related (provavelmente MTOM/XOP). Parseando partes...")
-            # Usar email.message_from_bytes para parsear a mensagem multipart
-            # Precisamos dos cabeçalhos HTTP completos para o parser funcionar corretamente
-            # Construir bytes dos cabeçalhos + corpo
-            http_message_bytes = b"Content-Type: " + content_type.encode('utf-8') + b"\r\n\r\n" + response.content
-            msg = message_from_bytes(http_message_bytes, policy=default_policy)
+            data_dict = serialize_object(response)
+            response = EasyDict(data_dict)
 
-            if msg.is_multipart():
-                # Procurar a parte principal do XML (geralmente a primeira ou com Content-Type text/xml)
-                for part in msg.iter_parts():
-                    part_ct = part.get_content_type()
-                    logger.debug(f"  Analisando parte com Content-Type: {part_ct}")
-                    # A parte raiz pode ter Content-Type application/xop+xml ou text/xml
-                    if 'application/xop+xml' in part_ct or 'text/xml' in part_ct:
-                        xml_to_parse = part.get_payload(decode=True) # Obter bytes decodificados
-                        logger.debug("  Encontrada parte XML principal.")
-                        break # Encontramos a parte XML
+            if response.sucesso:
+                logger.debug("Resposta bem sucedida, procurando documento...")
+
+                if not hasattr(response.processo, 'documento'):
+                    logger.error("Processo não contém documentos")
+                    return registro_erro(num_processo, num_documento, "Processo não contém documentos")
+
+                docs = response.processo.documento
+                if not isinstance(docs, list):
+                    docs = [docs]
+
+                logger.debug(f"Encontrados {len(docs)} documentos no processo")
+
+                # Função auxiliar para procurar documento recursivamente
+                def procurar_documento(doc_list, target_id):
+                    for doc in doc_list:
+                        # Log detalhado do documento atual
+                        logger.debug(f"Verificando documento: ID={getattr(doc, 'idDocumento', 'N/A')}")
+
+                        # Verifica se é o documento procurado
+                        if str(getattr(doc, 'idDocumento', '')) == str(target_id):
+                            logger.debug(f"Documento {target_id} encontrado!")
+                            return doc
+
+                        # Verifica documentos vinculados
+                        if hasattr(doc, 'documentoVinculado'):
+                            vinc_docs = doc.documentoVinculado
+                            if not isinstance(vinc_docs, list):
+                                vinc_docs = [vinc_docs]
+
+                            logger.debug(f"Verificando {len(vinc_docs)} documentos vinculados")
+                            result = procurar_documento(vinc_docs, target_id)
+                            if result:
+                                return result
+
+                        # Verifica outros tipos de documentos
+                        for attr in ['documento', 'documentos', 'anexos']:
+                            if hasattr(doc, attr):
+                                outros = getattr(doc, attr)
+                                if outros:
+                                    outros_list = outros if isinstance(outros, list) else [outros]
+                                    logger.debug(f"Verificando {len(outros_list)} documentos em {attr}")
+                                    result = procurar_documento(outros_list, target_id)
+                                    if result:
+                                        return result
+                    return None
+
+                # Procura o documento em toda a estrutura
+                documento = procurar_documento(docs, num_documento)
+
+                if documento:
+                    if documento.conteudo is None:
+                        return registro_erro(num_processo, num_documento, 
+                                        f"Documento {num_documento} encontrado mas retornou vazio")
+
+                    # Atribuir valores padrão se não existirem
+                    descricao = getattr(documento, 'descricao', f"Documento {num_documento}")
+                    id_tipo_documento = getattr(documento, 'tipoDocumento', '')
+                    mimetype = getattr(documento, 'mimetype', 'application/octet-stream')
                     
-                    # Verificar se é um conteúdo binário do documento (geralmente application/octet-stream)
-                    # Geralmente tem um Content-ID específico
-                    if part_ct == 'application/octet-stream' or 'application/pdf' in part_ct:
-                        logger.debug("  Encontrado conteúdo binário.")
-                        content_id = part.get('Content-ID', '')
-                        if 'cid:' in content_id or f'documento_{num_documento}' in content_id:
-                            logger.debug(f"  Conteúdo do documento {num_documento} encontrado com Content-ID: {content_id}")
-                            # Guarda o conteúdo binário
-                            document_content = part.get_payload(decode=True)
-                            logger.debug(f"  Tamanho do conteúdo binário: {len(document_content)} bytes")
-                            # Continuar procurando a parte XML principal
-                
-                if xml_to_parse is None:
-                     logger.error(f"Não foi possível encontrar a parte XML principal na resposta multipart para {num_processo}")
-                     return registro_erro(num_processo, num_documento, "Não foi possível encontrar a parte XML principal")
+                    # Se o mimetype estiver vazio, tentar deduzir pelo conteúdo
+                    if not mimetype and documento.conteudo:
+                        if len(documento.conteudo) > 4 and documento.conteudo[:4] == b'%PDF':
+                            mimetype = 'application/pdf'
+                        else:
+                            mimetype = 'application/octet-stream'
+
+                    return {
+                        'num_processo': num_processo,
+                        'id_documento': documento.idDocumento,
+                        'id_tipo_documento': id_tipo_documento,
+                        'descricao': descricao,
+                        'mimetype': mimetype,
+                        'conteudo': documento.conteudo
+                    }
+                else:
+                    logger.error(f"Documento {num_documento} não encontrado na estrutura do processo")
+                    return registro_erro(num_processo, num_documento, 
+                                    f"Documento {num_documento} não encontrado")
             else:
-                # Não deveria acontecer se o Content-Type é multipart, mas por segurança
-                 logger.error(f"Content-Type era multipart, mas a mensagem não foi parseada como tal para {num_processo}")
-                 return registro_erro(num_processo, num_documento, "Erro no parsing da resposta multipart")
-        elif 'text/xml' in content_type or 'application/soap+xml' in content_type:
-             logger.debug("Resposta parece ser XML simples.")
-             xml_to_parse = response.content
+                logger.error(f"Erro na resposta: {response.mensagem}")
+                return registro_erro(num_processo, num_documento, 
+                                f"Erro ao consultar o MNI: {response.mensagem}")
+
+    except Fault as e:
+        if "loginFailed" in str(e):
+            error_msg = "Erro de autenticação no MNI. Verifique suas credenciais"
         else:
-             logger.error(f"Content-Type inesperado recebido: {content_type} para {num_processo}")
-             logger.debug(f"Conteúdo da resposta (início): {response.content[:500]}") # Logar início do conteúdo
-             return registro_erro(num_processo, num_documento, f"Content-Type inesperado: {content_type}")
-
-        # --- Fim do Tratamento de MTOM/XOP ---
-
-        if xml_to_parse is None:
-             logger.error(f"Falha ao extrair conteúdo XML da resposta para {num_processo}")
-             return registro_erro(num_processo, num_documento, "Falha ao extrair conteúdo XML da resposta")
-
-        # Logar o XML extraído para depuração ANTES de parsear
-        try:
-            xml_string_for_log = xml_to_parse.decode('utf-8', errors='ignore')
-            logger.debug("\n--- INÍCIO XML EXTRAÍDO (para depuração) ---")
-            logger.debug(xml_string_for_log[:2000]) # Imprime os primeiros 2000 caracteres
-            logger.debug("--- FIM XML EXTRAÍDO (para depuração) ---\n")
-        except Exception as log_err:
-            logger.error(f"Erro ao tentar logar XML extraído: {log_err}")
-
-        logger.debug("Parseando XML extraído com lxml...")
-        root = etree.fromstring(xml_to_parse) # Parseia os bytes diretamente
-
-        # Verificar sucesso
-        sucesso_element = root.xpath('//ns2:consultarProcessoResposta/ns2:sucesso/text()', namespaces=NSMAP_RESP)
-        if not sucesso_element or sucesso_element[0].lower() != 'true':
-            mensagem_element = root.xpath('//ns2:consultarProcessoResposta/ns2:mensagem/text()', namespaces=NSMAP_RESP)
-            mensagem = mensagem_element[0] if mensagem_element else "Falha (mensagem não encontrada no XML)."
-            logger.error(f"Consulta MNI (requests+lxml) para documento {num_documento} indicou falha: {mensagem}")
-            return registro_erro(num_processo, num_documento, f"Erro na consulta: {mensagem}")
-
-        # Procurar o documento no XML
-        documento_xpath = root.xpath(
-            f'//ns2:documento[@idDocumento="{num_documento}"] | //ns2:documentoVinculado[@idDocumento="{num_documento}"]',
-            namespaces=NSMAP_RESP
-        )
-
-        if not documento_xpath:
-            logger.error(f"Documento {num_documento} não encontrado no XML de resposta")
-            return registro_erro(num_processo, num_documento, f"Documento {num_documento} não encontrado")
-
-        documento = documento_xpath[0]
-        logger.debug(f"Documento {num_documento} encontrado no XML")
-
-        # Extrair dados do documento
-        id_doc = documento.get('idDocumento', '')
-        tipo_doc = documento.get('tipoDocumento', '')
-        descricao = ''
-        mimetype = ''
-        conteudo_base64 = None
-
-        # Extrair descrição
-        descricao_element = documento.xpath('./ns2:descricao/text()', namespaces=NSMAP_RESP)
-        if descricao_element:
-            descricao = descricao_element[0]
-        else:
-            descricao = f"Documento {id_doc}"
-
-        # Extrair mimetype
-        mimetype_element = documento.xpath('./ns2:mimetype/text()', namespaces=NSMAP_RESP)
-        if mimetype_element:
-            mimetype = mimetype_element[0]
-        else:
-            # Tenta deduzir o mimetype pela extensão ou usar padrão
-            if document_content and document_content[:4] == b'%PDF':
-                mimetype = 'application/pdf'
-            else:
-                mimetype = 'application/octet-stream'
-
-        # Extrair conteúdo
-        conteudo_element = documento.xpath('./ns2:conteudo/text()', namespaces=NSMAP_RESP)
-        if conteudo_element:
-            conteudo_base64 = conteudo_element[0]
-            try:
-                conteudo_bytes = base64.b64decode(conteudo_base64)
-                logger.debug(f"Conteúdo base64 decodificado com sucesso. Tamanho: {len(conteudo_bytes)} bytes")
-                document_content = conteudo_bytes  # Atualiza o conteúdo se encontrado no XML
-            except Exception as e:
-                logger.error(f"Erro ao decodificar conteúdo base64: {str(e)}")
-                if not document_content:  # Se não temos conteúdo de outra fonte
-                    return registro_erro(num_processo, num_documento, f"Erro ao decodificar conteúdo: {str(e)}")
-        
-        # Verificar se temos conteúdo do documento (seja do XML ou do MTOM)
-        if document_content:
-            # Montar resposta com os dados do documento
-            return {
-                'num_processo': num_processo,
-                'id_documento': id_doc,
-                'id_tipo_documento': tipo_doc,
-                'descricao': descricao,
-                'mimetype': mimetype,
-                'conteudo': document_content
-            }
-        else:
-            logger.error("Documento não possui conteúdo (nem no XML nem como anexo MTOM)")
-            return registro_erro(num_processo, num_documento, "Documento não possui conteúdo")
-
-    except requests.exceptions.Timeout:
-         logger.error(f"Timeout ao consultar documento {num_documento} do processo {num_processo}")
-         return registro_erro(num_processo, num_documento, "Timeout na consulta")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Erro de requisição para documento {num_documento}: {e}")
-        # Se for erro 500, logar o conteúdo da resposta se houver
-        if hasattr(e, 'response') and e.response is not None:
-             logger.debug(f"Conteúdo da resposta de erro: {e.response.text}")
-        return registro_erro(num_processo, num_documento, f"Erro na requisição: {str(e)}")
-    except etree.XMLSyntaxError as e:
-        logger.error(f"Erro ao parsear XML para documento {num_documento}: {e}")
-        return registro_erro(num_processo, num_documento, f"Erro ao processar XML: {str(e)}")
+            error_msg = f"Erro na comunicação SOAP: {str(e)}"
+        logger.error(f"{error_msg} (Processo: {num_processo}, Documento: {num_documento})")
+        return registro_erro(num_processo, num_documento, error_msg)
     except Exception as e:
-        logger.error(f"Erro inesperado ao baixar documento {num_documento}: {str(e)}", exc_info=True)
-        return registro_erro(num_processo, num_documento, f"Erro inesperado: {str(e)}")
+        error_msg = f"Erro inesperado: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return registro_erro(num_processo, num_documento, error_msg)
 
 def registro_erro(num_processo, num_documento, msg):
     """
