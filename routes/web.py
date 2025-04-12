@@ -27,17 +27,90 @@ def debug_consulta():
 
     try:
         logger.debug(f"Consultando processo: {num_processo}")
+        # Obtenha credenciais finais para passar ao extrator de IDs
+        cpf_final = cpf or os.environ.get('MNI_ID_CONSULTANTE')
+        senha_final = senha or os.environ.get('MNI_SENHA_CONSULTANTE')
+        
         resposta = retorna_processo(
             num_processo,
-            cpf=cpf or os.environ.get('MNI_ID_CONSULTANTE'),
-            senha=senha or os.environ.get('MNI_SENHA_CONSULTANTE')
+            cpf=cpf_final,
+            senha=senha_final
         )
 
         # Extrair dados relevantes
         dados = extract_mni_data(resposta)
         logger.debug(f"Dados extraídos: {dados}")
 
-        # Processar hierarquia de documentos
+        # Se o processo existe e tem sucesso, atualize a lista de documentos
+        # usando a abordagem robusta para garantir todos os documentos
+        if dados['sucesso'] and dados['processo']:
+            # Obter a lista completa e robusta de IDs
+            ids_dados = extract_all_document_ids(resposta, num_processo=num_processo, 
+                                              cpf=cpf_final, senha=senha_final)
+            
+            if ids_dados['sucesso'] and ids_dados.get('documentos'):
+                logger.debug(f"Lista robusta de documentos extraída com {len(ids_dados.get('documentos', []))} IDs")
+                
+                # Criar mapa de documentos existentes para facilitar a busca
+                docs_map = {}
+                for doc in dados['processo'].get('documentos', []):
+                    doc_id = doc['idDocumento']
+                    docs_map[doc_id] = doc
+                
+                # Processar documentos vinculados para o mapa
+                for doc in dados['processo'].get('documentos', []):
+                    for vinc in doc.get('documentos_vinculados', []):
+                        vinc_id = vinc['idDocumento']
+                        docs_map[vinc_id] = vinc
+
+                # Processar hierarquia de documentos a partir da lista robusta
+                docs_principais = {}
+                docs_vinculados = {}
+
+                # Primeiro passo: coletar todos os principais e vinculados do resultado original
+                if dados['processo'].get('documentos'):
+                    for doc in dados['processo']['documentos']:
+                        doc_id = doc['idDocumento']
+                        docs_principais[doc_id] = doc
+
+                        # Se tem documentos vinculados, adiciona à estrutura
+                        if doc.get('documentos_vinculados'):
+                            docs_vinculados[doc_id] = doc['documentos_vinculados']
+                
+                # Segundo passo: adicionar quaisquer documentos que só foram encontrados na lista robusta
+                for doc_info in ids_dados.get('documentos', []):
+                    doc_id = doc_info['idDocumento']
+                    
+                    # Verifica se este ID já está nos documentos principais
+                    if doc_id not in docs_principais:
+                        # Se o documento consta no mapa de docs originais, use esse
+                        if doc_id in docs_map:
+                            docs_principais[doc_id] = docs_map[doc_id]
+                        else:
+                            # Caso contrário, use as informações básicas da lista de IDs
+                            docs_principais[doc_id] = {
+                                'idDocumento': doc_id,
+                                'tipoDocumento': doc_info.get('tipoDocumento', ''),
+                                'descricao': doc_info.get('descricao', f'Documento {doc_id}'),
+                                'documentos_vinculados': []
+                            }
+                
+                # Adicionar documentos vinculados aos principais
+                for doc_id, doc_info in docs_principais.items():
+                    if doc_id in docs_vinculados:
+                        doc_info['documentos_vinculados'] = docs_vinculados[doc_id]
+                    else:
+                        doc_info['documentos_vinculados'] = []
+                
+                logger.debug(f"Total de documentos na hierarquia: {len(docs_principais)}")
+
+                return render_template('debug.html', 
+                                resposta=dados,
+                                documentos_hierarquia=docs_principais,
+                                documentos_ids_totais=ids_dados.get('documentos', []),
+                                num_processo=num_processo)
+
+        # Fallback para o comportamento padrão se a lógica acima falhar
         docs_principais = {}
         docs_vinculados = {}
 

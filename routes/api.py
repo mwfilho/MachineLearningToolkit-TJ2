@@ -28,7 +28,10 @@ def log_request_info():
 @api.route('/processo/<num_processo>', methods=['GET'])
 def get_processo(num_processo):
     """
-    Retorna os dados do processo incluindo lista de documentos
+    Retorna os dados do processo incluindo lista completa de documentos
+    
+    Utiliza uma abordagem robusta que garante a extração de todos os documentos, mesmo
+    aqueles que podem ser perdidos pela biblioteca SOAP quando há múltiplos documentos vinculados.
     """
     try:
         logger.debug(f"API: Consultando processo {num_processo}")
@@ -44,6 +47,71 @@ def get_processo(num_processo):
 
         # Extrair dados relevantes
         dados = extract_mni_data(resposta)
+        
+        # Se o processo existe e tem sucesso, atualize a lista de documentos
+        # usando a abordagem robusta para garantir todos os documentos
+        if dados['sucesso'] and 'processo' in dados:
+            # Obter a lista completa e robusta de IDs
+            ids_dados = extract_all_document_ids(resposta, num_processo=num_processo, 
+                                             cpf=cpf, senha=senha)
+            
+            if ids_dados['sucesso'] and 'documentos' in ids_dados:
+                logger.debug(f"API: Lista robusta de documentos extraída com {len(ids_dados.get('documentos', []))} IDs")
+                
+                # Criar mapa de documentos existentes para facilitar a busca
+                docs_map = {}
+                # Processar documentos principais
+                for doc in dados['processo'].get('documentos', []):
+                    doc_id = doc['idDocumento']
+                    docs_map[doc_id] = doc
+                
+                # Processar documentos vinculados
+                for doc in dados['processo'].get('documentos', []):
+                    for vinc in doc.get('documentos_vinculados', []):
+                        vinc_id = vinc['idDocumento']
+                        docs_map[vinc_id] = vinc
+                
+                # Verificar se existem documentos na lista robusta que não foram encontrados na resposta zeep
+                docs_principais = []
+                docs_secundarios = {}
+                
+                ids_xml = set(d['idDocumento'] for d in ids_dados['documentos'])
+                ids_zeep = set(docs_map.keys())
+                ids_faltando = ids_xml - ids_zeep
+                
+                if ids_faltando:
+                    logger.debug(f"API: Encontrados {len(ids_faltando)} documentos na abordagem XML/lxml que não estavam no zeep")
+                    
+                    # Adiciona entradas para os documentos faltantes com dados básicos
+                    for doc_id in ids_faltando:
+                        # Procurar nas informações da lista robusta
+                        doc_info = next((d for d in ids_dados['documentos'] if d['idDocumento'] == doc_id), None)
+                        
+                        if doc_info:
+                            docs_map[doc_id] = {
+                                'idDocumento': doc_id,
+                                'tipoDocumento': doc_info.get('tipoDocumento', ''),
+                                'descricao': doc_info.get('descricao', f'Documento {doc_id}'),
+                                'dataHora': '',
+                                'mimetype': doc_info.get('mimetype', ''),
+                                'documentos_vinculados': []
+                            }
+                
+                # Construir/atualizar a lista de documentos completa e ordenada
+                # baseada na ordem da lista robusta de IDs
+                documentos_completos = []
+                for doc_info in ids_dados['documentos']:
+                    doc_id = doc_info['idDocumento']
+                    if doc_id in docs_map:
+                        documentos_completos.append(docs_map[doc_id])
+                
+                # Atualizar a lista de documentos no resultado
+                dados['processo']['documentos'] = documentos_completos
+                dados['processo']['total_documentos'] = len(documentos_completos)
+                
+                # Adicionar a lista bruta de IDs para debug/referência
+                dados['processo']['documentos_ids_brutos'] = [d['idDocumento'] for d in ids_dados['documentos']]
+        
         return jsonify(dados)
 
     except Exception as e:
