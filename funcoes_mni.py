@@ -465,6 +465,7 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
     """
     Faz a chamada SOAP usando requests com envelope manual e parseia
     o XML bruto da resposta com lxml para extrair TODOS os IDs de documentos.
+    VERSÃO CORRIGIDA: Baseada no código original que funcionava.
 
     Args:
         num_processo (str): Número do processo a ser consultado
@@ -474,22 +475,17 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
     Returns:
         list: Lista de todos os IDs de documentos encontrados ou None em caso de erro
     """
-    # Extrai apenas o URL base sem o ?wsdl
-    url_parts = MNI_URL.split('?')
-    url_base = url_parts[0]
-    logger.debug(f"Usando URL base para request: {url_base}")
-    
-    all_document_ids = []  # Mudado de set para list para preservar a ordem
+    url = MNI_URL
+    all_document_ids = set()  # Usando set para evitar duplicação
     cpf_consultante = cpf or MNI_ID_CONSULTANTE
     senha_consultante = senha or MNI_SENHA_CONSULTANTE
 
+    # Verificando credenciais
     if not cpf_consultante or not senha_consultante:
         logger.error("Credenciais MNI não fornecidas para extrair_ids_requests_lxml")
         return None
 
-    logger.debug(f"Usando credenciais - CPF: {cpf_consultante[:3]}****{cpf_consultante[-3:]}")
-
-    # Construção do envelope SOAP manual baseado no exemplo fornecido
+    # Construção do envelope SOAP manual como no código original que funcionava
     soap_envelope = f"""<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://www.cnj.jus.br/servico-intercomunicacao-2.2.2/" xmlns:tip="http://www.cnj.jus.br/tipos-servico-intercomunicacao-2.2.2">
    <soapenv:Header/>
    <soapenv:Body>
@@ -500,6 +496,8 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
          <tip:movimentos>false</tip:movimentos>
          <tip:incluirCabecalho>false</tip:incluirCabecalho>
          <tip:incluirDocumentos>true</tip:incluirDocumentos>
+         <!-- <tip:dataReferencia>?</tip:dataReferencia> -->
+         <!-- <tip:documento>?</tip:documento> -->
       </ser:consultarProcesso>
    </soapenv:Body>
 </soapenv:Envelope>
@@ -510,11 +508,10 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
                'SOAPAction': soap_action}
 
     try:
-        logger.debug(f"Enviando requisição SOAP manual para {num_processo} via {url_base}...")
-        # A URL para o request tem que ser o endpoint sem o ?wsdl
-        response = requests.post(url_base, data=soap_envelope.encode('utf-8'), headers=headers, timeout=120)
+        logger.debug(f"Enviando requisição SOAP manual para {num_processo}...")
+        response = requests.post(url, data=soap_envelope.encode('utf-8'), headers=headers, timeout=120)
         logger.debug(f"Resposta recebida. Status: {response.status_code}")
-        response.raise_for_status() # Lança exceção para erros 4xx/5xx
+        response.raise_for_status()  # Lança exceção para erros 4xx/5xx
 
         # --- Tratamento de MTOM/XOP ---
         content_type = response.headers.get('Content-Type', '')
@@ -522,100 +519,129 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
 
         if 'multipart/related' in content_type:
             logger.debug("Resposta é multipart/related (provavelmente MTOM/XOP). Parseando partes...")
-            # Usar email.message_from_bytes para parsear a mensagem multipart
-            # Precisamos dos cabeçalhos HTTP completos para o parser funcionar corretamente
             # Construir bytes dos cabeçalhos + corpo
             http_message_bytes = b"Content-Type: " + content_type.encode('utf-8') + b"\r\n\r\n" + response.content
             msg = message_from_bytes(http_message_bytes, policy=default_policy)
 
             if msg.is_multipart():
-                # Procurar a parte principal do XML (geralmente a primeira ou com Content-Type text/xml)
+                # Procurar a parte principal do XML
                 for part in msg.iter_parts():
                     part_ct = part.get_content_type()
                     logger.debug(f"  Analisando parte com Content-Type: {part_ct}")
-                    # A parte raiz pode ter Content-Type application/xop+xml ou text/xml
                     if 'application/xop+xml' in part_ct or 'text/xml' in part_ct:
-                        xml_to_parse = part.get_payload(decode=True) # Obter bytes decodificados
+                        xml_to_parse = part.get_payload(decode=True)
                         logger.debug("  Encontrada parte XML principal.")
-                        break # Encontramos a parte XML
+                        break
                 if xml_to_parse is None:
-                     logger.error(f"Não foi possível encontrar a parte XML principal na resposta multipart para {num_processo}")
-                     return None
+                    logger.error(f"Não foi possível encontrar a parte XML principal na resposta multipart")
+                    return None
             else:
-                # Não deveria acontecer se o Content-Type é multipart, mas por segurança
-                 logger.error(f"Content-Type era multipart, mas a mensagem não foi parseada como tal para {num_processo}")
-                 return None
+                logger.error(f"Content-Type era multipart, mas a mensagem não foi parseada como tal")
+                return None
         elif 'text/xml' in content_type or 'application/soap+xml' in content_type:
-             logger.debug("Resposta parece ser XML simples.")
-             xml_to_parse = response.content
+            logger.debug("Resposta parece ser XML simples.")
+            xml_to_parse = response.content
         else:
-             logger.error(f"Content-Type inesperado recebido: {content_type} para {num_processo}")
-             logger.debug(f"Conteúdo da resposta (início): {response.content[:500]}") # Logar início do conteúdo
-             return None
-
-        # --- Fim do Tratamento de MTOM/XOP ---
+            logger.error(f"Content-Type inesperado recebido: {content_type}")
+            logger.debug(f"Conteúdo da resposta (início): {response.content[:500]}")
+            return None
 
         if xml_to_parse is None:
-             logger.error(f"Falha ao extrair conteúdo XML da resposta para {num_processo}")
-             return None
-
-        # Logar o XML extraído para depuração ANTES de parsear
-        try:
-            xml_string_for_log = xml_to_parse.decode('utf-8', errors='ignore')
-            logger.debug("\n--- INÍCIO XML EXTRAÍDO (para depuração) ---")
-            logger.debug(xml_string_for_log[:2000]) # Imprime os primeiros 2000 caracteres
-            logger.debug("--- FIM XML EXTRAÍDO (para depuração) ---\n")
-        except Exception as log_err:
-            logger.error(f"Erro ao tentar logar XML extraído: {log_err}")
+            logger.error(f"Falha ao extrair conteúdo XML da resposta")
+            return None
 
         logger.debug("Parseando XML extraído com lxml...")
-        root = etree.fromstring(xml_to_parse) # Parseia os bytes diretamente
+        root = etree.fromstring(xml_to_parse)
 
         # Verificar sucesso
         sucesso_element = root.xpath('//ns2:consultarProcessoResposta/ns2:sucesso/text()', namespaces=NSMAP_RESP)
         if not sucesso_element or sucesso_element[0].lower() != 'true':
             mensagem_element = root.xpath('//ns2:consultarProcessoResposta/ns2:mensagem/text()', namespaces=NSMAP_RESP)
             mensagem = mensagem_element[0] if mensagem_element else "Falha (mensagem não encontrada no XML)."
-            logger.error(f"Consulta MNI (requests+lxml) para {num_processo} indicou falha: {mensagem}")
-            # Continuar mesmo assim para tentar extrair IDs se a estrutura parcial existir
+            logger.error(f"Consulta MNI indicou falha: {mensagem}")
+            return None  # Importante: não continuar se a consulta falhou
 
-        # XPath para começar com ns4:consultarProcessoResposta
-        # e buscar descendentes ns2:documento ou ns2:documentoVinculado com @idDocumento
-        document_ids_xpath = root.xpath(
-             '//ns4:consultarProcessoResposta/descendant::ns2:documento/@idDocumento | //ns4:consultarProcessoResposta/descendant::ns2:documentoVinculado/@idDocumento',
-             namespaces=NSMAP_RESP
-        )
+        # IMPORTANTE: Esta é a alteração principal - vamos obter a lista de IDs usando Zeep em vez de XPath
+        # A abordagem original que funcionava
+        try:
+            # Agora vamos usar o zeep para obter os documentos de forma confiável
+            client = Client(url)
+            with client.settings(strict=False, xml_huge_tree=True):
+                # Realiza a chamada ao método SOAP "consultarProcesso"
+                request_data = {
+                    'idConsultante': cpf_consultante,
+                    'senhaConsultante': senha_consultante,
+                    'numeroProcesso': num_processo,
+                    'incluirDocumentos': True
+                }
+                response_zeep = client.service.consultarProcesso(**request_data)
 
-        logger.debug(f"Encontrados {len(document_ids_xpath)} atributos @idDocumento no XML bruto com XPath.")
-        
-        # Adicionar IDs em ordem (sem usar set para preservar a ordem exata)
-        # Convertendo NodeSet para lista de strings
-        for doc_id in document_ids_xpath:
-            if doc_id not in all_document_ids:
-                all_document_ids.append(doc_id)
+            # Verifica se a consulta foi bem-sucedida
+            if not response_zeep or not response_zeep.sucesso:
+                logger.error(f"Consulta zeep falhou para {num_processo}")
+                return None
 
-        logger.debug(f"Total de IDs extraídos do XML bruto via lxml: {len(all_document_ids)}")
-        if not all_document_ids:
-             logger.warning(f"Nenhum ID de documento extraído do XML bruto para o processo {num_processo}")
-             return []
-
-        # Não precisamos ordenar, pois queremos manter a ordem original exata
-        return all_document_ids
+            # Navega na estrutura para obter os IDs válidos
+            if hasattr(response_zeep, 'processo') and hasattr(response_zeep.processo, 'documento'):
+                # Função recursiva para extração de IDs - como no código original
+                def extract_docs_recursivo(docs, ids_set):
+                    if not isinstance(docs, list):
+                        docs = [docs] if docs else []
+                    
+                    for doc in docs:
+                        if hasattr(doc, 'idDocumento') and doc.idDocumento:
+                            ids_set.add(doc.idDocumento)
+                            
+                            # Processa documentos vinculados
+                            if hasattr(doc, 'documentoVinculado') and doc.documentoVinculado:
+                                vinculados = doc.documentoVinculado
+                                if not isinstance(vinculados, list):
+                                    vinculados = [vinculados]
+                                extract_docs_recursivo(vinculados, ids_set)
+                
+                # Início da extração recursiva
+                docs_principais = response_zeep.processo.documento
+                extract_docs_recursivo(docs_principais, all_document_ids)
+                
+                logger.debug(f"Total de IDs extraídos com zeep: {len(all_document_ids)}")
+                return sorted(list(all_document_ids))
+            else:
+                logger.error(f"Estrutura de documentos não encontrada para {num_processo}")
+                return []
+                
+        except Exception as zeep_error:
+            logger.error(f"Erro ao usar zeep para extrair documentos: {str(zeep_error)}")
+            
+            # Fallback para a abordagem XPath, mas apenas se realmente necessário
+            # Isso pode incluir IDs incorretos como visto anteriormente
+            logger.debug("Tentando abordagem XPath como fallback...")
+            document_ids_xpath = root.xpath(
+                '//ns4:consultarProcessoResposta/descendant::ns2:documento/@idDocumento | //ns4:consultarProcessoResposta/descendant::ns2:documentoVinculado/@idDocumento',
+                namespaces=NSMAP_RESP
+            )
+            
+            logger.debug(f"Encontrados {len(document_ids_xpath)} IDs no XML via XPath.")
+            all_document_ids = set(document_ids_xpath)
+            
+            if not all_document_ids:
+                logger.warning(f"Nenhum ID de documento extraído do XML bruto")
+                return []
+                
+            return sorted(list(all_document_ids))
 
     except requests.exceptions.Timeout:
-         logger.error(f"Timeout (requests+lxml) ao consultar {num_processo}")
-         return None
+        logger.error(f"Timeout ao consultar {num_processo}")
+        return None
     except requests.exceptions.RequestException as e:
-        logger.error(f"Erro de requisição (requests+lxml) para {num_processo}: {e}")
-        # Se for erro 500, logar o conteúdo da resposta se houver
+        logger.error(f"Erro de requisição para {num_processo}: {e}")
         if hasattr(e, 'response') and e.response is not None:
-             logger.debug(f"Conteúdo da resposta de erro: {e.response.text}")
+            logger.debug(f"Conteúdo da resposta de erro: {e.response.text}")
         return None
     except etree.XMLSyntaxError as e:
-        logger.error(f"Erro ao parsear XML bruto (requests+lxml) para {num_processo}: {e}")
+        logger.error(f"Erro ao parsear XML: {e}")
         return None
     except Exception as e:
-        logger.error(f"Erro inesperado (requests+lxml) ao extrair IDs de {num_processo}: {e}")
+        logger.error(f"Erro inesperado: {e}")
         return None
         
 def retorna_peticao_inicial_e_anexos(num_processo, cpf=None, senha=None):
