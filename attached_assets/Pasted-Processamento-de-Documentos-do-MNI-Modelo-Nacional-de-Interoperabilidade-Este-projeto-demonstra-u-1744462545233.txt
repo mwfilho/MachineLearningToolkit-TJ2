@@ -1,0 +1,51 @@
+Processamento de Documentos do MNI (Modelo Nacional de Interoperabilidade)
+Este projeto demonstra uma abordagem robusta para consultar processos no serviço SOAP do MNI, extrair a lista completa de todos os documentos (principais e vinculados) e baixar seus respectivos conteúdos.
+
+Desafio
+A consulta ao método consultarProcesso do MNI com a opção incluirDocumentos=True retorna uma resposta complexa. Observou-se que bibliotecas SOAP como zeep, ao tentarem serializar ou interpretar essa resposta diretamente para objetos Python, podem omitir elementos, especificamente o primeiro documentoVinculado quando há múltiplos deles aninhados dentro de um documento principal. Isso leva à perda de documentos importantes.
+
+Além disso, o servidor MNI utiliza o padrão MTOM/XOP (XML-binary Optimized Packaging) para enviar a resposta quando documentos estão incluídos, encapsulando o XML SOAP principal dentro de uma mensagem multipart/related. Ferramentas padrão de bibliotecas SOAP podem ter dificuldade em lidar corretamente com essa estrutura para extrair o XML bruto de forma confiável.
+
+Solução Implementada
+A solução final adotada contorna as limitações das bibliotecas SOAP padrão para este caso específico, focando no parseamento direto da resposta XML bruta:
+
+Requisição SOAP Manual (requests):
+
+Uma requisição HTTP POST é enviada diretamente para o endpoint SOAP do MNI usando a biblioteca requests.
+O envelope SOAP (soap_envelope) é construído manualmente como uma string formatada, garantindo a estrutura exata esperada pelo serviço consultarProcesso, incluindo os namespaces corretos (soapenv, ser, tip) e os parâmetros necessários (idConsultante, senhaConsultante, numeroProcesso, incluirDocumentos=true, etc.).
+O cabeçalho HTTP SOAPAction correto, obtido do WSDL, é incluído na requisição.
+Utiliza-se um timeout adequado para a requisição.
+Tratamento da Resposta MTOM/XOP (email module):
+
+Verifica-se o cabeçalho Content-Type da resposta HTTP.
+Se for multipart/related, indica que a resposta usa MTOM/XOP.
+O módulo email da biblioteca padrão do Python (com message_from_bytes e default_policy) é utilizado para parsear a resposta multipart completa (cabeçalhos HTTP + corpo).
+O código itera sobre as partes da mensagem multipart, procurando pela parte que contém o XML principal (geralmente com Content-Type application/xop+xml ou text/xml).
+O payload (conteúdo) desta parte XML é extraído em formato de bytes (xml_to_parse).
+Parseamento do XML Bruto (lxml):
+
+A biblioteca lxml (instalada via pip install lxml) é usada para parsear os bytes do XML (xml_to_parse) extraído na etapa anterior (etree.fromstring(xml_to_parse)). lxml é conhecida por sua robustez e eficiência no parseamento de XML.
+Extração de IDs com XPath (lxml):
+
+Um dicionário de namespaces (NSMAP_RESP) é definido corretamente, mapeando os prefixos usados no XML de resposta (ns2, ns4) para seus respectivos URIs.
+Uma expressão XPath é utilizada para encontrar todos os atributos idDocumento presentes em qualquer tag <ns2:documento> ou <ns2:documentoVinculado> que seja descendente da tag raiz da resposta (<ns4:consultarProcessoResposta>). A expressão usada é:
+'//ns4:consultarProcessoResposta/descendant::ns2:documento/@idDocumento | //ns4:consultarProcessoResposta/descendant::ns2:documentoVinculado/@idDocumento'
+Os IDs extraídos são armazenados em um set para garantir a unicidade e depois convertidos em uma lista ordenada (lista_completa_ids).
+Download Individual dos Documentos (zeep):
+
+O script principal (core.py) recebe a lista_completa_ids.
+Ele itera sobre esta lista. Para cada doc_id, ele chama a função retorna_documento_processo.
+A função retorna_documento_processo utiliza a biblioteca zeep para fazer uma consulta SOAP específica para aquele doc_id (passando o ID no parâmetro documento da requisição consultarProcesso). Esta abordagem de buscar documentos individualmente pelo ID mostrou-se confiável com zeep.
+O conteúdo binário retornado é salvo em um arquivo com a extensão apropriada, determinada pelo mimetype do documento.
+Vantagens desta Abordagem
+Robustez: Ao parsear o XML bruto com lxml, evitamos os problemas de interpretação/serialização da biblioteca zeep para estruturas complexas.
+Completude: Garante que todos os IDs de documentos presentes na resposta XML sejam capturados.
+Generalidade: A extração de IDs via XPath é genérica e deve funcionar para diferentes processos, desde que a estrutura básica e os namespaces da resposta MNI permaneçam consistentes.
+Confiabilidade no Download: Mantém o uso da zeep para a tarefa onde ela se mostrou confiável: buscar o conteúdo de um documento individual quando seu ID é fornecido.
+Arquivos Principais
+funcoes_mni.py:
+extrair_ids_requests_lxml(): Implementa as etapas 1 a 4 (requisição manual, tratamento MTOM, parseamento lxml, extração XPath).
+retorna_documento_processo(): Implementa a etapa 5 (download individual via Zeep).
+core.py: Orquestra o fluxo: chama extrair_ids_requests_lxml() para obter a lista de IDs e depois itera chamando retorna_documento_processo() para baixar cada um.
+config.py: Contém as configurações de URL e credenciais do MNI.
+requirements.txt: Lista as dependências (requests, lxml, zeep, easydict, pandas).

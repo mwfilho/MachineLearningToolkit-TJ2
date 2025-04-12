@@ -2,3 +2,4 @@ zeep
 easydict
 pandas
 requests
+lxml
