@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, send_file, request
 import os
 import logging
-from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos, extrair_ids_requests_lxml
+from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
 from utils import extract_mni_data, extract_capa_processo, extract_all_document_ids
 import core
 import tempfile
@@ -217,22 +217,12 @@ def get_document_ids(num_processo):
                 'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
 
-        # Usa diretamente a abordagem de extração de IDs por XML/lxml, que é mais robusta
-        document_ids = extrair_ids_requests_lxml(num_processo, cpf=cpf, senha=senha)
-        
-        if document_ids is None:
-            return jsonify({
-                'erro': 'Erro ao consultar o MNI',
-                'mensagem': 'Não foi possível extrair os IDs de documentos'
-            }), 500
-        
-        # Formata a resposta com a lista de IDs
-        dados = {
-            'numero_processo': num_processo,
-            'sucesso': True,
-            'mensagem': 'Lista de documentos extraída com sucesso',
-            'documentos': [{'id': doc_id} for doc_id in document_ids]
-        }
+        # Obtém o processo completo com documentos usando a abordagem tradicional primeiro
+        resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
+
+        # Extrai os IDs dos documentos usando a nova abordagem robusta
+        # Passa o número do processo e credenciais para permitir nova consulta se necessário
+        dados = extract_all_document_ids(resposta, num_processo=num_processo, cpf=cpf, senha=senha)
         return jsonify(dados)
 
     except Exception as e:
