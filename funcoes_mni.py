@@ -18,6 +18,9 @@ from configparser import ConfigParser
 from datetime import datetime
 from zeep.exceptions import Fault
 from datetime import date
+from lxml import etree  # Para parsear o XML bruto
+from email import message_from_bytes  # Para parsear multipart/MTOM
+from email.policy import default as default_policy  # Política para parsing
 
 # Configure logging
 logging.basicConfig(
@@ -25,6 +28,19 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Namespaces definidos no WSDL e no exemplo de requisição
+NSMAP_REQ = {
+    'soapenv': 'http://schemas.xmlsoap.org/soap/envelope/',
+    'ser': 'http://www.cnj.jus.br/servico-intercomunicacao-2.2.2/',
+    'tip': 'http://www.cnj.jus.br/tipos-servico-intercomunicacao-2.2.2'
+}
+# Namespaces esperados na resposta
+NSMAP_RESP = {
+    'ns2': 'http://www.cnj.jus.br/intercomunicacao-2.2.2',
+    'ns4': 'http://www.cnj.jus.br/servico-intercomunicacao-2.2.2/'
+    # O namespace default não precisa ser mapeado explicitamente para este XPath
+}
 
 def debug_estrutura_documento(doc, nivel=0, prefixo=''):
     """
@@ -364,6 +380,150 @@ def consultar_classe_processual(classe_processual, codigoLocalidade):
     except Exception as e:
         logger.error(f"Erro ao consultar classe processual: {str(e)}")
         return "Erro na consulta"
+
+def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
+    """
+    Faz a chamada SOAP usando requests com envelope manual e parseia
+    o XML bruto da resposta com lxml para extrair TODOS os IDs de documentos.
+
+    Args:
+        num_processo (str): Número do processo a ser consultado
+        cpf (str, optional): CPF/CNPJ do consultante. Se não fornecido, usa o padrão do ambiente
+        senha (str, optional): Senha do consultante. Se não fornecida, usa o padrão do ambiente
+
+    Returns:
+        list: Lista de todos os IDs de documentos encontrados ou None em caso de erro
+    """
+    url = MNI_URL
+    all_document_ids = set()
+    cpf_consultante = cpf or MNI_ID_CONSULTANTE
+    senha_consultante = senha or MNI_SENHA_CONSULTANTE
+
+    if not cpf_consultante or not senha_consultante:
+        logger.error("Credenciais MNI não fornecidas para extrair_ids_requests_lxml")
+        return None
+
+    # Construção do envelope SOAP manual baseado no exemplo fornecido
+    soap_envelope = f"""<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://www.cnj.jus.br/servico-intercomunicacao-2.2.2/" xmlns:tip="http://www.cnj.jus.br/tipos-servico-intercomunicacao-2.2.2">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <ser:consultarProcesso>
+         <tip:idConsultante>{cpf_consultante}</tip:idConsultante>
+         <tip:senhaConsultante>{senha_consultante}</tip:senhaConsultante>
+         <tip:numeroProcesso>{num_processo}</tip:numeroProcesso>
+         <tip:movimentos>false</tip:movimentos>
+         <tip:incluirCabecalho>false</tip:incluirCabecalho>
+         <tip:incluirDocumentos>true</tip:incluirDocumentos>
+      </ser:consultarProcesso>
+   </soapenv:Body>
+</soapenv:Envelope>
+"""
+    # SOAPAction obtida do WSDL
+    soap_action = "http://www.cnj.jus.br/servico-intercomunicacao-2.2.2/consultarProcesso"
+    headers = {'Content-Type': 'text/xml; charset=utf-8',
+               'SOAPAction': soap_action}
+
+    try:
+        logger.debug(f"Enviando requisição SOAP manual para {num_processo}...")
+        response = requests.post(url, data=soap_envelope.encode('utf-8'), headers=headers, timeout=120)
+        logger.debug(f"Resposta recebida. Status: {response.status_code}")
+        response.raise_for_status() # Lança exceção para erros 4xx/5xx
+
+        # --- Tratamento de MTOM/XOP ---
+        content_type = response.headers.get('Content-Type', '')
+        xml_to_parse = None
+
+        if 'multipart/related' in content_type:
+            logger.debug("Resposta é multipart/related (provavelmente MTOM/XOP). Parseando partes...")
+            # Usar email.message_from_bytes para parsear a mensagem multipart
+            # Precisamos dos cabeçalhos HTTP completos para o parser funcionar corretamente
+            # Construir bytes dos cabeçalhos + corpo
+            http_message_bytes = b"Content-Type: " + content_type.encode('utf-8') + b"\r\n\r\n" + response.content
+            msg = message_from_bytes(http_message_bytes, policy=default_policy)
+
+            if msg.is_multipart():
+                # Procurar a parte principal do XML (geralmente a primeira ou com Content-Type text/xml)
+                for part in msg.iter_parts():
+                    part_ct = part.get_content_type()
+                    logger.debug(f"  Analisando parte com Content-Type: {part_ct}")
+                    # A parte raiz pode ter Content-Type application/xop+xml ou text/xml
+                    if 'application/xop+xml' in part_ct or 'text/xml' in part_ct:
+                        xml_to_parse = part.get_payload(decode=True) # Obter bytes decodificados
+                        logger.debug("  Encontrada parte XML principal.")
+                        break # Encontramos a parte XML
+                if xml_to_parse is None:
+                     logger.error(f"Não foi possível encontrar a parte XML principal na resposta multipart para {num_processo}")
+                     return None
+            else:
+                # Não deveria acontecer se o Content-Type é multipart, mas por segurança
+                 logger.error(f"Content-Type era multipart, mas a mensagem não foi parseada como tal para {num_processo}")
+                 return None
+        elif 'text/xml' in content_type or 'application/soap+xml' in content_type:
+             logger.debug("Resposta parece ser XML simples.")
+             xml_to_parse = response.content
+        else:
+             logger.error(f"Content-Type inesperado recebido: {content_type} para {num_processo}")
+             logger.debug(f"Conteúdo da resposta (início): {response.content[:500]}") # Logar início do conteúdo
+             return None
+
+        # --- Fim do Tratamento de MTOM/XOP ---
+
+        if xml_to_parse is None:
+             logger.error(f"Falha ao extrair conteúdo XML da resposta para {num_processo}")
+             return None
+
+        # Logar o XML extraído para depuração ANTES de parsear
+        try:
+            xml_string_for_log = xml_to_parse.decode('utf-8', errors='ignore')
+            logger.debug("\n--- INÍCIO XML EXTRAÍDO (para depuração) ---")
+            logger.debug(xml_string_for_log[:2000]) # Imprime os primeiros 2000 caracteres
+            logger.debug("--- FIM XML EXTRAÍDO (para depuração) ---\n")
+        except Exception as log_err:
+            logger.error(f"Erro ao tentar logar XML extraído: {log_err}")
+
+        logger.debug("Parseando XML extraído com lxml...")
+        root = etree.fromstring(xml_to_parse) # Parseia os bytes diretamente
+
+        # Verificar sucesso
+        sucesso_element = root.xpath('//ns2:consultarProcessoResposta/ns2:sucesso/text()', namespaces=NSMAP_RESP)
+        if not sucesso_element or sucesso_element[0].lower() != 'true':
+            mensagem_element = root.xpath('//ns2:consultarProcessoResposta/ns2:mensagem/text()', namespaces=NSMAP_RESP)
+            mensagem = mensagem_element[0] if mensagem_element else "Falha (mensagem não encontrada no XML)."
+            logger.error(f"Consulta MNI (requests+lxml) para {num_processo} indicou falha: {mensagem}")
+            # Continuar mesmo assim para tentar extrair IDs se a estrutura parcial existir
+
+        # XPath para começar com ns4:consultarProcessoResposta
+        # e buscar descendentes ns2:documento ou ns2:documentoVinculado com @idDocumento
+        document_ids_xpath = root.xpath(
+             '//ns4:consultarProcessoResposta/descendant::ns2:documento/@idDocumento | //ns4:consultarProcessoResposta/descendant::ns2:documentoVinculado/@idDocumento',
+             namespaces=NSMAP_RESP
+        )
+
+        logger.debug(f"Encontrados {len(document_ids_xpath)} atributos @idDocumento no XML bruto com XPath.")
+        all_document_ids.update(document_ids_xpath) # Adiciona todos os IDs encontrados ao set
+
+        logger.debug(f"Total de IDs únicos extraídos do XML bruto via lxml: {len(all_document_ids)}")
+        if not all_document_ids:
+             logger.warning(f"Nenhum ID de documento extraído do XML bruto para o processo {num_processo}")
+             return []
+
+        return sorted(list(all_document_ids))
+
+    except requests.exceptions.Timeout:
+         logger.error(f"Timeout (requests+lxml) ao consultar {num_processo}")
+         return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Erro de requisição (requests+lxml) para {num_processo}: {e}")
+        # Se for erro 500, logar o conteúdo da resposta se houver
+        if hasattr(e, 'response') and e.response is not None:
+             logger.debug(f"Conteúdo da resposta de erro: {e.response.text}")
+        return None
+    except etree.XMLSyntaxError as e:
+        logger.error(f"Erro ao parsear XML bruto (requests+lxml) para {num_processo}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Erro inesperado (requests+lxml) ao extrair IDs de {num_processo}: {e}")
+        return None
         
 def retorna_peticao_inicial_e_anexos(num_processo, cpf=None, senha=None):
     """

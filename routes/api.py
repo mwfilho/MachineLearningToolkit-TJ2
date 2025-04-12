@@ -135,6 +135,9 @@ def get_document_ids(num_processo):
     """
     Retorna uma lista única com todos os IDs de documentos do processo, incluindo vinculados,
     na ordem em que aparecem no processo.
+    
+    Utiliza uma abordagem robusta que garante a extração de todos os documentos, mesmo
+    aqueles que podem ser perdidos pela biblioteca SOAP quando há múltiplos documentos vinculados.
     """
     try:
         logger.debug(f"API: Consultando lista de IDs de documentos do processo {num_processo}")
@@ -146,11 +149,12 @@ def get_document_ids(num_processo):
                 'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
 
-        # Obtém o processo completo com documentos
+        # Obtém o processo completo com documentos usando a abordagem tradicional primeiro
         resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
 
-        # Extrai apenas os IDs dos documentos em ordem
-        dados = extract_all_document_ids(resposta)
+        # Extrai os IDs dos documentos usando a nova abordagem robusta
+        # Passa o número do processo e credenciais para permitir nova consulta se necessário
+        dados = extract_all_document_ids(resposta, num_processo=num_processo, cpf=cpf, senha=senha)
         return jsonify(dados)
 
     except Exception as e:

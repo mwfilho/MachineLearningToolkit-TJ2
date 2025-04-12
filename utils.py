@@ -92,43 +92,118 @@ def extract_mni_data(resposta):
         logger.error(f"Erro ao extrair dados MNI: {str(e)}")
         return {'sucesso': False, 'mensagem': f'Erro ao processar dados: {str(e)}'}
         
-def extract_all_document_ids(resposta):
-    """Extrai uma lista única com todos os IDs de documentos do processo, incluindo vinculados"""
-    try:
-        logger.debug(f"Extraindo lista de IDs de documentos. Tipo de resposta: {type(resposta)}")
+def extract_all_document_ids(resposta, num_processo=None, cpf=None, senha=None):
+    """
+    Extrai uma lista única com todos os IDs de documentos do processo, incluindo vinculados.
+    
+    Usa a abordagem baseada em XML e lxml para garantir a extração completa de todos os documentos,
+    inclusive os primeiros documentos vinculados que podem ser omitidos pelo zeep.
+    
+    Args:
+        resposta: Resposta do MNI (resultado do retorna_processo)
+        num_processo: Número do processo (opcional, usado quando precisamos fazer nova consulta)
+        cpf: CPF/CNPJ do consultante (opcional)
+        senha: Senha do consultante (opcional)
         
+    Returns:
+        dict: Dicionário com a lista de documentos extraídos
+    """
+    from funcoes_mni import extrair_ids_requests_lxml
+    
+    try:
+        logger.debug(f"Extraindo lista de IDs de documentos usando a abordagem XML/lxml")
         documentos_ids = []
         
-        if not hasattr(resposta, 'processo') or not hasattr(resposta.processo, 'documento'):
-            logger.warning("Processo não possui documentos")
-            return {'sucesso': False, 'mensagem': 'Processo não possui documentos', 'documentos': []}
+        # Obtém o número do processo a partir da resposta, se não foi fornecido como parâmetro
+        if not num_processo and hasattr(resposta, 'processo') and hasattr(resposta.processo, 'numero'):
+            num_processo = resposta.processo.numero
         
-        # Função recursiva para extrair IDs dos documentos e seus vinculados
-        def extract_ids_recursivo(doc):
-            # Extrair informações básicas do documento atual
-            doc_info = {
-                'idDocumento': getattr(doc, 'idDocumento', ''),
-                'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
-                'descricao': getattr(doc, 'descricao', ''),
-                'mimetype': getattr(doc, 'mimetype', ''),
-            }
+        # Abordagem 1: Tenta extrair direto da resposta zeep primeiro (mais rápido se já temos os dados)
+        if hasattr(resposta, 'processo') and hasattr(resposta.processo, 'documento'):
+            logger.debug("Tentando extrair documentos da resposta zeep primeiro")
             
-            # Adicionar documento à lista
-            documentos_ids.append(doc_info)
-            
-            # Processar documentos vinculados se existirem
-            if hasattr(doc, 'documentoVinculado'):
-                docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
+            # Função recursiva para extrair IDs dos documentos e seus vinculados
+            def extract_ids_recursivo(doc):
+                # Extrair informações básicas do documento atual
+                doc_info = {
+                    'idDocumento': getattr(doc, 'idDocumento', ''),
+                    'tipoDocumento': getattr(doc, 'tipoDocumento', ''),
+                    'descricao': getattr(doc, 'descricao', ''),
+                    'mimetype': getattr(doc, 'mimetype', ''),
+                }
                 
-                for doc_vinc in docs_vinc:
-                    extract_ids_recursivo(doc_vinc)
+                # Adicionar documento à lista
+                documentos_ids.append(doc_info)
+                
+                # Processar documentos vinculados se existirem
+                if hasattr(doc, 'documentoVinculado'):
+                    docs_vinc = doc.documentoVinculado if isinstance(doc.documentoVinculado, list) else [doc.documentoVinculado]
+                    
+                    for doc_vinc in docs_vinc:
+                        extract_ids_recursivo(doc_vinc)
+            
+            # Processar todos os documentos do processo
+            docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
+            for doc in docs:
+                extract_ids_recursivo(doc)
+            
+            logger.debug(f"Total de IDs de documentos extraídos da resposta zeep: {len(documentos_ids)}")
         
-        # Processar todos os documentos do processo
-        docs = resposta.processo.documento if isinstance(resposta.processo.documento, list) else [resposta.processo.documento]
-        for doc in docs:
-            extract_ids_recursivo(doc)
+        # Abordagem 2: Usar a função extrair_ids_requests_lxml para garantir extração completa
+        # Só faz nova chamada se temos o número do processo e se:
+        # 1) Não conseguimos extrair documentos da resposta zeep, ou
+        # 2) Queremos garantir que temos TODOS os IDs, mesmo que a resposta zeep contenha alguns
+        if num_processo and (not documentos_ids or True):  # Por segurança, sempre usamos a abordagem XML
+            logger.debug(f"Usando abordagem XML/lxml para extração completa de IDs de documentos para {num_processo}")
+            
+            # Fazer nova chamada direto com requests+lxml para garantir todos os IDs
+            xml_ids = extrair_ids_requests_lxml(num_processo, cpf=cpf, senha=senha)
+            
+            if xml_ids:
+                logger.debug(f"Abordagem XML/lxml retornou {len(xml_ids)} IDs de documentos")
+                
+                # Verificar se a abordagem XML retornou mais documentos
+                ids_zeep = set(d['idDocumento'] for d in documentos_ids)
+                ids_xml = set(xml_ids)
+                
+                # Se temos documentos de zeep e XML, verificar diferenças
+                if documentos_ids and ids_zeep != ids_xml:
+                    documents_only_in_xml = ids_xml - ids_zeep
+                    if documents_only_in_xml:
+                        logger.warning(f"Encontrados {len(documents_only_in_xml)} documentos apenas na abordagem XML: {sorted(documents_only_in_xml)}")
+                
+                # Construir lista final a partir dos IDs do XML
+                # Mantém os metadados dos documentos que já temos e adiciona os que faltam
+                final_documents = []
+                
+                # Mapeia os documentos que já temos por ID para fácil acesso
+                docs_map = {d['idDocumento']: d for d in documentos_ids}
+                
+                # Para cada ID do XML, pega os metadados se disponíveis ou cria um novo
+                for id_doc in xml_ids:
+                    if id_doc in docs_map:
+                        final_documents.append(docs_map[id_doc])
+                    else:
+                        final_documents.append({
+                            'idDocumento': id_doc,
+                            'tipoDocumento': '',  # Não temos os metadados para este documento
+                            'descricao': '',
+                            'mimetype': '',
+                        })
+                
+                # Substitui a lista de documentos pela final
+                documentos_ids = final_documents
         
-        logger.debug(f"Total de IDs de documentos extraídos: {len(documentos_ids)}")
+        # Se não conseguimos extrair documentos de nenhuma maneira
+        if not documentos_ids:
+            logger.warning("Não foi possível extrair documentos de nenhuma fonte")
+            return {
+                'sucesso': False,
+                'mensagem': 'Não foi possível extrair a lista de documentos',
+                'documentos': []
+            }
+        
+        logger.debug(f"Total final de IDs de documentos extraídos: {len(documentos_ids)}")
         return {
             'sucesso': True, 
             'mensagem': 'Lista de documentos extraída com sucesso',
