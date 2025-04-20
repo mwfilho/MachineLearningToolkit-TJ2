@@ -567,8 +567,11 @@ def consultar_classe_processual(classe_processual, codigoLocalidade):
 def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
     """
     Faz a chamada SOAP usando requests com envelope manual e parseia
-    o XML bruto da resposta com lxml para extrair TODOS os IDs de documentos.
-    Usando o formato original que funcionava perfeitamente.
+    o XML bruto da resposta com lxml para extrair TODOS os metadados de documentos,
+    incluindo IDs, mimetypes, descrições e tipos de documento.
+    
+    Usando o formato original que funcionava perfeitamente, mas expandido para capturar
+    mais metadados além dos IDs.
 
     Args:
         num_processo (str): Número do processo a ser consultado
@@ -576,14 +579,14 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
         senha (str, optional): Senha do consultante. Se não fornecida, usa o padrão do ambiente
 
     Returns:
-        list: Lista de todos os IDs de documentos encontrados ou None em caso de erro
+        list: Lista de dicionários com metadados dos documentos ou None em caso de erro
     """
     # Extrai apenas o URL base sem o ?wsdl
     url_parts = MNI_URL.split('?')
     url_base = url_parts[0]
     logger.debug(f"Usando URL base para request: {url_base}")
     
-    all_document_ids = []  # Lista para preservar a ordem exata
+    all_documents = []  # Lista para armazenar dicionários com metadados
     cpf_consultante = cpf or MNI_ID_CONSULTANTE
     senha_consultante = senha or MNI_SENHA_CONSULTANTE
 
@@ -681,30 +684,76 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
             mensagem_element = root.xpath('//ns2:consultarProcessoResposta/ns2:mensagem/text()', namespaces=NSMAP_RESP)
             mensagem = mensagem_element[0] if mensagem_element else "Falha (mensagem não encontrada no XML)."
             logger.error(f"Consulta MNI (requests+lxml) para {num_processo} indicou falha: {mensagem}")
-            # Continuar mesmo assim para tentar extrair IDs se a estrutura parcial existir
+            # Continuar mesmo assim para tentar extrair documentos se a estrutura parcial existir
 
-        # XPath para começar com ns4:consultarProcessoResposta
-        # e buscar descendentes ns2:documento ou ns2:documentoVinculado com @idDocumento
-        document_ids_xpath = root.xpath(
-             '//ns4:consultarProcessoResposta/descendant::ns2:documento/@idDocumento | //ns4:consultarProcessoResposta/descendant::ns2:documentoVinculado/@idDocumento',
-             namespaces=NSMAP_RESP
+        # Obter todos os elementos de documento e documentos vinculados
+        documento_elements = root.xpath(
+            '//ns4:consultarProcessoResposta/descendant::ns2:documento',
+            namespaces=NSMAP_RESP
         )
-
-        logger.debug(f"Encontrados {len(document_ids_xpath)} atributos @idDocumento no XML bruto com XPath.")
+        doc_vinculado_elements = root.xpath(
+            '//ns4:consultarProcessoResposta/descendant::ns2:documentoVinculado',
+            namespaces=NSMAP_RESP
+        )
         
-        # Adicionar IDs em ordem (sem usar set para preservar a ordem exata)
-        # Convertendo NodeSet para lista de strings
-        for doc_id in document_ids_xpath:
-            if doc_id not in all_document_ids:
-                all_document_ids.append(doc_id)
+        logger.debug(f"Encontrados {len(documento_elements)} elementos documento e {len(doc_vinculado_elements)} elementos documentoVinculado")
+        
+        # Conjunto para controle de IDs já processados
+        processed_ids = set()
+        
+        # Função auxiliar para extrair metadados de um elemento de documento
+        def extract_document_metadata(element):
+            doc_id = element.get('idDocumento', '')
+            
+            # Evita duplicação de documentos com mesmo ID
+            if doc_id in processed_ids:
+                return None
+                
+            processed_ids.add(doc_id)
+            
+            # Extrair os metadados usando XPath relativo ao elemento atual
+            mimetype = ''
+            mimetype_element = element.xpath('./ns2:mimetype/text()', namespaces=NSMAP_RESP)
+            if mimetype_element:
+                mimetype = mimetype_element[0]
+                
+            descricao = f"Documento {doc_id}"
+            descricao_element = element.xpath('./ns2:descricao/text()', namespaces=NSMAP_RESP)
+            if descricao_element:
+                descricao = descricao_element[0]
+                
+            tipo_documento = ''
+            tipo_elemento = element.xpath('./ns2:tipoDocumento/text()', namespaces=NSMAP_RESP)
+            if tipo_elemento:
+                tipo_documento = tipo_elemento[0]
+                
+            return {
+                'idDocumento': doc_id,
+                'tipoDocumento': tipo_documento,
+                'descricao': descricao,
+                'mimetype': mimetype
+            }
+        
+        # Processar documentos principais
+        for element in documento_elements:
+            metadata = extract_document_metadata(element)
+            if metadata:
+                all_documents.append(metadata)
+                
+        # Processar documentos vinculados
+        for element in doc_vinculado_elements:
+            metadata = extract_document_metadata(element)
+            if metadata:
+                all_documents.append(metadata)
 
-        logger.debug(f"Total de IDs extraídos do XML bruto via lxml: {len(all_document_ids)}")
-        if not all_document_ids:
-             logger.warning(f"Nenhum ID de documento extraído do XML bruto para o processo {num_processo}")
+        logger.debug(f"Total de documentos extraídos do XML bruto via lxml: {len(all_documents)}")
+        
+        if not all_documents:
+             logger.warning(f"Nenhum documento extraído do XML bruto para o processo {num_processo}")
              return []
 
-        # Não precisamos ordenar, pois queremos manter a ordem original exata
-        return all_document_ids
+        # Retornar a lista de dicionários com os metadados
+        return all_documents
 
     except requests.exceptions.Timeout:
          logger.error(f"Timeout (requests+lxml) ao consultar {num_processo}")
