@@ -751,6 +751,65 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
         if not all_documents:
              logger.warning(f"Nenhum documento extraído do XML bruto para o processo {num_processo}")
              return []
+             
+        # Para documentos que não possuem mimetype ou tipoDocumento,
+        # tentar obter informações adicionais por consulta direta
+        incomplete_docs = [doc for doc in all_documents 
+                          if not doc['mimetype'] or not doc['tipoDocumento']]
+                          
+        if incomplete_docs and len(incomplete_docs) <= 3:  # Limitar para evitar muitas chamadas
+            logger.debug(f"Tentando obter metadados adicionais para {len(incomplete_docs)} documentos incompletos")
+            
+            client = Client(url)
+            
+            for doc in incomplete_docs:
+                doc_id = doc['idDocumento']
+                logger.debug(f"Consultando metadados adicionais para documento {doc_id}")
+                
+                try:
+                    # Definir formato da requisição para busca direta
+                    request_data_direct = {
+                        'idConsultante': cpf_consultante,
+                        'senhaConsultante': senha_consultante,
+                        'numeroProcesso': num_processo,
+                        'documento': doc_id.strip(),  # Garante que o ID não tenha espaços
+                        'incluirDocumentos': True
+                    }
+                    
+                    response_direct = client.service.consultarProcesso(**request_data_direct)
+                    
+                    if response_direct and getattr(response_direct, 'sucesso', False):
+                        data_dict_direct = serialize_object(response_direct)
+                        resp_direct = EasyDict(data_dict_direct)
+                        
+                        if hasattr(resp_direct, 'processo') and hasattr(resp_direct.processo, 'documento'):
+                            d = resp_direct.processo.documento
+                            direct_docs = d if isinstance(d, list) else [d]
+                            
+                            for direct_doc in direct_docs:
+                                direct_id = str(getattr(direct_doc, 'idDocumento', '')).strip()
+                                if direct_id == doc_id:
+                                    logger.debug(f"Encontrado metadados adicionais para documento {doc_id}")
+                                    
+                                    # Atualizar campos se disponíveis
+                                    mimetype = getattr(direct_doc, 'mimetype', '')
+                                    tipo_doc = getattr(direct_doc, 'tipoDocumento', '')
+                                    descricao = getattr(direct_doc, 'descricao', '')
+                                    
+                                    if mimetype and not doc['mimetype']:
+                                        doc['mimetype'] = mimetype
+                                        logger.debug(f"Atualizado mimetype de {doc_id}: {mimetype}")
+                                        
+                                    if tipo_doc and not doc['tipoDocumento']:
+                                        doc['tipoDocumento'] = tipo_doc
+                                        logger.debug(f"Atualizado tipoDocumento de {doc_id}: {tipo_doc}")
+                                        
+                                    if descricao and doc['descricao'] == f"Documento {doc_id}":
+                                        doc['descricao'] = descricao
+                                        logger.debug(f"Atualizada descrição de {doc_id}: {descricao}")
+                except Exception as e:
+                    logger.error(f"Erro ao consultar metadados adicionais para documento {doc_id}: {e}")
+                    continue
 
         # Retornar a lista de dicionários com os metadados
         return all_documents
