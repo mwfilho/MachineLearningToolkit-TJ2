@@ -154,17 +154,17 @@ def extract_all_document_ids(resposta, num_processo=None, cpf=None, senha=None):
         # 1) Não conseguimos extrair documentos da resposta zeep, ou
         # 2) Queremos garantir que temos TODOS os IDs, mesmo que a resposta zeep contenha alguns
         if num_processo and (not documentos_ids or True):  # Por segurança, sempre usamos a abordagem XML
-            logger.debug(f"Usando abordagem XML/lxml para extração completa de documentos para {num_processo}")
+            logger.debug(f"Usando abordagem XML/lxml para extração completa de IDs de documentos para {num_processo}")
             
-            # Fazer nova chamada direto com requests+lxml para garantir todos os metadados
-            xml_documents = extrair_ids_requests_lxml(num_processo, cpf=cpf, senha=senha)
+            # Fazer nova chamada direto com requests+lxml para garantir todos os IDs
+            xml_ids = extrair_ids_requests_lxml(num_processo, cpf=cpf, senha=senha)
             
-            if xml_documents:
-                logger.debug(f"Abordagem XML/lxml retornou {len(xml_documents)} documentos com metadados completos")
+            if xml_ids:
+                logger.debug(f"Abordagem XML/lxml retornou {len(xml_ids)} IDs de documentos")
                 
                 # Verificar se a abordagem XML retornou mais documentos
                 ids_zeep = set(d['idDocumento'] for d in documentos_ids)
-                ids_xml = set(d['idDocumento'] for d in xml_documents)
+                ids_xml = set(xml_ids)
                 
                 # Se temos documentos de zeep e XML, verificar diferenças
                 if documentos_ids and ids_zeep != ids_xml:
@@ -172,42 +172,30 @@ def extract_all_document_ids(resposta, num_processo=None, cpf=None, senha=None):
                     if documents_only_in_xml:
                         logger.warning(f"Encontrados {len(documents_only_in_xml)} documentos apenas na abordagem XML: {sorted(documents_only_in_xml)}")
                 
-                # Construir lista final a partir dos documentos do XML
-                # Mantém os metadados dos documentos que já temos, mas prefere os do XML se estiver disponível
+                # Construir lista final a partir dos IDs do XML
+                # Mantém os metadados dos documentos que já temos e adiciona os que faltam
                 final_documents = []
                 
                 # Mapeia os documentos que já temos por ID para fácil acesso
                 docs_map = {d['idDocumento']: d for d in documentos_ids}
-                xml_docs_map = {d['idDocumento']: d for d in xml_documents}
                 
-                # Para cada documento no XML, mantém a ordem exata e usa seus metadados
-                # Se já tivermos mais informações da abordagem Zeep, mescla os dados
-                for doc in xml_documents:
-                    id_doc = doc['idDocumento']
+                # Para cada ID do XML, pega os metadados se disponíveis ou cria um novo
+                # IMPORTANTE: Manter a ORDEM EXATA dos documentos como aparece no XML
+                for id_doc in xml_ids:
                     if id_doc in docs_map:
-                        # Mesclar dados, preferindo os da abordagem XML se disponíveis
-                        merged_doc = docs_map[id_doc].copy()
-                        
-                        # Se os dados do XML tiverem valores, usá-los em vez dos valores vazios do Zeep
-                        if doc['mimetype'] and not merged_doc['mimetype']:
-                            merged_doc['mimetype'] = doc['mimetype']
-                        
-                        if doc['descricao'] and merged_doc['descricao'] == f'Documento {id_doc}':
-                            merged_doc['descricao'] = doc['descricao']
-                            
-                        if doc['tipoDocumento'] and not merged_doc['tipoDocumento']:
-                            merged_doc['tipoDocumento'] = doc['tipoDocumento']
-                            
-                        final_documents.append(merged_doc)
+                        final_documents.append(docs_map[id_doc])
                     else:
-                        # Usar diretamente os dados da abordagem XML
-                        final_documents.append(doc)
+                        final_documents.append({
+                            'idDocumento': id_doc,
+                            'tipoDocumento': '',  # Não temos os metadados para este documento
+                            'descricao': f'Documento {id_doc}',
+                            'mimetype': '',
+                        })
                 
                 # Substitui a lista de documentos pela final, preservando a ordem do XML
                 documentos_ids = final_documents
                 
-                # Log adicional para verificar os metadados finais
-                logger.debug(f"Exemplo de metadados do primeiro documento: {documentos_ids[0] if documentos_ids else 'Nenhum documento'}")
+                # Log adicional para verificar a ordem final
                 logger.debug(f"Ordem final dos IDs: {[d['idDocumento'] for d in documentos_ids]}")
         
         # Se não conseguimos extrair documentos de nenhuma maneira
