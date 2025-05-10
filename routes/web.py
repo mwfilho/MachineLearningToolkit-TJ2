@@ -19,7 +19,15 @@ def debug_required(f):
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
             logger.warning(f"Tentativa de acesso não autorizado à rota: {request.path}")
+            flash('Por favor, faça login para acessar esta página.', 'warning')
             return redirect(url_for('auth.login', next=request.url))
+        
+        # Verificar se o usuário é administrador
+        if not current_user.is_admin:
+            logger.warning(f"Usuário sem permissão de admin tentou acessar: {request.path}, user: {current_user.username}")
+            flash('Você não tem permissão para acessar esta página.', 'danger')
+            return redirect(url_for('web.index'))
+            
         return f(*args, **kwargs)
     return decorated_function
 
