@@ -67,6 +67,19 @@ Para gerenciar suas API keys, é necessário estar autenticado no sistema:
 2. Acesse o gerenciador de API keys em `/auth/api-keys`
 3. Use as opções para criar novas chaves ou revogar chaves existentes
 
+**Importante**: Por padrão, novos usuários não têm permissão para criar API keys. Esta permissão deve ser concedida por um administrador através do Painel de Administração.
+
+#### Sistema de Permissões
+
+O sistema implementa um controle de permissões em camadas:
+
+- **Usuários regulares:** Não possuem permissão para criar API keys por padrão
+- **Usuários com permissão:** Podem criar e gerenciar suas próprias API keys
+- **Administradores:** Têm acesso ao Painel de Administração onde podem:
+  - Conceder ou remover permissões para criação de API keys
+  - Promover usuários a administradores
+  - Visualizar e gerenciar todas as API keys do sistema
+
 As API keys só são exibidas uma vez no momento da criação. Armazene-as em um local seguro.
 
 ## Recursos Avançados
@@ -145,5 +158,14 @@ O sistema está funcionando perfeitamente e pronto para uso em produção.
 | `/auth/login` | GET/POST | Login de usuários |
 | `/auth/logout` | GET | Logout de usuários |
 | `/auth/api-keys` | GET | Lista todas as API keys do usuário atual |
-| `/auth/api-keys/create` | POST | Cria uma nova API key |
+| `/auth/api-keys/create` | POST | Cria uma nova API key (requer permissão) |
 | `/auth/api-keys/<key_id>/revoke` | POST | Revoga (desativa) uma API key |
+
+### Endpoints de Administração
+
+| Rota | Método | Descrição |
+|------|--------|-----------|
+| `/auth/admin` | GET | Painel de administração (acesso restrito) |
+| `/auth/admin/user/<user_id>/toggle-api-permission` | POST | Concede/remove permissão para criar API keys |
+| `/auth/admin/user/<user_id>/toggle-admin` | POST | Promove/rebaixa usuário para/de administrador |
+| `/auth/admin/api-key/<key_id>/revoke` | POST | Revoga (desativa) uma API key por um administrador |

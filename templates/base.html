@@ -24,6 +24,11 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('auth.list_api_keys') }}">Minhas API Keys</a>
                     </li>
+                    {% if current_user.is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.admin_panel') }}">Painel Admin</a>
+                    </li>
+                    {% endif %}
                     {% endif %}
                 </ul>
                 <ul class="navbar-nav">
