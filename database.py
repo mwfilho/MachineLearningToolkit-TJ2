@@ -1,0 +1,14 @@
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import DeclarativeBase
+
+class Base(DeclarativeBase):
+    pass
+
+db = SQLAlchemy(model_class=Base)
+
+def init_app(app):
+    db.init_app(app)
+    with app.app_context():
+        # Importação tardia para evitar loops circulares
+        import models
+        db.create_all()

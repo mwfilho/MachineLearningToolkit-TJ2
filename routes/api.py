@@ -1,6 +1,9 @@
-from flask import Blueprint, jsonify, send_file, request
+from flask import Blueprint, jsonify, send_file, request, g, current_app, abort
 import os
 import logging
+from functools import wraps
+from models import ApiKey, User
+from flask_login import current_user
 from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
 from utils import extract_mni_data, extract_capa_processo, extract_all_document_ids
 import core
@@ -17,6 +20,36 @@ def get_mni_credentials():
     cpf = request.headers.get('X-MNI-CPF') or os.environ.get('MNI_ID_CONSULTANTE')
     senha = request.headers.get('X-MNI-SENHA') or os.environ.get('MNI_SENHA_CONSULTANTE')
     return cpf, senha
+
+def require_api_key(f):
+    """Decorator para exigir API key válida"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Verificar a API key
+        api_key = request.headers.get('X-API-KEY') or request.args.get('api_key')
+        
+        if not api_key:
+            return jsonify({
+                'erro': 'API key não fornecida',
+                'mensagem': 'Forneça uma API key válida no header X-API-KEY ou no parâmetro api_key'
+            }), 401
+        
+        key_entry = ApiKey.query.filter_by(key=api_key, is_active=True).first()
+        
+        if not key_entry:
+            return jsonify({
+                'erro': 'API key inválida',
+                'mensagem': 'A API key fornecida não é válida ou está inativa'
+            }), 401
+        
+        # Atualizar o último uso
+        key_entry.use()
+        
+        # Armazenar o usuário da API key para uso posterior
+        g.api_user = key_entry.user
+        
+        return f(*args, **kwargs)
+    return decorated_function
 
 @api.before_request
 def log_request_info():
