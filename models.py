@@ -8,6 +8,11 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256))
     is_admin = db.Column(db.Boolean, default=False)
     
+    def __init__(self, **kwargs):
+        # Permitir criar usuário com argumentos nomeados
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+    
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
         

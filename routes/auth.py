@@ -9,7 +9,7 @@ auth = Blueprint('auth', __name__)
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+        return redirect(url_for('web.index'))
 
     if request.method == 'POST':
         username = request.form['username']
@@ -23,7 +23,7 @@ def login():
         login_user(user)
         next_page = request.args.get('next')
         if not next_page or next_page.startswith('//'):
-            next_page = url_for('index')
+            next_page = url_for('web.index')
         return redirect(next_page)
 
     return render_template('auth/login.html')
@@ -31,7 +31,7 @@ def login():
 @auth.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+        return redirect(url_for('web.index'))
 
     if request.method == 'POST':
         username = request.form['username']
