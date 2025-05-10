@@ -22,6 +22,7 @@ def debug():
     return render_template('debug.html')
 
 @web.route('/debug/consulta', methods=['POST'])
+@login_required
 def debug_consulta():
     num_processo = request.form.get('num_processo')
     cpf = request.form.get('cpf')
@@ -143,6 +144,7 @@ def debug_consulta():
         return render_template('debug.html')
 
 @web.route('/debug/documento', methods=['POST'])
+@login_required
 def debug_documento():
     num_processo = request.form.get('num_processo')
     id_documento = request.form.get('id_documento')
@@ -173,6 +175,7 @@ def debug_documento():
         return render_template('debug.html')
 
 @web.route('/debug/peticao-inicial', methods=['POST'])
+@login_required
 def debug_peticao_inicial():
     num_processo = request.form.get('num_processo')
     cpf = request.form.get('cpf')
@@ -203,6 +206,7 @@ def debug_peticao_inicial():
         return render_template('debug.html')
 
 @web.route('/download_documento/<num_processo>/<num_documento>')
+@login_required
 def download_documento(num_processo, num_documento):
     try:
         logger.debug(f"Attempting to download document {num_documento} from process {num_processo}")
@@ -232,6 +236,7 @@ def download_documento(num_processo, num_documento):
         return render_template('index.html')
 
 @web.route('/debug/documentos-ids', methods=['POST'])
+@login_required
 def debug_document_ids():
     num_processo = request.form.get('num_processo')
     cpf = request.form.get('cpf')
@@ -265,6 +270,7 @@ def debug_document_ids():
         return render_template('debug.html')
 
 @web.route('/debug/capa', methods=['POST'])
+@login_required
 def debug_capa_processo():
     num_processo = request.form.get('num_processo')
     cpf = request.form.get('cpf')
