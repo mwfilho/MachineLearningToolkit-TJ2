@@ -32,10 +32,10 @@ database.init_app(app)
 
 # Initialize Flask-Login
 login_manager = LoginManager()
+login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
 login_manager.login_message = 'Por favor, faça login para acessar esta página.'
 login_manager.login_message_category = "warning"
-login_manager.init_app(app)
 
 @login_manager.user_loader
 def load_user(user_id):

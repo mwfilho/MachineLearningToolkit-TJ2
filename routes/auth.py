@@ -8,7 +8,7 @@ auth = Blueprint('auth', __name__)
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+        return redirect(url_for('web.index'))
 
     if request.method == 'POST':
         username = request.form['username']
@@ -30,7 +30,7 @@ def login():
 @auth.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+        return redirect(url_for('web.index'))
 
     if request.method == 'POST':
         username = request.form['username']
