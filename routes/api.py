@@ -59,6 +59,7 @@ def log_request_info():
     logger.debug('URL: %s', request.url)
 
 @api.route('/processo/<num_processo>', methods=['GET'])
+@require_api_key
 def get_processo(num_processo):
     """
     Retorna os dados do processo incluindo lista completa de documentos
@@ -155,6 +156,7 @@ def get_processo(num_processo):
         }), 500
 
 @api.route('/processo/<num_processo>/documento/<num_documento>', methods=['GET'])
+@require_api_key
 def download_documento(num_processo, num_documento):
     """
     Faz download de um documento específico do processo
@@ -200,6 +202,7 @@ def download_documento(num_processo, num_documento):
         }), 500
         
 @api.route('/processo/<num_processo>/peticao-inicial', methods=['GET'])
+@require_api_key
 def get_peticao_inicial(num_processo):
     """
     Retorna a petição inicial e seus anexos para o processo informado
@@ -232,6 +235,7 @@ def get_peticao_inicial(num_processo):
         }), 500
         
 @api.route('/processo/<num_processo>/documentos/ids', methods=['GET'])
+@require_api_key
 def get_document_ids(num_processo):
     """
     Retorna uma lista única com todos os IDs de documentos do processo, incluindo vinculados,
@@ -266,6 +270,7 @@ def get_document_ids(num_processo):
         }), 500
 
 @api.route('/processo/<num_processo>/capa', methods=['GET'])
+@require_api_key
 def get_capa_processo(num_processo):
     """
     Retorna apenas os dados da capa do processo (sem documentos),

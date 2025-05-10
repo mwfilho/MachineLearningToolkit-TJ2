@@ -16,9 +16,12 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
     
-    def generate_api_key(self):
+    def generate_api_key(self, description=None):
         """Gera uma nova API key para o usuário"""
-        new_key = ApiKey(user_id=self.id, key=secrets.token_hex(32))
+        new_key = ApiKey()
+        new_key.user_id = self.id
+        new_key.key = secrets.token_hex(32)
+        new_key.description = description
         db.session.add(new_key)
         db.session.commit()
         return new_key
