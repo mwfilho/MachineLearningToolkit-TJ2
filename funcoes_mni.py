@@ -3,7 +3,7 @@ import os
 import sys
 import time
 import requests
-from zeep import Client
+from zeep import Client, Transport
 from zeep.helpers import serialize_object
 from easydict import EasyDict
 from config import MNI_URL, MNI_SENHA_CONSULTANTE, MNI_CONSULTA_URL, MNI_ID_CONSULTANTE
@@ -21,6 +21,9 @@ from datetime import date
 from lxml import etree  # Para parsear o XML bruto
 from email import message_from_bytes  # Para parsear multipart/MTOM
 from email.policy import default as default_policy  # Política para parsing
+
+# Importações do sistema de proxy
+from proxy_manager import ProxySession, with_proxy_session, clear_proxy_cache, load_proxies_from_file
 
 # Configure logging
 logging.basicConfig(
