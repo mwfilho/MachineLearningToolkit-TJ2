@@ -17,6 +17,8 @@ Este sistema foi desenvolvido para interagir com os serviços web SOAP do MNI, p
 
 ## Endpoints da API
 
+Para uma documentação completa da API, incluindo exemplos de requisições e respostas, consulte o arquivo [API_DOCS.md](API_DOCS.md).
+
 ### Endpoints Web (Interface de Usuário)
 
 | Rota | Método | Descrição |
@@ -42,11 +44,30 @@ Este sistema foi desenvolvido para interagir com os serviços web SOAP do MNI, p
 
 ## Autenticação
 
-A autenticação é realizada utilizando credenciais MNI (CPF/CNPJ e senha) que podem ser fornecidas de três formas:
+### Autenticação MNI
+
+A autenticação com o serviço MNI é realizada utilizando credenciais (CPF/CNPJ e senha) que podem ser fornecidas de três formas:
 
 1. Headers HTTP (`X-MNI-CPF` e `X-MNI-SENHA`)
 2. Variáveis de ambiente (`MNI_ID_CONSULTANTE` e `MNI_SENHA_CONSULTANTE`)
 3. Formulários na interface web
+
+### Autenticação da API (API Key)
+
+Para acessar os endpoints da API REST, é necessário usar uma API key válida. A API key pode ser fornecida de duas formas:
+
+1. Header HTTP: `X-API-KEY: sua_api_key_aqui`
+2. Parâmetro na URL: `?api_key=sua_api_key_aqui`
+
+#### Gerenciamento de API Keys
+
+Para gerenciar suas API keys, é necessário estar autenticado no sistema:
+
+1. Registre-se em `/auth/register` ou faça login em `/auth/login`
+2. Acesse o gerenciador de API keys em `/auth/api-keys`
+3. Use as opções para criar novas chaves ou revogar chaves existentes
+
+As API keys só são exibidas uma vez no momento da criação. Armazene-as em um local seguro.
 
 ## Recursos Avançados
 
@@ -68,6 +89,10 @@ Implementa tratamento especial para mensagens SOAP com formato MTOM/XOP (otimiza
 ## Modelos de Dados
 
 - **User**: Modelo para autenticação e gerenciamento de usuários
+- **ApiKey**: Modelo para armazenamento e gerenciamento de chaves de API
+  - Cada usuário pode ter múltiplas API keys
+  - As chaves contêm metadados como data de criação, último uso e status (ativa/inativa)
+  - Vínculo direto com o usuário proprietário da chave
 
 ## Como o Código Funciona
 
@@ -88,9 +113,15 @@ O sistema implementa um mecanismo de extração em duas etapas:
 ### Considerações de Segurança
 
 - Tratamento de credenciais via variáveis de ambiente
+- Autenticação em camadas (usuário/senha + API key)
 - Validação de inputs
 - Tratamento adequado de erros e exceções
 - Proteção contra falhas de comunicação com o serviço MNI
+- Sistema seguro para gerenciamento de API keys
+  - Hash seguro para senhas de usuários
+  - API keys geradas com alta entropia (32 bytes hexadecimais)
+  - Controle de acesso baseado em propriedade
+  - Possibilidade de revogar chaves comprometidas
 
 ## Histórico de Desenvolvimento
 
@@ -99,5 +130,20 @@ O sistema foi desenvolvido com foco em robustez e confiabilidade para processame
 1. **Extração Completa de Documentos**: Desenvolvimento de um método robusto para garantir a extração de todos os documentos, inclusive os que podem ser perdidos pelo cliente SOAP
 2. **Otimização de Performance**: Implementação de consultas otimizadas para acelerar o processamento
 3. **Interface de Depuração**: Criação de ferramentas para facilitar o diagnóstico e análise de problemas
+4. **Segurança em Camadas**: Implementação de um sistema de autenticação em duas camadas:
+   - Login tradicional com usuário e senha
+   - Autenticação da API baseada em API keys
+5. **Gerenciamento de Acesso**: Implementação de um sistema completo para gerenciamento de API keys, permitindo aos usuários criar, visualizar e revogar suas chaves de API
 
 O sistema está funcionando perfeitamente e pronto para uso em produção.
+
+## Endpoints de Autenticação
+
+| Rota | Método | Descrição |
+|------|--------|-----------|
+| `/auth/register` | GET/POST | Registro de novos usuários |
+| `/auth/login` | GET/POST | Login de usuários |
+| `/auth/logout` | GET | Logout de usuários |
+| `/auth/api-keys` | GET | Lista todas as API keys do usuário atual |
+| `/auth/api-keys/create` | POST | Cria uma nova API key |
+| `/auth/api-keys/<key_id>/revoke` | POST | Revoga (desativa) uma API key |

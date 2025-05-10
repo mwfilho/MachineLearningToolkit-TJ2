@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 offset-md-1">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">Painel de Administração</h3>
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" 
+                                role="tab" aria-controls="users" aria-selected="true">
+                            Gerenciar Usuários
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="api-keys-tab" data-bs-toggle="tab" data-bs-target="#api-keys" 
+                                type="button" role="tab" aria-controls="api-keys" aria-selected="false">
+                            API Keys
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="adminTabContent">
+                    <!-- Tab Gerenciar Usuários -->
+                    <div class="tab-pane fade show active" id="users" role="tabpanel" aria-labelledby="users-tab">
+                        <h4>Usuários do Sistema</h4>
+                        
+                        {% if users %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Usuário</th>
+                                        <th>Admin</th>
+                                        <th>Permissão API Key</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for user in users %}
+                                    <tr>
+                                        <td>{{ user.id }}</td>
+                                        <td>{{ user.username }}</td>
+                                        <td>
+                                            {% if user.is_admin %}
+                                            <span class="badge bg-primary">Sim</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">Não</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if user.can_create_api_keys %}
+                                            <span class="badge bg-success">Permitido</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Bloqueado</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group">
+                                                <form action="{{ url_for('auth.toggle_api_permission', user_id=user.id) }}" method="POST" class="d-inline me-2">
+                                                    <button type="submit" class="btn btn-sm {% if user.can_create_api_keys %}btn-danger{% else %}btn-success{% endif %}">
+                                                        {% if user.can_create_api_keys %}
+                                                        <i class="bi bi-x-circle"></i> Remover Permissão
+                                                        {% else %}
+                                                        <i class="bi bi-check-circle"></i> Conceder Permissão
+                                                        {% endif %}
+                                                    </button>
+                                                </form>
+                                                
+                                                {% if not user.is_admin and current_user.id != user.id %}
+                                                <form action="{{ url_for('auth.toggle_admin', user_id=user.id) }}" method="POST" class="d-inline">
+                                                    <button type="submit" class="btn btn-sm {% if user.is_admin %}btn-warning{% else %}btn-info{% endif %}">
+                                                        {% if user.is_admin %}
+                                                        <i class="bi bi-person"></i> Remover Admin
+                                                        {% else %}
+                                                        <i class="bi bi-person-fill"></i> Tornar Admin
+                                                        {% endif %}
+                                                    </button>
+                                                </form>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i> Nenhum usuário encontrado no sistema.
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Tab API Keys -->
+                    <div class="tab-pane fade" id="api-keys" role="tabpanel" aria-labelledby="api-keys-tab">
+                        <h4>Todas as API Keys</h4>
+                        
+                        {% if all_api_keys %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Usuário</th>
+                                        <th>Descrição</th>
+                                        <th>Criada em</th>
+                                        <th>Último uso</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for key in all_api_keys %}
+                                    <tr>
+                                        <td>{{ key.id }}</td>
+                                        <td>{{ key.user.username }}</td>
+                                        <td>{{ key.description or 'Sem descrição' }}</td>
+                                        <td>{{ key.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                                        <td>{{ key.last_used.strftime('%d/%m/%Y %H:%M') if key.last_used else 'Nunca utilizada' }}</td>
+                                        <td>
+                                            {% if key.is_active %}
+                                            <span class="badge bg-success">Ativa</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Revogada</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if key.is_active %}
+                                            <form action="{{ url_for('auth.admin_revoke_api_key', key_id=key.id) }}" method="POST" class="d-inline">
+                                                <button type="submit" class="btn btn-sm btn-danger"
+                                                       onclick="return confirm('Tem certeza que deseja revogar esta API key?')">
+                                                    <i class="bi bi-trash"></i> Revogar
+                                                </button>
+                                            </form>
+                                            {% else %}
+                                            <button type="button" class="btn btn-sm btn-secondary" disabled>
+                                                <i class="bi bi-slash-circle"></i> Já Revogada
+                                            </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i> Nenhuma API key encontrada no sistema.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
