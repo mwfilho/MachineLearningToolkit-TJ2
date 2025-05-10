@@ -32,9 +32,9 @@ db.init_app(app)
 
 # Initialize Flask-Login
 login_manager = LoginManager()
+login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
 login_manager.login_message = 'Por favor, faça login para acessar esta página.'
-login_manager.init_app(app)
 
 # Import models after initializing db to avoid circular imports
 from models import User
@@ -48,6 +48,7 @@ def load_user(user_id):
 from routes.api import api
 from routes.web import web
 from routes.auth import auth
+from routes.debug_auth import debug_auth
 
 # Register blueprints
 logger.debug("Registrando blueprint web...")
@@ -58,6 +59,9 @@ app.register_blueprint(api)  # API routes com prefixo /api/v1
 
 logger.debug("Registrando blueprint auth...")
 app.register_blueprint(auth)  # Auth routes
+
+logger.debug("Registrando blueprint debug_auth...")
+app.register_blueprint(debug_auth, url_prefix='/debug_auth')  # Debug auth routes
 
 logger.debug("Blueprints registrados com sucesso")
 

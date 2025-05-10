@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 import tempfile
 import os
 import logging
+import functools
 from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
 from utils import extract_mni_data, extract_capa_processo, extract_all_document_ids
 import core
@@ -12,13 +13,25 @@ logger = logging.getLogger(__name__)
 
 web = Blueprint('web', __name__)
 
+# Decorator personalizado para proteção de rotas
+def debug_required(f):
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            logger.warning(f"Tentativa de acesso não autorizado à rota: {request.path}")
+            return redirect(url_for('auth.login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
 @web.route('/')
 def index():
     return render_template('index.html')
 
 @web.route('/debug')
-@login_required
+@debug_required
 def debug():
+    # Se chegou aqui, o usuário está autenticado
+    logger.debug(f"Acesso à tela de debug por: {current_user.username}")
     return render_template('debug.html')
 
 @web.route('/debug/consulta', methods=['POST'])
