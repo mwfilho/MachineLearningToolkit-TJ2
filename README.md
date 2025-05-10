@@ -1,103 +1,340 @@
-# MNI Document Processing System
+# API de Consulta MNI - Sistema de Processamento de Documentos Judiciais
 
-O Sistema de Processamento de Documentos MNI é uma aplicação Flask avançada que aproveita o Modelo Nacional de Interoperabilidade (MNI) para realizar consultas e processamento de documentos judiciais de forma eficiente e robusta.
+Este projeto é uma API para processamento avançado de documentos judiciais que utiliza o Modelo Nacional de Interoperabilidade (MNI) para consulta, análise e extração inteligente de documentos legais.
 
 ## Visão Geral
 
-Este sistema foi desenvolvido para interagir com os serviços web SOAP do MNI, permitindo a consulta, processamento e download de documentos judiciais, oferecendo mecanismos avançados para garantir a extração completa de todos os documentos de um processo.
+A API facilita a consulta e processamento de documentos judiciais através do MNI, com recursos avançados de:
 
-## Tecnologias Utilizadas
+- Consulta de processos judiciais
+- Download de documentos específicos
+- Extração e processamento de petições iniciais e seus anexos
+- Obtenção de lista completa de IDs de documentos
+- Consulta da capa do processo (dados básicos)
 
-- **Flask**: Framework web para o backend
-- **Flask-SQLAlchemy**: ORM para interação com o banco de dados
-- **Zeep**: Cliente SOAP para comunicação com serviços web MNI
-- **lxml**: Processamento avançado de XML
-- **Requests**: Requisições HTTP para chamadas SOAP manuais
-- **Gunicorn**: Servidor WSGI para produção
+## Tecnologias
 
-## Endpoints da API
+- **Backend**: Python com Flask
+- **Interação com serviços SOAP**: Zeep
+- **Processamento de XML**: lxml
+- **Banco de dados**: PostgreSQL (com SQLAlchemy)
+- **Servidor de produção**: Gunicorn
 
-### Endpoints Web (Interface de Usuário)
+## Requisitos
 
-| Rota | Método | Descrição |
-|------|--------|-----------|
-| `/` | GET | Página inicial da aplicação |
-| `/debug` | GET | Interface de depuração para testes |
-| `/debug/consulta` | POST | Consulta detalhada de processos incluindo documentos |
-| `/debug/documento` | POST | Consulta de documentos específicos |
-| `/debug/peticao-inicial` | POST | Consulta de petição inicial e anexos |
-| `/download_documento/<num_processo>/<num_documento>` | GET | Download de documentos |
-| `/debug/documentos-ids` | POST | Consulta de IDs de documentos |
-| `/debug/capa-processo` | POST | Consulta da capa do processo |
+- Python 3.11 ou superior
+- PostgreSQL
+- Credenciais de acesso ao MNI
 
-### Endpoints REST API
+## Instalação Local
 
-| Rota | Método | Descrição |
-|------|--------|-----------|
-| `/api/v1/processo/<num_processo>` | GET | Retorna todos os dados do processo incluindo documentos |
-| `/api/v1/processo/<num_processo>/documento/<num_documento>` | GET | Faz download de um documento específico |
-| `/api/v1/processo/<num_processo>/peticao-inicial` | GET | Retorna a petição inicial e seus anexos |
-| `/api/v1/processo/<num_processo>/documentos/ids` | GET | Retorna lista de IDs de documentos do processo |
-| `/api/v1/processo/<num_processo>/capa` | GET | Retorna apenas os dados da capa do processo |
+### 1. Clone o repositório
 
-## Autenticação
+```bash
+git clone https://github.com/seu-usuario/api-mni.git
+cd api-mni
+```
 
-A autenticação é realizada utilizando credenciais MNI (CPF/CNPJ e senha) que podem ser fornecidas de três formas:
+### 2. Configure o ambiente virtual
 
-1. Headers HTTP (`X-MNI-CPF` e `X-MNI-SENHA`)
-2. Variáveis de ambiente (`MNI_ID_CONSULTANTE` e `MNI_SENHA_CONSULTANTE`)
-3. Formulários na interface web
+```bash
+python -m venv venv
+source venv/bin/activate  # No Windows: venv\Scripts\activate
+```
 
-## Recursos Avançados
+### 3. Instale as dependências
 
-### Extração Robusta de Documentos
+```bash
+pip install -r requirements.txt
+```
 
-O sistema implementa dois métodos complementares para garantir a extração completa de todos os documentos de um processo:
+Se o arquivo `requirements.txt` não existir, você pode criá-lo a partir do `pyproject.toml` usando:
 
-1. **Abordagem Zeep**: Utiliza o cliente SOAP Zeep para extrair documentos e suas relações
-2. **Abordagem XML/lxml**: Processa o XML bruto para garantir a extração de todos os documentos, incluindo aqueles que podem ser perdidos pelo Zeep
+```bash
+pip install -e .
+# ou manualmente instalar as dependências:
+pip install easydict email-validator flask flask-login flask-sqlalchemy gunicorn lxml pandas psycopg2-binary requests sqlalchemy trafilatura werkzeug zeep
+```
 
-### Algoritmo BFS para Relacionamento de Documentos
+### 4. Configure as variáveis de ambiente
 
-Utiliza algoritmo de Busca em Largura (BFS) para rastrear e mapear complexos relacionamentos entre documentos principais e vinculados.
+Crie um arquivo `.env` na raiz do projeto com o seguinte conteúdo:
 
-### Tratamento de MTOM/XOP
+```
+# Credenciais MNI
+MNI_URL=https://pjews.tjce.jus.br/pje1grau/intercomunicacao?wsdl
+MNI_CONSULTA_URL=https://pjews.tjce.jus.br/pje1grau/ConsultaPJe?wsdl
+MNI_ID_CONSULTANTE=seu_id_consultante
+MNI_SENHA_CONSULTANTE=sua_senha_consultante
 
-Implementa tratamento especial para mensagens SOAP com formato MTOM/XOP (otimização para transferência de dados binários).
+# Configuração do Flask
+SECRET_KEY=chave_secreta_para_sessao
+SESSION_SECRET=chave_secreta_para_sessao
 
-## Modelos de Dados
+# Configuração do Banco de Dados
+DATABASE_URL=postgresql://usuario:senha@localhost:5432/nome_do_banco
+```
 
-- **User**: Modelo para autenticação e gerenciamento de usuários
+### 5. Inicialize o banco de dados
 
-## Como o Código Funciona
+O banco é criado automaticamente ao iniciar a aplicação, mas você precisa ter um servidor PostgreSQL rodando e acessível com as credenciais do `DATABASE_URL`.
 
-### Fluxo de Consulta de Processos
+### 6. Execute a aplicação
 
-1. As requisições chegam pelos endpoints web ou API
-2. As credenciais são validadas e obtidas (de headers, formulários ou variáveis de ambiente)
-3. A consulta ao MNI é realizada via SOAP (Zeep) ou requisições manuais (requests + lxml)
-4. Os dados são processados, estruturados e retornados ao cliente
+```bash
+python main.py
+# ou
+gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app
+```
 
-### Extração de Documentos
+A aplicação estará disponível em `http://localhost:5000`
 
-O sistema implementa um mecanismo de extração em duas etapas:
+## Deploy no Google Cloud Run
 
-1. **Consulta Principal**: Obtém os dados gerais do processo e documentos principais
-2. **Extração Completa**: Garante a extração de todos os documentos, incluindo vinculados, usando uma abordagem robusta baseada em XML
+Google Cloud Run é uma excelente opção para hospedar aplicações containerizadas sem se preocupar com a infraestrutura. Veja como fazer o deploy desta API:
 
-### Considerações de Segurança
+### 1. Preparação Inicial
 
-- Tratamento de credenciais via variáveis de ambiente
-- Validação de inputs
-- Tratamento adequado de erros e exceções
-- Proteção contra falhas de comunicação com o serviço MNI
+#### Instale e configure o Google Cloud SDK
 
-## Histórico de Desenvolvimento
+1. Faça o download e instale o [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
+2. Inicialize e faça login:
+   ```bash
+   gcloud init
+   gcloud auth login
+   ```
+3. Configure o projeto:
+   ```bash
+   gcloud config set project SEU_ID_DO_PROJETO
+   ```
 
-O sistema foi desenvolvido com foco em robustez e confiabilidade para processamento de documentos judiciais. A implementação atual aborda desafios específicos:
+#### Habilite as APIs necessárias
 
-1. **Extração Completa de Documentos**: Desenvolvimento de um método robusto para garantir a extração de todos os documentos, inclusive os que podem ser perdidos pelo cliente SOAP
-2. **Otimização de Performance**: Implementação de consultas otimizadas para acelerar o processamento
-3. **Interface de Depuração**: Criação de ferramentas para facilitar o diagnóstico e análise de problemas
+```bash
+gcloud services enable cloudbuild.googleapis.com
+gcloud services enable run.googleapis.com
+gcloud services enable artifactregistry.googleapis.com
+gcloud services enable secretmanager.googleapis.com
+```
 
-O sistema está funcionando perfeitamente e pronto para uso em produção.
+### 2. Configure um Dockerfile
+
+Crie um arquivo `Dockerfile` na raiz do projeto:
+
+```Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instalar dependências
+COPY pyproject.toml .
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código fonte
+COPY . .
+
+# Variáveis de ambiente padrão
+ENV PORT=8080
+ENV PYTHONUNBUFFERED=1
+
+# Expor a porta
+EXPOSE $PORT
+
+# Comando para iniciar a aplicação
+CMD gunicorn --bind 0.0.0.0:$PORT main:app
+```
+
+### 3. Crie o arquivo requirements.txt se não existir
+
+```bash
+pip install -e . --no-deps
+pip freeze > requirements.txt
+```
+
+Ou crie manualmente com o conteúdo necessário:
+
+```
+easydict>=1.13
+email-validator>=2.2.0
+flask-login>=0.6.3
+flask>=3.1.0
+flask-sqlalchemy>=3.1.1
+gunicorn>=23.0.0
+pandas>=2.2.3
+psycopg2-binary>=2.9.10
+requests>=2.32.3
+zeep>=4.3.1
+werkzeug>=3.1.3
+sqlalchemy>=2.0.39
+trafilatura>=2.0.0
+lxml>=5.3.1
+```
+
+### 4. Configure Secrets no Google Cloud
+
+Configure os segredos necessários no Google Secret Manager para proteger suas credenciais:
+
+```bash
+# Crie os segredos
+echo -n "valor_mni_id_consultante" | gcloud secrets create mni-id-consultante --data-file=-
+echo -n "valor_mni_senha_consultante" | gcloud secrets create mni-senha-consultante --data-file=-
+echo -n "valor_chave_secreta" | gcloud secrets create secret-key --data-file=-
+echo -n "postgresql://usuario:senha@host:5432/banco" | gcloud secrets create database-url --data-file=-
+
+# Dê permissão de acesso à conta de serviço do Cloud Run
+gcloud secrets add-iam-policy-binding mni-id-consultante \
+    --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+
+# Repita o comando acima para os outros segredos
+```
+
+### 5. Configure um banco de dados PostgreSQL
+
+Você pode usar o Cloud SQL do Google Cloud para seu banco PostgreSQL:
+
+1. Crie uma instância PostgreSQL:
+   ```bash
+   gcloud sql instances create mni-database \
+     --database-version=POSTGRES_13 \
+     --tier=db-f1-micro \
+     --region=us-central1
+   ```
+
+2. Crie um banco de dados:
+   ```bash
+   gcloud sql databases create mni-api-db --instance=mni-database
+   ```
+
+3. Crie um usuário:
+   ```bash
+   gcloud sql users create mni-app-user \
+     --instance=mni-database \
+     --password=SENHA_SEGURA
+   ```
+
+4. Obtenha a string de conexão:
+   ```
+   postgresql://mni-app-user:SENHA_SEGURA@/mni-api-db?host=/cloudsql/PROJECT_ID:REGION:mni-database
+   ```
+
+### 6. Deploy no Cloud Run
+
+Agora você pode fazer o deploy da aplicação:
+
+```bash
+gcloud run deploy mni-api \
+  --source . \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --update-secrets=MNI_ID_CONSULTANTE=mni-id-consultante:latest,MNI_SENHA_CONSULTANTE=mni-senha-consultante:latest,SECRET_KEY=secret-key:latest,DATABASE_URL=database-url:latest \
+  --set-env-vars="MNI_URL=https://pjews.tjce.jus.br/pje1grau/intercomunicacao?wsdl,MNI_CONSULTA_URL=https://pjews.tjce.jus.br/pje1grau/ConsultaPJe?wsdl"
+```
+
+Se estiver usando Cloud SQL, adicione a flag:
+```
+--add-cloudsql-instances=PROJECT_ID:REGION:mni-database
+```
+
+### 7. Verifique o deploy
+
+Após o deploy, você receberá a URL do serviço. Teste a API usando um cliente HTTP como curl:
+
+```bash
+curl https://seu-servico-url.a.run.app/api/v1/processo/NUMERO_DO_PROCESSO \
+  -H "X-MNI-CPF: SEU_CPF" \
+  -H "X-MNI-SENHA: SUA_SENHA"
+```
+
+### 8. Configure CI/CD (opcional)
+
+Para automatizar o processo de deploy, você pode configurar um pipeline CI/CD usando o GitHub Actions.
+
+Crie um arquivo `.github/workflows/deploy.yml`:
+
+```yaml
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v0.3.0
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy mni-api \
+            --source . \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --update-secrets=MNI_ID_CONSULTANTE=mni-id-consultante:latest,MNI_SENHA_CONSULTANTE=mni-senha-consultante:latest,SECRET_KEY=secret-key:latest,DATABASE_URL=database-url:latest \
+            --set-env-vars="MNI_URL=https://pjews.tjce.jus.br/pje1grau/intercomunicacao?wsdl,MNI_CONSULTA_URL=https://pjews.tjce.jus.br/pje1grau/ConsultaPJe?wsdl"
+```
+
+## Uso da API
+
+### Endpoints Disponíveis
+
+- **GET /api/v1/processo/{num_processo}**: Retorna dados completos do processo
+- **GET /api/v1/processo/{num_processo}/documento/{num_documento}**: Faz download de um documento específico
+- **GET /api/v1/processo/{num_processo}/peticao-inicial**: Retorna a petição inicial e anexos
+- **GET /api/v1/processo/{num_processo}/documentos/ids**: Lista todos os IDs de documentos
+- **GET /api/v1/processo/{num_processo}/capa**: Retorna apenas os dados da capa do processo
+
+### Autenticação
+
+A API aceita credenciais MNI de duas formas:
+
+1. **Via Headers HTTP**:
+   ```
+   X-MNI-CPF: seu_cpf_ou_cnpj
+   X-MNI-SENHA: sua_senha
+   ```
+
+2. **Via Variáveis de Ambiente**:
+   ```
+   MNI_ID_CONSULTANTE=seu_cpf_ou_cnpj
+   MNI_SENHA_CONSULTANTE=sua_senha
+   ```
+
+## Monitoramento e Logs
+
+No Google Cloud Run, você pode monitorar sua aplicação através do Cloud Logging:
+
+```bash
+gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=mni-api" --limit=10
+```
+
+## Custos
+
+O Google Cloud Run cobra apenas pelo tempo em que seus contêineres estão processando solicitações, arredondado para cima até os 100ms mais próximos. Há um nível gratuito generoso que inclui:
+
+- 2 milhões de solicitações gratuitas por mês
+- 360.000 GB-segundos de memória gratuitos
+- 180.000 vCPU-segundos gratuitos
+
+Para o banco de dados Cloud SQL, a instância db-f1-micro custa aproximadamente US$ 7-12 por mês.
+
+## Suporte e Contribuições
+
+Para relatar problemas ou contribuir com o projeto, abra uma issue ou pull request no repositório GitHub.
+
+## Licença
+
+[Especifique a licença do seu projeto]
