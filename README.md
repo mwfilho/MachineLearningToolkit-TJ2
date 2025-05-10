@@ -297,7 +297,20 @@ jobs:
 - **GET /api/v1/processo/{num_processo}/documentos/ids**: Lista todos os IDs de documentos
 - **GET /api/v1/processo/{num_processo}/capa**: Retorna apenas os dados da capa do processo
 
-### Autenticação
+### Interfaces de Depuração
+
+A aplicação inclui interfaces de depuração protegidas por senha e restritas a usuários com permissões de administrador:
+
+- **/debug**: Interface principal de depuração
+- **/debug/consulta**: Consulta detalhada de processos
+- **/debug/documento**: Visualização detalhada de documentos
+- **/debug/peticao-inicial**: Análise de petições iniciais
+- **/debug/documentos-ids**: Listagem completa de IDs de documentos
+- **/debug/capa**: Visualização da capa do processo
+
+Para mais detalhes sobre o sistema de autenticação, consulte o arquivo [AUTH_README.md](AUTH_README.md).
+
+### Autenticação da API (MNI)
 
 A API aceita credenciais MNI de duas formas:
 
@@ -312,6 +325,21 @@ A API aceita credenciais MNI de duas formas:
    MNI_ID_CONSULTANTE=seu_cpf_ou_cnpj
    MNI_SENHA_CONSULTANTE=sua_senha
    ```
+
+### Autenticação da Interface Web
+
+Para acessar as interfaces de depuração, é necessário:
+
+1. Fazer login com um usuário que possua a flag `is_admin=True`
+2. Usuário padrão:
+   - Username: `admin`
+   - Senha: `senhasegura` (altere após o primeiro acesso)
+
+Para criar ou modificar usuários administradores:
+
+```bash
+python create_admin.py <username> <password> [force]
+```
 
 ## Monitoramento e Logs
 
