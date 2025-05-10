@@ -1,9 +1,7 @@
-from flask import Blueprint, render_template, request, send_file, flash, redirect, url_for
-from flask_login import login_required, current_user
+from flask import Blueprint, render_template, request, send_file, flash
 import tempfile
 import os
 import logging
-import functools
 from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
 from utils import extract_mni_data, extract_capa_processo, extract_all_document_ids
 import core
@@ -13,37 +11,15 @@ logger = logging.getLogger(__name__)
 
 web = Blueprint('web', __name__)
 
-# Decorator personalizado para proteção de rotas
-def debug_required(f):
-    @functools.wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated:
-            logger.warning(f"Tentativa de acesso não autorizado à rota: {request.path}")
-            flash('Por favor, faça login para acessar esta página.', 'warning')
-            return redirect(url_for('auth.login', next=request.url))
-        
-        # Verificar se o usuário é administrador
-        if not current_user.is_admin:
-            logger.warning(f"Usuário sem permissão de admin tentou acessar: {request.path}, user: {current_user.username}")
-            flash('Você não tem permissão para acessar esta página.', 'danger')
-            return redirect(url_for('web.index'))
-            
-        return f(*args, **kwargs)
-    return decorated_function
-
 @web.route('/')
 def index():
     return render_template('index.html')
 
 @web.route('/debug')
-@debug_required
 def debug():
-    # Se chegou aqui, o usuário está autenticado
-    logger.debug(f"Acesso à tela de debug por: {current_user.username}")
     return render_template('debug.html')
 
 @web.route('/debug/consulta', methods=['POST'])
-@debug_required
 def debug_consulta():
     num_processo = request.form.get('num_processo')
     cpf = request.form.get('cpf')
@@ -165,7 +141,6 @@ def debug_consulta():
         return render_template('debug.html')
 
 @web.route('/debug/documento', methods=['POST'])
-@debug_required
 def debug_documento():
     num_processo = request.form.get('num_processo')
     id_documento = request.form.get('id_documento')
@@ -196,7 +171,6 @@ def debug_documento():
         return render_template('debug.html')
 
 @web.route('/debug/peticao-inicial', methods=['POST'])
-@debug_required
 def debug_peticao_inicial():
     num_processo = request.form.get('num_processo')
     cpf = request.form.get('cpf')
@@ -227,7 +201,6 @@ def debug_peticao_inicial():
         return render_template('debug.html')
 
 @web.route('/download_documento/<num_processo>/<num_documento>')
-@debug_required
 def download_documento(num_processo, num_documento):
     try:
         logger.debug(f"Attempting to download document {num_documento} from process {num_processo}")
@@ -257,7 +230,6 @@ def download_documento(num_processo, num_documento):
         return render_template('index.html')
 
 @web.route('/debug/documentos-ids', methods=['POST'])
-@debug_required
 def debug_document_ids():
     num_processo = request.form.get('num_processo')
     cpf = request.form.get('cpf')
@@ -291,7 +263,6 @@ def debug_document_ids():
         return render_template('debug.html')
 
 @web.route('/debug/capa', methods=['POST'])
-@debug_required
 def debug_capa_processo():
     num_processo = request.form.get('num_processo')
     cpf = request.form.get('cpf')
