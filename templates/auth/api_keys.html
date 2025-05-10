@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">Minhas API Keys</h3>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newApiKeyModal">
+                    <i class="bi bi-plus-lg"></i> Nova API Key
+                </button>
+            </div>
+            <div class="card-body">
+                {% if api_keys %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Descrição</th>
+                                <th>Criada em</th>
+                                <th>Último uso</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for key in api_keys %}
+                            <tr>
+                                <td>{{ key.description or 'Sem descrição' }}</td>
+                                <td>{{ key.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td>{{ key.last_used.strftime('%d/%m/%Y %H:%M') if key.last_used else 'Nunca utilizada' }}</td>
+                                <td>
+                                    <form action="{{ url_for('auth.revoke_api_key', key_id=key.id) }}" method="POST" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-danger" 
+                                                onclick="return confirm('Tem certeza que deseja revogar esta API key? Esta ação não pode ser desfeita.')">
+                                            <i class="bi bi-trash"></i> Revogar
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-info-circle"></i> <strong>Importante:</strong> As chaves são exibidas apenas uma vez no momento da criação. Depois disso, apenas dados sobre elas são mostrados por segurança.
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> Você ainda não possui API keys. Crie uma nova para acessar a API.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para criar nova API Key -->
+<div class="modal fade" id="newApiKeyModal" tabindex="-1" aria-labelledby="newApiKeyModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('auth.create_api_key') }}" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="newApiKeyModalLabel">Nova API Key</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Descrição (opcional)</label>
+                        <input type="text" class="form-control" id="description" name="description" 
+                               placeholder="Ex: API para integração com sistema X">
+                        <div class="form-text">Uma descrição ajuda a identificar o propósito desta API key.</div>
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> <strong>Atenção:</strong> A chave completa será exibida apenas uma vez após a criação. Guarde-a em um local seguro.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Criar API Key</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,10 +1,13 @@
 import os
 import logging
 from flask import Flask
+from flask_login import LoginManager
 from routes.api import api
 from routes.web import web
+from routes.auth import auth
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
+import database
 
 # Configure logging
 logging.basicConfig(
@@ -12,9 +15,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-class Base(DeclarativeBase):
-    pass
 
 # create the app
 app = Flask(__name__)
@@ -28,8 +28,19 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 }
 
 # Initialize SQLAlchemy
-db = SQLAlchemy(model_class=Base)
-db.init_app(app)
+database.init_app(app)
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.login_view = 'auth.login'
+login_manager.login_message = 'Por favor, faça login para acessar esta página.'
+login_manager.login_message_category = "warning"
+login_manager.init_app(app)
+
+@login_manager.user_loader
+def load_user(user_id):
+    from models import User
+    return User.query.get(int(user_id))
 
 # Register blueprints
 logger.debug("Registrando blueprint web...")
@@ -38,11 +49,15 @@ app.register_blueprint(web)  # Web routes sem prefixo
 logger.debug("Registrando blueprint api...")
 app.register_blueprint(api)  # API routes com prefixo /api/v1
 
+logger.debug("Registrando blueprint auth...")
+app.register_blueprint(auth, url_prefix='/auth')
+
 logger.debug("Blueprints registrados com sucesso")
 
 with app.app_context():
     # Import models para criar as tabelas
     import models  # noqa: F401
+    from database import db
     db.create_all()
 
 # Log todas as rotas registradas

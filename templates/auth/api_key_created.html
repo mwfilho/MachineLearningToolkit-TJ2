@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h3 class="mb-0">API Key Criada com Sucesso</h3>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill"></i> <strong>ATENÇÃO!</strong> Esta é a única vez que sua API key será exibida. Copie-a e guarde em um local seguro.
+                </div>
+                
+                <h5>Detalhes da API Key:</h5>
+                <ul class="list-group mb-4">
+                    <li class="list-group-item">
+                        <strong>Descrição:</strong> {{ api_key.description or 'Sem descrição' }}
+                    </li>
+                    <li class="list-group-item">
+                        <strong>Criada em:</strong> {{ api_key.created_at.strftime('%d/%m/%Y %H:%M') }}
+                    </li>
+                    <li class="list-group-item">
+                        <strong>Chave:</strong>
+                        <div class="input-group mt-2">
+                            <input type="text" class="form-control" value="{{ api_key.key }}" id="apiKeyField" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyApiKey()">
+                                <i class="bi bi-clipboard"></i> Copiar
+                            </button>
+                        </div>
+                    </li>
+                </ul>
+                
+                <h5>Como usar:</h5>
+                <p>Para autenticar as chamadas à API, inclua sua API key em cada requisição de uma das seguintes formas:</p>
+                
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <strong>Opção 1: No Header da Requisição</strong>
+                    </div>
+                    <div class="card-body">
+                        <pre class="bg-dark text-light p-3 rounded"><code>X-API-KEY: {{ api_key.key }}</code></pre>
+                    </div>
+                </div>
+                
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <strong>Opção 2: Como Parâmetro na URL</strong>
+                    </div>
+                    <div class="card-body">
+                        <pre class="bg-dark text-light p-3 rounded"><code>https://exemplo.com/api/v1/processo/12345?api_key={{ api_key.key }}</code></pre>
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <a href="{{ url_for('auth.list_api_keys') }}" class="btn btn-primary">
+                        <i class="bi bi-arrow-left"></i> Voltar para Lista de API Keys
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyApiKey() {
+    var copyText = document.getElementById("apiKeyField");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999); // Para dispositivos móveis
+    navigator.clipboard.writeText(copyText.value);
+    
+    // Alternativamente, para navegadores mais antigos:
+    document.execCommand("copy");
+    
+    // Mostrar feedback
+    alert("API Key copiada para a área de transferência!");
+}
+</script>
+{% endblock %}
