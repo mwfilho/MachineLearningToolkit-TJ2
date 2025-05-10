@@ -42,6 +42,23 @@ def require_api_key(f):
                 'mensagem': 'A API key fornecida não é válida ou está inativa'
             }), 401
         
+        # Verificar se o usuário ainda tem permissão para usar API keys
+        user = key_entry.user
+        if not (user.is_admin or user.can_create_api_keys):
+            # Desativar todas as chaves do usuário quando ele perde permissão
+            for key in user.api_keys:
+                if key.is_active:
+                    key.is_active = False
+            
+            # Commit as alterações
+            from database import db
+            db.session.commit()
+            
+            return jsonify({
+                'erro': 'Permissão revogada',
+                'mensagem': 'O usuário não tem mais permissão para usar API keys'
+            }), 403
+        
         # Atualizar o último uso
         key_entry.use()
         

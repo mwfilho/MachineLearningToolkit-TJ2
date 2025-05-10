@@ -131,11 +131,24 @@ def toggle_api_permission(user_id):
         flash('Você não pode remover suas próprias permissões de administrador.', 'error')
         return redirect(url_for('auth.admin_panel'))
     
+    revoked_count = 0
     user.can_create_api_keys = not user.can_create_api_keys
+    
+    # Se estiver removendo a permissão, revogar todas as API keys do usuário
+    if not user.can_create_api_keys:
+        for key in user.api_keys:
+            if key.is_active:
+                key.is_active = False
+                revoked_count += 1
+    
     db.session.commit()
     
     action = "concedida" if user.can_create_api_keys else "removida"
     flash(f'Permissão para criar API keys {action} para o usuário {user.username}', 'success')
+    
+    if not user.can_create_api_keys and revoked_count > 0:
+        flash(f'Todas as {revoked_count} API keys ativas deste usuário foram automaticamente revogadas.', 'info')
+    
     return redirect(url_for('auth.admin_panel'))
 
 @auth.route('/admin/user/<int:user_id>/toggle-admin', methods=['POST'])
