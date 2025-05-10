@@ -22,7 +22,7 @@ def login():
         login_user(user)
         next_page = request.args.get('next')
         if not next_page or next_page.startswith('//'):
-            next_page = url_for('index')
+            next_page = url_for('web.index')
         return redirect(next_page)
 
     return render_template('auth/login.html')
@@ -55,7 +55,7 @@ def register():
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('index'))
+    return redirect(url_for('web.index'))
 
 @auth.route('/api-keys', methods=['GET'])
 @login_required
