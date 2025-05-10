@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, request, send_file, flash
+from flask import Blueprint, render_template, request, send_file, flash, redirect, url_for
+from flask_login import login_required, current_user
 import tempfile
 import os
 import logging
@@ -16,6 +17,7 @@ def index():
     return render_template('index.html')
 
 @web.route('/debug')
+@login_required
 def debug():
     return render_template('debug.html')
 
