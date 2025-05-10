@@ -44,6 +44,14 @@ from models import User
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# Inicializar sistema de proxy
+try:
+    from init_proxy import init_proxy_system
+    proxy_status = init_proxy_system()
+    logger.info(f"Sistema de proxy inicializado: {proxy_status}")
+except Exception as e:
+    logger.error(f"Erro ao inicializar sistema de proxy: {str(e)}")
+
 # Import blueprints after models to avoid circular imports
 from routes.api import api
 from routes.web import web

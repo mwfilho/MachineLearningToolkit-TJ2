@@ -18,6 +18,8 @@ A API facilita a consulta e processamento de documentos judiciais através do MN
 - **Interação com serviços SOAP**: Zeep
 - **Processamento de XML**: lxml
 - **Banco de dados**: PostgreSQL (com SQLAlchemy)
+- **Sistema de proxy**: Proxy rotativo com cache e retry
+- **Autenticação**: Flask-Login com controle de permissões
 - **Servidor de produção**: Gunicorn
 
 ## Requisitos

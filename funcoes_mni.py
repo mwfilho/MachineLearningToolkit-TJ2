@@ -567,7 +567,8 @@ def consultar_classe_processual(classe_processual, codigoLocalidade):
         logger.error(f"Erro ao consultar classe processual: {str(e)}")
         return "Erro na consulta"
 
-def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
+@with_proxy_session(use_cache=True, use_proxy=True, retries=3, backoff_factor=0.5)
+def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None, session=None, use_cache=True):
     """
     Faz a chamada SOAP usando requests com envelope manual e parseia
     o XML bruto da resposta com lxml para extrair TODOS os IDs de documentos.
@@ -577,6 +578,8 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
         num_processo (str): Número do processo a ser consultado
         cpf (str, optional): CPF/CNPJ do consultante. Se não fornecido, usa o padrão do ambiente
         senha (str, optional): Senha do consultante. Se não fornecida, usa o padrão do ambiente
+        session (ProxySession, optional): Sessão de proxy a ser usada (gerenciada pelo decorator)
+        use_cache (bool, optional): Se True, usa cache (gerenciado pelo decorator)
 
     Returns:
         list: Lista de todos os IDs de documentos encontrados ou None em caso de erro
@@ -619,8 +622,20 @@ def extrair_ids_requests_lxml(num_processo, cpf=None, senha=None):
     try:
         logger.debug(f"Enviando requisição SOAP manual para {num_processo} via {url_base}...")
         # A URL para o request tem que ser o endpoint sem o ?wsdl
-        response = requests.post(url_base, data=soap_envelope.encode('utf-8'), headers=headers, timeout=120)
+        # Usar a sessão de proxy fornecida pelo decorator para fazer a requisição
+        response = session.post(
+            url_base, 
+            data=soap_envelope.encode('utf-8'), 
+            headers=headers, 
+            timeout=180,  # Aumentado para 3 minutos para processos grandes
+            use_cache=use_cache
+        )
         logger.debug(f"Resposta recebida. Status: {response.status_code}")
+        
+        # Verificar se a resposta veio do cache
+        if 'X-Cache' in response.headers and response.headers['X-Cache'] == 'HIT':
+            logger.info(f"Resposta para {num_processo} obtida do cache")
+            
         response.raise_for_status() # Lança exceção para erros 4xx/5xx
 
         # --- Tratamento de MTOM/XOP ---
