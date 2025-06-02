@@ -29,11 +29,9 @@ def get_mni_credentials():
 #                 'mensagem': 'Forneça uma API key válida no header X-API-KEY ou no parâmetro api_key'
 #             }), 401
 #         key_entry = ApiKey.query.filter_by(key=api_key, is_active=True).first()
-#         …
 #         g.api_user = key_entry.user
 #         return f(*args, **kwargs)
 #     return decorated_function
-
 
 @api.before_request
 def log_request_info():
@@ -55,7 +53,6 @@ def get_processo(num_processo):
 
         resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
         dados = extract_mni_data(resposta)
-        …
         return jsonify(dados_formatados)
     except Exception as e:
         logger.exception("Erro ao consultar processo")
