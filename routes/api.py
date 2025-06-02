@@ -2,8 +2,6 @@ from flask import Blueprint, jsonify, send_file, request, g, current_app, abort
 import os
 import logging
 from functools import wraps
-from models import ApiKey, User
-from flask_login import current_user
 from funcoes_mni import retorna_processo, retorna_documento_processo, retorna_peticao_inicial_e_anexos
 from utils import extract_mni_data, extract_capa_processo, extract_all_document_ids
 import core
@@ -45,18 +43,10 @@ def log_request_info():
     logger.debug('URL: %s', request.url)
 
 @api.route('/processo/<num_processo>', methods=['GET'])
-# @require_api_key
+# @require_api_key              # Comentado
 def get_processo(num_processo):
-    """
-    Retorna os dados do processo incluindo lista completa de documentos
-    
-    Utiliza uma abordagem robusta que garante a extração de todos os documentos, mesmo
-    aqueles que podem ser perdidos pela biblioteca SOAP quando há múltiplos documentos vinculados.
-    """
     try:
-        logger.debug(f"API: Consultando processo {num_processo}")
         cpf, senha = get_mni_credentials()
-
         if not cpf or not senha:
             return jsonify({
                 'erro': 'Credenciais MNI não fornecidas',
@@ -64,9 +54,12 @@ def get_processo(num_processo):
             }), 401
 
         resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
-
-        # Extrair dados relevantes
         dados = extract_mni_data(resposta)
+        …
+        return jsonify(dados_formatados)
+    except Exception as e:
+        logger.exception("Erro ao consultar processo")
+        return jsonify({'erro': str(e)}), 500
         
         # Se o processo existe e tem sucesso, atualize a lista de documentos
         # usando a abordagem robusta para garantir todos os documentos
