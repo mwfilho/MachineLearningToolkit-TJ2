@@ -21,52 +21,21 @@ def get_mni_credentials():
     senha = request.headers.get('X-MNI-SENHA') or os.environ.get('MNI_SENHA_CONSULTANTE')
     return cpf, senha
 
-def require_api_key(f):
-    """Decorator para exigir API key válida"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        # Verificar a API key
-        api_key = request.headers.get('X-API-KEY') or request.args.get('api_key')
-        
-        if not api_key:
-            return jsonify({
-                'erro': 'API key não fornecida',
-                'mensagem': 'Forneça uma API key válida no header X-API-KEY ou no parâmetro api_key'
-            }), 401
-        
-        key_entry = ApiKey.query.filter_by(key=api_key, is_active=True).first()
-        
-        if not key_entry:
-            return jsonify({
-                'erro': 'API key inválida',
-                'mensagem': 'A API key fornecida não é válida ou está inativa'
-            }), 401
-        
-        # Verificar se o usuário ainda tem permissão para usar API keys
-        user = key_entry.user
-        if not (user.is_admin or user.can_create_api_keys):
-            # Desativar todas as chaves do usuário quando ele perde permissão
-            for key in user.api_keys:
-                if key.is_active:
-                    key.is_active = False
-            
-            # Commit as alterações
-            from database import db
-            db.session.commit()
-            
-            return jsonify({
-                'erro': 'Permissão revogada',
-                'mensagem': 'O usuário não tem mais permissão para usar API keys'
-            }), 403
-        
-        # Atualizar o último uso
-        key_entry.use()
-        
-        # Armazenar o usuário da API key para uso posterior
-        g.api_user = key_entry.user
-        
-        return f(*args, **kwargs)
-    return decorated_function
+# def require_api_key(f):
+#     @wraps(f)
+#     def decorated_function(*args, **kwargs):
+#         api_key = request.headers.get('X-API-KEY') or request.args.get('api_key')
+#         if not api_key:
+#             return jsonify({
+#                 'erro': 'API key não fornecida',
+#                 'mensagem': 'Forneça uma API key válida no header X-API-KEY ou no parâmetro api_key'
+#             }), 401
+#         key_entry = ApiKey.query.filter_by(key=api_key, is_active=True).first()
+#         …
+#         g.api_user = key_entry.user
+#         return f(*args, **kwargs)
+#     return decorated_function
+
 
 @api.before_request
 def log_request_info():
@@ -76,7 +45,7 @@ def log_request_info():
     logger.debug('URL: %s', request.url)
 
 @api.route('/processo/<num_processo>', methods=['GET'])
-@require_api_key
+# @require_api_key
 def get_processo(num_processo):
     """
     Retorna os dados do processo incluindo lista completa de documentos
@@ -173,7 +142,7 @@ def get_processo(num_processo):
         }), 500
 
 @api.route('/processo/<num_processo>/documento/<num_documento>', methods=['GET'])
-@require_api_key
+# @require_api_key
 def download_documento(num_processo, num_documento):
     """
     Faz download de um documento específico do processo
@@ -219,7 +188,7 @@ def download_documento(num_processo, num_documento):
         }), 500
         
 @api.route('/processo/<num_processo>/peticao-inicial', methods=['GET'])
-@require_api_key
+# @require_api_key
 def get_peticao_inicial(num_processo):
     """
     Retorna a petição inicial e seus anexos para o processo informado
@@ -252,7 +221,7 @@ def get_peticao_inicial(num_processo):
         }), 500
         
 @api.route('/processo/<num_processo>/documentos/ids', methods=['GET'])
-@require_api_key
+# @require_api_key
 def get_document_ids(num_processo):
     """
     Retorna uma lista única com todos os IDs de documentos do processo, incluindo vinculados,
@@ -287,7 +256,7 @@ def get_document_ids(num_processo):
         }), 500
 
 @api.route('/processo/<num_processo>/capa', methods=['GET'])
-@require_api_key
+# @require_api_key
 def get_capa_processo(num_processo):
     """
     Retorna apenas os dados da capa do processo (sem documentos),
