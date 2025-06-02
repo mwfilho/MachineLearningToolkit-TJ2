@@ -1,0 +1,9 @@
+Flask
+flask-login
+Flask-SQLAlchemy
+zeep
+xmltodict
+requests
+pandas
+easydict
+gunicorn
