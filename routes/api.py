@@ -1,9 +1,6 @@
-from flask import Blueprint, jsonify, send_file, request, g, current_app, abort
+from flask import Blueprint, jsonify, send_file, request, g
 import os
 import logging
-from functools import wraps
-from models import ApiKey, User
-from flask_login import current_user
 from funcoes_mni import (
     retorna_processo,
     retorna_documento_processo,
@@ -14,66 +11,24 @@ from utils import (
     extract_capa_processo,
     extract_all_document_ids
 )
-import core
 import tempfile
 
-# Configure logging
+# Configuração de logger
 logger = logging.getLogger(__name__)
 
-# Criar o blueprint da API
+# Cria o blueprint da API com prefixo /api/v1
 api = Blueprint('api', __name__, url_prefix='/api/v1')
-
-
-# -----------------------------------------------------------------------
-# DECORATOR PARA EXIGIR API KEY (OPCIONAL)
-# -----------------------------------------------------------------------
-def require_api_key(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        api_key = request.headers.get('X-API-KEY') or request.args.get('api_key')
-        if not api_key:
-            return jsonify({
-                'erro': 'API key não fornecida',
-                'mensagem': 'Forneça uma API key válida no header X-API-KEY ou no parâmetro api_key'
-            }), 401
-        key_entry = ApiKey.query.filter_by(key=api_key, is_active=True).first()
-        if not key_entry:
-            return jsonify({
-                'erro': 'API key inválida',
-                'mensagem': 'A API key fornecida não é válida ou está inativa'
-            }), 401
-        user = key_entry.user
-        # Verifica permissões: se não for admin nem ter permissão de criar API keys
-        if not (user.is_admin or user.can_create_api_keys):
-            # Revoga todas as chaves ativas desse usuário
-            for key in user.api_keys:
-                if key.is_active:
-                    key.is_active = False
-            from database import db
-            db.session.commit()
-            return jsonify({
-                'erro': 'Permissão revogada',
-                'mensagem': 'O usuário não tem mais permissão para usar API keys'
-            }), 403
-        # Marca o uso recente da chave e disponibiliza o usuário no contexto
-        key_entry.use()
-        g.api_user = key_entry.user
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 @api.before_request
 def before_any_request():
     """
-    Hook que roda antes de qualquer rota. Apenas para log; sem checagem adicional aqui.
+    Hook que roda antes de qualquer rota. Mantém apenas para log.
     """
     logger.debug(f"Recebendo request: {request.method} {request.url}")
-    # Nenhum return aqui, apenas logging
+    # Não há verificação de API Key aqui
 
 
-# -----------------------------------------------------------------------
-# Função auxiliar para extrair credenciais MNI
-# -----------------------------------------------------------------------
 def get_mni_credentials():
     """
     Obtém CPF e senha do MNI dos headers ou das variáveis de ambiente.
@@ -84,11 +39,7 @@ def get_mni_credentials():
     return cpf, senha
 
 
-# -----------------------------------------------------------------------
-# ROTA: /api/v1/processo/<num_processo>
-# -----------------------------------------------------------------------
 @api.route('/processo/<num_processo>', methods=['GET'])
-@require_api_key
 def get_processo(num_processo):
     """
     Consulta os dados básicos de um processo (sem listar documentos ou conteúdos).
@@ -96,7 +47,6 @@ def get_processo(num_processo):
     Exemplo:
       GET /api/v1/processo/1234567-89.2024.8.17.0001
       Headers:
-        X-API-KEY: sua_api_key
         X-MNI-CPF: 06293234456
         X-MNI-SENHA: Simb@280303
     """
@@ -107,7 +57,7 @@ def get_processo(num_processo):
         if not cpf or not senha:
             return jsonify({
                 'erro': 'Credenciais MNI não fornecidas',
-                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+                'mensagem': 'Forneça os headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
 
         resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
@@ -138,18 +88,13 @@ def get_processo(num_processo):
         }), 500
 
 
-# -----------------------------------------------------------------------
-# ROTA: /api/v1/processo/<num_processo>/documento/<id_documento>
-# -----------------------------------------------------------------------
 @api.route('/processo/<num_processo>/documento/<id_documento>', methods=['GET'])
-@require_api_key
 def get_documento(num_processo, id_documento):
     """
     Obtém o binário de um documento específico do processo.
     Uso:
       GET /api/v1/processo/<num_processo>/documento/<id_documento>
       Headers:
-        X-API-KEY: sua_api_key
         X-MNI-CPF: 06293234456
         X-MNI-SENHA: Simb@280303
     """
@@ -160,7 +105,7 @@ def get_documento(num_processo, id_documento):
         if not cpf or not senha:
             return jsonify({
                 'erro': 'Credenciais MNI não fornecidas',
-                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+                'mensagem': 'Forneça os headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
 
         conteudo = retorna_documento_processo(num_processo, id_documento, cpf, senha)
@@ -170,7 +115,6 @@ def get_documento(num_processo, id_documento):
                 'mensagem': f'ID {id_documento} não encontrado para o processo {num_processo}'
             }), 404
 
-        # Cria arquivo temporário e devolve para download
         tmp = tempfile.NamedTemporaryFile(delete=False)
         tmp.write(conteudo)
         tmp.flush()
@@ -187,18 +131,13 @@ def get_documento(num_processo, id_documento):
         }), 500
 
 
-# -----------------------------------------------------------------------
-# ROTA: /api/v1/processo/<num_processo>/peticao-inicial
-# -----------------------------------------------------------------------
 @api.route('/processo/<num_processo>/peticao-inicial', methods=['GET'])
-@require_api_key
 def get_peticao_inicial(num_processo):
     """
     Retorna a petição inicial + anexos do processo.
     Uso:
       GET /api/v1/processo/<num_processo>/peticao-inicial
       Headers:
-        X-API-KEY: sua_api_key
         X-MNI-CPF: 06293234456
         X-MNI-SENHA: Simb@280303
     """
@@ -209,7 +148,7 @@ def get_peticao_inicial(num_processo):
         if not cpf or not senha:
             return jsonify({
                 'erro': 'Credenciais MNI não fornecidas',
-                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+                'mensagem': 'Forneça os headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
 
         dados = retorna_peticao_inicial_e_anexos(num_processo, cpf, senha)
@@ -229,11 +168,7 @@ def get_peticao_inicial(num_processo):
         }), 500
 
 
-# -----------------------------------------------------------------------
-# ROTA: /api/v1/processo/<num_processo>/documentos/ids
-# -----------------------------------------------------------------------
 @api.route('/processo/<num_processo>/documentos/ids', methods=['GET'])
-@require_api_key
 def get_documentos_ids(num_processo):
     """
     Retorna uma lista única com todos os IDs de documentos do processo, incluindo vinculados,
@@ -241,7 +176,6 @@ def get_documentos_ids(num_processo):
     Uso:
       GET /api/v1/processo/<num_processo>/documentos/ids
       Headers:
-        X-API-KEY: sua_api_key
         X-MNI-CPF: 06293234456
         X-MNI-SENHA: Simb@280303
     """
@@ -252,13 +186,10 @@ def get_documentos_ids(num_processo):
         if not cpf or not senha:
             return jsonify({
                 'erro': 'Credenciais MNI não fornecidas',
-                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+                'mensagem': 'Forneça os headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
 
-        # Obtém o processo completo com documentos
         resposta = retorna_processo(num_processo, cpf=cpf, senha=senha)
-
-        # Extrai os IDs dos documentos usando abordagem robusta
         dados = extract_all_document_ids(resposta, num_processo=num_processo, cpf=cpf, senha=senha)
         return jsonify(dados)
 
@@ -270,11 +201,7 @@ def get_documentos_ids(num_processo):
         }), 500
 
 
-# -----------------------------------------------------------------------
-# ROTA: /api/v1/processo/<num_processo>/capa
-# -----------------------------------------------------------------------
 @api.route('/processo/<num_processo>/capa', methods=['GET'])
-@require_api_key
 def get_capa_processo(num_processo):
     """
     Retorna apenas os dados da capa do processo (sem documentos),
@@ -282,7 +209,6 @@ def get_capa_processo(num_processo):
     Uso:
       GET /api/v1/processo/<num_processo>/capa
       Headers:
-        X-API-KEY: sua_api_key
         X-MNI-CPF: 06293234456
         X-MNI-SENHA: Simb@280303
     """
@@ -293,13 +219,10 @@ def get_capa_processo(num_processo):
         if not cpf or not senha:
             return jsonify({
                 'erro': 'Credenciais MNI não fornecidas',
-                'mensagem': 'Forneça as credenciais nos headers X-MNI-CPF e X-MNI-SENHA'
+                'mensagem': 'Forneça os headers X-MNI-CPF e X-MNI-SENHA'
             }), 401
 
-        # Usando o parâmetro incluir_documentos=False para melhor performance
         resposta = retorna_processo(num_processo, cpf=cpf, senha=senha, incluir_documentos=False)
-
-        # Extrair apenas os dados da capa do processo
         dados = extract_capa_processo(resposta)
         return jsonify(dados)
 
