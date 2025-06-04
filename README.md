@@ -70,8 +70,8 @@ Para deploy no Vercel, use o arquivo `vercel.json` incluído.
 
 - `DATABASE_URL`: URL de conexão com PostgreSQL
 - `SESSION_SECRET`: Chave secreta para sessões
-- `MNI_CPF`: CPF para acesso à API MNI (opcional)
-- `MNI_SENHA`: Senha para acesso à API MNI (opcional)
+- `MNI_ID_CONSULTANTE`: CPF ou CNPJ do consultante para a API MNI (opcional)
+- `MNI_SENHA_CONSULTANTE`: Senha do consultante para a API MNI (opcional)
 
 ## API Endpoints
 
