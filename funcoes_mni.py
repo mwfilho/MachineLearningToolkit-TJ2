@@ -20,7 +20,7 @@ from datetime import datetime, date
 logger = logging.getLogger(__name__)
 
 
-def retorna_processo(numero_processo, cpf=None, senha=None, cache=True, timeout=60):
+def retorna_processo(numero_processo, cpf=None, senha=None, cache=True, timeout=60, incluir_documentos=False):
     """
     Retorna o dicionário bruto do processo MNI (consultarProcesso).
     Usa Zeep para chamada SOAP e parse via serialize_object ou xmltodict.
@@ -30,6 +30,7 @@ def retorna_processo(numero_processo, cpf=None, senha=None, cache=True, timeout=
       - senha: opcional, Senha do consultante. Se None, pega de MNI_SENHA_CONSULTANTE.
       - cache: bool, se usar cache local (pandas/HDF5). Se True, tenta ler de cache antes de chamar MNI.
       - timeout: int, timeout em segundos para a chamada SOAP.
+      - incluir_documentos: bool, se True inclui dados completos dos documentos na resposta.
     Retorna: dicionário Python com todos os campos brutos do processo.
     """
     if not cpf:
@@ -62,7 +63,7 @@ def retorna_processo(numero_processo, cpf=None, senha=None, cache=True, timeout=
             numeroProcesso=numero_processo,
             movimentos=True,
             incluirCabecalho=True,
-            incluirDocumentos=False
+            incluirDocumentos=incluir_documentos
         )
     except Exception as e:
         logger.exception("Falha ao chamar consultarProcesso")
