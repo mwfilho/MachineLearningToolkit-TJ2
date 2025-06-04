@@ -7,6 +7,11 @@ import requests
 from zeep import Client
 from zeep.transports import Transport
 from lxml import etree
+from flask_login import LoginManager
+from routes.api import api as api_bp
+from routes.web import web as web_bp
+from routes.auth import auth as auth_bp
+import database
 import base64
 from datetime import datetime
 import json
@@ -28,6 +33,39 @@ CORS(app)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 app.config['MNI_CPF'] = os.getenv('MNI_CPF')
 app.config['MNI_SENHA'] = os.getenv('MNI_SENHA')
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_recycle": 300,
+    "pool_pre_ping": True,
+}
+
+database.init_app(app)
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'auth.login'
+login_manager.login_message = 'Por favor, faça login para acessar esta página.'
+login_manager.login_message_category = "warning"
+
+@login_manager.user_loader
+def load_user(user_id):
+    from models import User
+    return User.query.get(int(user_id))
+
+# Register blueprints from the routes package
+app.register_blueprint(web_bp)
+app.register_blueprint(api_bp)
+app.register_blueprint(auth_bp, url_prefix='/auth')
+
+with app.app_context():
+    # Import models to ensure tables are created
+    import models  # noqa: F401
+    from database import db
+    db.create_all()
+
+logger.debug("Rotas registradas:")
+for rule in app.url_map.iter_rules():
+    logger.debug(f"{rule.endpoint}: {rule.rule}")
 
 # Mapeamento de tribunais por código
 TRIBUNAL_WSDL_MAP = {
