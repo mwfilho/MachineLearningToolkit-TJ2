@@ -18,6 +18,10 @@ import json
 import io
 from PyPDF2 import PdfMerger
 import tempfile
+import mimetypes
+
+from funcoes_mni import retorna_processo, retorna_documento_processo
+from utils import extract_all_document_ids
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -537,17 +541,41 @@ def baixar_copia_integral(numero_processo):
     try:
         cpf = request.headers.get('X-MNI-CPF')
         senha = request.headers.get('X-MNI-SENHA')
-        
-        # Por enquanto, retornar informação sobre como seria implementado
-        # Em produção, isso baixaria todos os documentos e mesclaria em um PDF
-        
-        return jsonify({
-            'sucesso': False,
-            'erro': 'NOT_IMPLEMENTED',
-            'mensagem': 'Download de cópia integral será implementado em breve',
-            'info': 'Esta funcionalidade baixará todos os documentos e mesclará em um único PDF'
-        }), 501
-        
+
+        resposta = retorna_processo(numero_processo, cpf=cpf, senha=senha)
+        docs_info = extract_all_document_ids(resposta, num_processo=numero_processo, cpf=cpf, senha=senha)
+        ids = [d['idDocumento'] for d in docs_info.get('documentos', [])]
+
+        if not ids:
+            return jsonify({'sucesso': False, 'erro': 'NAO_ENCONTRADO', 'mensagem': 'Nenhum documento localizado'}), 404
+
+        merger = PdfMerger()
+        adicionados = 0
+        for doc_id in ids:
+            try:
+                conteudo = retorna_documento_processo(numero_processo, doc_id, cpf, senha)
+                if not conteudo:
+                    continue
+                merger.append(io.BytesIO(conteudo))
+                adicionados += 1
+            except Exception as exc:
+                logger.warning(f'Falha ao anexar documento {doc_id}: {exc}')
+
+        if adicionados == 0:
+            return jsonify({'sucesso': False, 'erro': 'NAO_ENCONTRADO', 'mensagem': 'Documentos indisponíveis'}), 404
+
+        output = io.BytesIO()
+        merger.write(output)
+        merger.close()
+        output.seek(0)
+
+        return send_file(
+            output,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'{numero_processo}_copia_integral.pdf'
+        )
+
     except Exception as e:
         logger.error(f"Erro na API: {str(e)}")
         return jsonify({
@@ -562,14 +590,32 @@ def baixar_documento(numero_processo, id_documento):
     try:
         cpf = request.headers.get('X-MNI-CPF')
         senha = request.headers.get('X-MNI-SENHA')
-        
-        # Por enquanto, retornar placeholder
-        return jsonify({
-            'sucesso': False,
-            'erro': 'NOT_IMPLEMENTED',
-            'mensagem': 'Endpoint de download individual em desenvolvimento'
-        }), 501
-        
+
+        processo = retorna_processo(numero_processo, cpf=cpf, senha=senha)
+        docs_info = extract_all_document_ids(processo, num_processo=numero_processo, cpf=cpf, senha=senha)
+        mimetype = 'application/pdf'
+        for doc in docs_info.get('documentos', []):
+            if str(doc.get('idDocumento')) == str(id_documento):
+                if doc.get('mimetype'):
+                    mimetype = doc['mimetype']
+                break
+
+        conteudo = retorna_documento_processo(numero_processo, id_documento, cpf, senha)
+        if not conteudo:
+            return jsonify({
+                'sucesso': False,
+                'erro': 'NAO_ENCONTRADO',
+                'mensagem': 'Documento não encontrado'
+            }), 404
+
+        ext = mimetypes.guess_extension(mimetype) or '.bin'
+        return send_file(
+            io.BytesIO(conteudo),
+            mimetype=mimetype,
+            as_attachment=True,
+            download_name=f'{id_documento}{ext}'
+        )
+
     except Exception as e:
         logger.error(f"Erro na API: {str(e)}")
         return jsonify({
