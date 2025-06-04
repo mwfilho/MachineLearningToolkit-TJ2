@@ -83,8 +83,8 @@ SESSION_SECRET=uma-chave-secreta-longa-e-aleatoria
 
 Opcionais (se usar API MNI):
 ```
-MNI_CPF=seu-cpf
-MNI_SENHA=sua-senha
+MNI_ID_CONSULTANTE=seu-cpf-ou-cnpj
+MNI_SENHA_CONSULTANTE=sua-senha
 ```
 
 ## Testando localmente
